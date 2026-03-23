@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger.utils';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -14,16 +15,22 @@ export const errorHandler = (
   const statusCode = err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
 
-  // Log error in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Error:', err);
-  }
+  // Log error
+  logger.error(`${req.method} ${req.path}`, {
+    error: message,
+    statusCode,
+    stack: err.stack,
+    ip: req.ip,
+  });
 
   res.status(statusCode).json({
     status: 'error',
-    statusCode,
     message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    timestamp: new Date().toISOString(),
+    ...(process.env.NODE_ENV === 'development' && { 
+      stack: err.stack,
+      path: req.path,
+    })
   });
 };
 

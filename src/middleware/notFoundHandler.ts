@@ -1,10 +1,6 @@
 import { Request, Response } from 'express';
+import { ResponseUtil } from '../utils/response.utils';
 
 export const notFoundHandler = (req: Request, res: Response) => {
-  res.status(404).json({
-    status: 'error',
-    statusCode: 404,
-    message: `Route ${req.originalUrl} not found`,
-    method: req.method
-  });
+  ResponseUtil.notFound(res, `Route ${req.method} ${req.originalUrl} not found`);
 };
