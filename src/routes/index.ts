@@ -3,7 +3,9 @@ import { ResponseUtil } from '../utils/response.utils';
 import authRoutes from './auth.routes';
 import usersRoutes from './users.routes';
 import adminRoutes from './admin.routes';
+import bookingsRoutes from './bookings.routes';
 import { AdminService } from '../services/admin.service';
+import { BookingsService } from '../services/bookings.service';
 
 const router = Router();
 
@@ -12,10 +14,16 @@ AdminService.initialize().catch(err => {
   console.error('Failed to initialize admin tables:', err);
 });
 
+// Initialize bookings tables (async, don't block)
+BookingsService.initialize().catch(err => {
+  console.error('Failed to initialize bookings tables:', err);
+});
+
 // Mount route modules
 router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
 router.use('/admin', adminRoutes);
+router.use('/bookings', bookingsRoutes);
 
 /**
  * @swagger
