@@ -396,3 +396,14 @@ For issues and questions:
 **Status**: 🟢 Active Development
 
 Built with ❤️ for the MentorMinds Stellar platform
+
+## 🐳 Docker Containerization
+Run the full stack locally:
+\`bash
+docker-compose up --build
+\`
+
+Run the test suite in Docker:
+\`bash
+docker-compose -f docker-compose.test.yml up --exit-code-from test-backend
+\`
