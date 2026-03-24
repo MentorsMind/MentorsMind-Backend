@@ -19,9 +19,9 @@ export const calculateMeetingExpiry = (
 };
 
 /**
- * Generate a unique Jitsi room name
+ * Generate a clean, unique Jitsi room name
  * @param sessionId - Session UUID
- * @returns Room name
+ * @returns Formatted room name
  */
 export const generateJitsiRoomName = (sessionId: string): string => {
   // Remove hyphens from UUID for cleaner URL
