@@ -1,4 +1,5 @@
 import { env } from './env';
+import monitoringConfig from './monitoring.config';
 
 const config = {
   env: env.NODE_ENV,
@@ -34,11 +35,10 @@ const config = {
     network: env.STELLAR_NETWORK,
     horizonUrl: env.STELLAR_HORIZON_URL,
     platformPublicKey: env.PLATFORM_PUBLIC_KEY,
-    // Never expose secret key directly — accessed only via getPlatformKeypair()
   },
 
   cors: {
-    origins: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+    origins: env.CORS_ORIGIN.split(',').map((o: string) => o.trim()),
   },
 
   rateLimit: {
@@ -61,7 +61,10 @@ const config = {
   platform: {
     feePercentage: parseInt(env.PLATFORM_FEE_PERCENTAGE, 10),
   },
+
+  monitoring: monitoringConfig,
 } as const;
 
 export default config;
 export type Config = typeof config;
+
