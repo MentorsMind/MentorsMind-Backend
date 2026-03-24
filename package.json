@@ -25,9 +25,16 @@
   "author": "MentorMinds Team",
   "license": "MIT",
   "type": "commonjs",
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.5.0",
     "@types/archiver": "^7.0.0",
+    "@types/ws": "^8.18.1",
     "archiver": "^7.0.1",
     "axios": "^1.13.6",
     "bcryptjs": "^3.0.3",
@@ -48,6 +55,7 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",
+    "ws": "^8.20.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

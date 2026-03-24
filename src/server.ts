@@ -2,9 +2,10 @@
 import config from './config';
 import app from './app';
 import { initializeModels } from './models';
+import { initWebSocketServer } from './websocket/ws-server';
 
 // Initialize database tables
-initializeModels().catch(err => {
+initializeModels().catch((err) => {
   console.error('Failed to initialize models:', err);
 });
 
@@ -18,7 +19,11 @@ const server = app.listen(PORT, () => {
   console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
   console.log(`💚 Health check: http://localhost:${PORT}/health`);
   console.log(`📚 API Docs: http://localhost:${PORT}/api/${API_VERSION}/docs`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
 });
+
+// Attach WebSocket server to the same HTTP server
+initWebSocketServer(server);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
