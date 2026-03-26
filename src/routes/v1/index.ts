@@ -15,15 +15,16 @@ import disputesRoutes from '../disputes.routes';
 import escrowRoutes from '../escrow.routes';
 import { AdminService } from '../../services/admin.service';
 import { BookingsService } from '../../services/bookings.service';
+import { logger } from '../../utils/logger';
 
 const router = Router();
 
 // Lazy service initialization (non-blocking)
 AdminService.initialize().catch((err) => {
-  console.error('Failed to initialize admin tables:', err);
+  logger.error('Failed to initialize admin tables:', err);
 });
 BookingsService.initialize().catch((err) => {
-  console.error('Failed to initialize bookings tables:', err);
+  logger.error('Failed to initialize bookings tables:', err);
 });
 
 router.use('/auth', authRoutes);

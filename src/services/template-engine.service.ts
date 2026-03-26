@@ -1,5 +1,6 @@
 import { NotificationTemplatesModel, NotificationTemplateRecord } from '../models/notification-templates.model';
 import { createHash } from 'crypto';
+import { logger } from '../utils/logger';
 
 export interface RenderedEmail {
   subject: string;
@@ -83,7 +84,7 @@ export const TemplateEngineService = {
       const template = await this.getTemplate(templateId);
       
       if (!template || template.type !== 'email') {
-        console.warn(`Email template ${templateId} not found, using fallback`);
+        logger.warn(`Email template ${templateId} not found, using fallback`);
         return this.getFallbackEmailTemplate(data);
       }
 
@@ -97,7 +98,7 @@ export const TemplateEngineService = {
         textContent: this.sanitizeOutput(textContent),
       };
     } catch (error) {
-      console.error('Failed to render email template:', error);
+      logger.error('Failed to render email template:', error);
       return this.getFallbackEmailTemplate(data);
     }
   },
@@ -110,7 +111,7 @@ export const TemplateEngineService = {
       const template = await this.getTemplate(templateId);
       
       if (!template || template.type !== 'in_app') {
-        console.warn(`In-app template ${templateId} not found, using fallback`);
+        logger.warn(`In-app template ${templateId} not found, using fallback`);
         return this.getFallbackInAppTemplate(data);
       }
 
@@ -123,7 +124,7 @@ export const TemplateEngineService = {
         data: data || {},
       };
     } catch (error) {
-      console.error('Failed to render in-app template:', error);
+      logger.error('Failed to render in-app template:', error);
       return this.getFallbackInAppTemplate(data);
     }
   },
@@ -189,7 +190,7 @@ export const TemplateEngineService = {
         this.cache.set(templateId, template);
       }
     } catch (error) {
-      console.error(`Failed to cache template ${templateId}:`, error);
+      logger.error(`Failed to cache template ${templateId}:`, error);
     }
   },
 

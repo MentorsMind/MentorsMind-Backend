@@ -2,6 +2,7 @@ import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
 import config from '../config';
 import { NotificationTemplatesModel } from '../models/notification-templates.model';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
+import { logger } from '../utils/logger';
 
 export interface EmailRequest {
   to: string[];
@@ -54,15 +55,17 @@ export class EmailService {
    * Initialize email providers based on configuration
    */
   private initializeProviders(): void {
+    const { smtp, gmail } = config.email;
+
     // Primary provider: SMTP (Nodemailer)
-    if (process.env.SMTP_HOST) {
+    if (smtp.host) {
       const smtpTransporter = nodemailer.createTransporter({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: process.env.SMTP_SECURE === 'true',
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user: smtp.user,
+          pass: smtp.pass,
         },
         pool: true,
         maxConnections: 5,
@@ -77,12 +80,12 @@ export class EmailService {
     }
 
     // Fallback provider: Gmail (for development)
-    if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+    if (gmail.user && gmail.pass) {
       const gmailTransporter = nodemailer.createTransporter({
         service: 'gmail',
         auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_PASS,
+          user: gmail.user,
+          pass: gmail.pass,
         },
       });
 
@@ -112,7 +115,7 @@ export class EmailService {
       });
     }
 
-    console.log(`📧 Email service initialized with ${this.providers.length} provider(s)`);
+    logger.info(`Email service initialized with ${this.providers.length} provider(s)`);
   }
 
   /**
@@ -185,7 +188,7 @@ export class EmailService {
       }
 
       const mailOptions: SendMailOptions = {
-        from: process.env.FROM_EMAIL || 'noreply@mentorminds.com',
+        from: config.email.fromEmail,
         to: request.to.join(', '),
         cc: request.cc?.join(', '),
         bcc: request.bcc?.join(', '),
@@ -216,7 +219,7 @@ export class EmailService {
         });
       }
 
-      console.log(`📧 Email sent successfully via ${provider.name}:`, {
+      logger.info(`Email sent successfully via ${provider.name}`, {
         messageId: info.messageId,
         to: request.to,
         subject: request.subject,
@@ -245,7 +248,7 @@ export class EmailService {
         });
       }
 
-      console.error(`📧 Email failed via ${provider.name}:`, errorMessage);
+      logger.error(`Email failed via ${provider.name}`, { error: errorMessage });
 
       return {
         success: false,
@@ -283,7 +286,7 @@ export class EmailService {
 
       return { subject, html, text };
     } catch (error) {
-      console.error('Failed to render email template:', error);
+      logger.error('Failed to render email template', { error });
       
       // Return fallback template
       return {
@@ -311,7 +314,7 @@ export class EmailService {
       );
 
       if (missingVariables.length > 0) {
-        console.warn(`Template ${templateId} missing variables:`, missingVariables);
+        logger.warn(`Template ${templateId} missing variables`, { missingVariables });
         return false;
       }
 
@@ -319,7 +322,7 @@ export class EmailService {
       await this.renderTemplate(templateId, sampleData);
       return true;
     } catch (error) {
-      console.error(`Template validation failed for ${templateId}:`, error);
+      logger.error(`Template validation failed for ${templateId}`, { error });
       return false;
     }
   }
@@ -357,7 +360,7 @@ export class EmailService {
         provider.isHealthy = true;
         provider.lastError = undefined;
         provider.lastErrorTime = undefined;
-        console.log(`📧 Provider ${provider.name} circuit breaker reset`);
+        logger.info(`Provider ${provider.name} circuit breaker reset`);
         return true;
       }
     }
@@ -373,7 +376,7 @@ export class EmailService {
     provider.lastErrorTime = new Date();
     provider.isHealthy = false;
     
-    console.warn(`📧 Provider ${provider.name} marked as unhealthy:`, error);
+    logger.warn(`Provider ${provider.name} marked as unhealthy`, { error });
   }
 
   /**

@@ -88,9 +88,10 @@ export const DisputeModel = {
 
   async findUnresolvedOlderThanDays(days: number): Promise<DisputeRecord[]> {
     const { rows } = await pool.query<DisputeRecord>(
-      `SELECT * FROM disputes 
-       WHERE status != 'resolved' 
-       AND created_at < NOW() - INTERVAL '${days} days'`
+      `SELECT * FROM disputes
+       WHERE status != 'resolved'
+       AND created_at < NOW() - make_interval(days => $1)`,
+      [days]
     );
     return rows;
   },

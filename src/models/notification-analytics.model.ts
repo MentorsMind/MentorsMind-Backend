@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface NotificationAnalyticsRecord {
   id: string;
@@ -106,7 +107,7 @@ export const NotificationAnalyticsModel = {
       const { rows } = await pool.query<NotificationAnalyticsRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to upsert notification analytics:', error);
+      logger.error('Failed to upsert notification analytics:', error);
       return null;
     }
   },
@@ -134,7 +135,7 @@ export const NotificationAnalyticsModel = {
       const { rowCount } = await pool.query(query, [date, notificationType, channel, count]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      console.error('Failed to increment analytics metric:', error);
+      logger.error('Failed to increment analytics metric:', error);
       return false;
     }
   },
@@ -176,7 +177,7 @@ export const NotificationAnalyticsModel = {
       const { rows } = await pool.query<NotificationAnalyticsRecord>(query, values);
       return rows;
     } catch (error) {
-      console.error('Failed to get analytics data:', error);
+      logger.error('Failed to get analytics data:', error);
       return [];
     }
   },
@@ -243,7 +244,7 @@ export const NotificationAnalyticsModel = {
         clickRate: Math.round(clickRate * 100) / 100,
       };
     } catch (error) {
-      console.error('Failed to get aggregated analytics stats:', error);
+      logger.error('Failed to get aggregated analytics stats:', error);
       return {
         totalSent: 0,
         totalDelivered: 0,
@@ -299,7 +300,7 @@ export const NotificationAnalyticsModel = {
       const { rows } = await pool.query<NotificationAnalyticsRecord>(query, values);
       return rows;
     } catch (error) {
-      console.error('Failed to get daily trends:', error);
+      logger.error('Failed to get daily trends:', error);
       return [];
     }
   },

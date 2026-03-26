@@ -1,8 +1,9 @@
 import { optimizedPool } from '../config/database-pool.config';
 import { QueryMonitor } from '../utils/query-monitor.utils';
+import { logger } from '../utils/logger';
 
 async function runLoadTest(concurrentRequests: number, iterations: number) {
-  console.log(`Starting load test with ${concurrentRequests} concurrent queries...`);
+  logger.info(`Starting load test with ${concurrentRequests} concurrent queries...`);
   
   const startTime = Date.now();
   let successCount = 0;
@@ -26,7 +27,7 @@ async function runLoadTest(concurrentRequests: number, iterations: number) {
         successCount++;
       } catch (error) {
         errorCount++;
-        console.error(`Query ${index} failed:`, error);
+        logger.error(`Query ${index} failed:`, error);
       } finally {
         if (client) client.release();
       }
@@ -36,16 +37,16 @@ async function runLoadTest(concurrentRequests: number, iterations: number) {
   }
 
   const duration = Date.now() - startTime;
-  console.log(`Load test completed in ${duration}ms.`);
-  console.log(`Successful Queries: ${successCount}`);
-  console.log(`Failed Queries: ${errorCount}`);
+  logger.info(`Load test completed in ${duration}ms.`);
+  logger.info(`Successful Queries: ${successCount}`);
+  logger.info(`Failed Queries: ${errorCount}`);
 
   await optimizedPool.end();
 }
 
 // Example usage: 50 concurrent requests over 5 iterations
 if (require.main === module) {
-  runLoadTest(50, 5).catch(console.error);
+  runLoadTest(50, 5).catch((err) => logger.error('Load test failed', { error: err }));
 }
 
 export { runLoadTest };

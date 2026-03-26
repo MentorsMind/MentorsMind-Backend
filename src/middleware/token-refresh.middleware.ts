@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { TokenService } from '../services/token.service';
 import { JwtUtils } from '../utils/jwt.utils';
 import { ResponseUtil } from '../utils/response.utils';
+import { logger } from '../utils/logger';
 
 /**
  * Middleware to handle token refresh requests
@@ -35,7 +36,7 @@ export const handleTokenRefresh = async (
         error.message.includes('Device mismatch')
       ) {
         // Here you could also trigger an audit log or email the user
-        console.warn(`SECURITY ALERT: ${error.message} for IP ${req.ip}`);
+        logger.warn('Security alert detected during token refresh', { message: error.message, ip: req.ip });
         ResponseUtil.unauthorized(res, 'Security alert: Session revoked');
         return;
       }

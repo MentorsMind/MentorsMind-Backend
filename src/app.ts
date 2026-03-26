@@ -7,7 +7,8 @@ import {
   securityMiddleware,
   sanitizeInput,
 } from './middleware/security.middleware';
-import { requestLogger } from './middleware/logging.middleware';
+import { correlationIdMiddleware } from './middleware/correlation-id.middleware';
+import { requestLoggerMiddleware } from './middleware/request-logger.middleware';
 import { generalLimiter } from './middleware/rate-limit.middleware';
 import { errorHandler } from './middleware/errorHandler';
 import { notFoundHandler } from './middleware/notFoundHandler';
@@ -17,15 +18,19 @@ import HealthService from './services/health.service';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 import { versioningMiddleware } from './middleware/versioning.middleware';
 import { CURRENT_VERSION } from './config/api-versions.config';
+import { logger } from './utils/logger';
 
 const app: Application = express();
 const { apiVersion } = config.server;
 const resolvedApiVersion = apiVersion || CURRENT_VERSION;
 
-// Security middleware (should be first)
+// Correlation ID must be first so all downstream middleware/handlers have access
+app.use(correlationIdMiddleware);
+
+// Security middleware
 app.use(securityMiddleware);
 app.use(corsMiddleware);
-app.use(requestLogger);
+app.use(requestLoggerMiddleware);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -55,7 +60,7 @@ app.get(`/api/${resolvedApiVersion}/docs/spec.json`, (_req, res) => {
 
 // Initialize health service
 HealthService.initialize().catch((err) => {
-  console.error('HealthService initialization failed:', err);
+  logger.error('HealthService initialization failed', { error: err });
 });
 
 // API routes

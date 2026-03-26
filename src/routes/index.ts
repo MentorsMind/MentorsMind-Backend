@@ -9,12 +9,19 @@ import timezoneRoutes from './timezone.routes';
 import mentorsRoutes from './mentors.routes';
 import paymentsRoutes from './payments.routes';
 import { AdminService } from '../services/admin.service';
+import { BookingsService } from '../services/bookings.service';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
 // Initialize admin tables (async, don't block)
 AdminService.initialize().catch((err) => {
-  console.error('Failed to initialize admin tables:', err);
+  logger.error('Failed to initialize admin tables:', err);
+});
+
+// Initialize bookings tables (async, don't block)
+BookingsService.initialize().catch(err => {
+  logger.error('Failed to initialize bookings tables:', err);
 });
 
 // Mount route modules

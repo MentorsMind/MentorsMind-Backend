@@ -44,6 +44,16 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.string().regex(/^\d+$/).default('900000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().regex(/^\d+$/).default('100'),
 
+  // Email (SMTP)
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().regex(/^\d+$/).default('587'),
+  SMTP_SECURE: z.enum(['true', 'false']).default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  GMAIL_USER: z.string().optional(),
+  GMAIL_PASS: z.string().optional(),
+  FROM_EMAIL: z.string().email().default('noreply@mentorminds.com'),
+
   // Redis
   REDIS_URL: z.string().url('REDIS_URL must be a valid URL').optional(),
 

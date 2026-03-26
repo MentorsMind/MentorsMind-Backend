@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface NotificationPreferencesRecord {
   id: string;
@@ -73,7 +74,7 @@ export const NotificationPreferencesModel = {
       const { rows } = await pool.query<NotificationPreferencesRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to upsert notification preferences:', error);
+      logger.error('Failed to upsert notification preferences:', error);
       return null;
     }
   },
@@ -91,7 +92,7 @@ export const NotificationPreferencesModel = {
       const { rows } = await pool.query<NotificationPreferencesRecord>(query, [userId]);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to get notification preferences:', error);
+      logger.error('Failed to get notification preferences:', error);
       return null;
     }
   },
@@ -128,7 +129,7 @@ export const NotificationPreferencesModel = {
       const { rowCount } = await pool.query(query, [userId]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      console.error('Failed to delete notification preferences:', error);
+      logger.error('Failed to delete notification preferences:', error);
       return false;
     }
   },

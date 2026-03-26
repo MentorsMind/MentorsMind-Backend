@@ -108,19 +108,20 @@ export const BookingModel = {
       paramIndex++;
     }
 
-    const { rows } = await pool.query<BookingRecord>(
-      `SELECT * FROM bookings WHERE ${whereClause} ORDER BY scheduled_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-      [...params, limit, offset]
-    );
-
-    const { rows: countRows } = await pool.query(
-      `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
-      params
-    );
+    const [dataResult, countResult] = await Promise.all([
+      pool.query<BookingRecord>(
+        `SELECT * FROM bookings WHERE ${whereClause} ORDER BY scheduled_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        [...params, limit, offset]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
+        params
+      ),
+    ]);
 
     return {
-      bookings: rows,
-      total: parseInt(countRows[0].count, 10),
+      bookings: dataResult.rows,
+      total: parseInt(countResult.rows[0].count, 10),
     };
   },
 

@@ -5,6 +5,7 @@ import { MeetingService } from '../services/meeting.service';
 import { NotificationService } from '../services/notification.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
+import { logger } from '../utils/logger';
 
 /**
  * Bookings Controller - Handles session booking operations with meeting URL generation
@@ -84,7 +85,7 @@ export const BookingsController = {
         );
       } catch (notificationError) {
         // Log notification error but don't fail the booking
-        console.error('Failed to send meeting notifications:', notificationError);
+        logger.error('Failed to send meeting notifications:', notificationError);
       }
 
       // Return updated session with meeting URL
@@ -104,7 +105,7 @@ export const BookingsController = {
       // Mark session for manual intervention
       await SessionModel.markForManualIntervention(session.id);
 
-      console.error('Failed to create meeting room:', errorMessage);
+      logger.error('Failed to create meeting room:', errorMessage);
 
       // Still confirm the booking but flag the issue
       await SessionModel.updateStatus(session.id, 'confirmed');

@@ -1,6 +1,7 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
 import { env } from './env';
 import config from './index';
+import { logger } from '../utils/logger';
 
 /**
  * Stellar Network Configuration
@@ -58,7 +59,7 @@ export const networkPassphrase =
 export const getPlatformKeypair = (): StellarSdk.Keypair | null => {
   const secretKey = env.PLATFORM_SECRET_KEY;
   if (!secretKey) {
-    console.warn('⚠️  Platform secret key not configured');
+    logger.warn('Platform secret key not configured');
     return null;
   }
   return StellarSdk.Keypair.fromSecret(secretKey);
@@ -71,10 +72,10 @@ export const getPlatformKeypair = (): StellarSdk.Keypair | null => {
 export const testStellarConnection = async (): Promise<boolean> => {
   try {
     await server.ledgers().limit(1).call();
-    console.log(`✅ Stellar ${config.stellar.network} connected successfully`);
+    logger.info(`Stellar ${config.stellar.network} connected successfully`);
     return true;
   } catch (error) {
-    console.error('❌ Stellar connection failed:', error instanceof Error ? error.message : error);
+    logger.error('Stellar connection failed', { error: error instanceof Error ? error.message : error });
     return false;
   }
 };

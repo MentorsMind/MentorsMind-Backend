@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuditLoggerService } from '../services/audit-logger.service';
 import { extractClientIp, AuditAction, LogLevel } from '../utils/log-formatter.utils';
+import { logger } from '../utils/logger';
 
 export interface AuditLogConfig {
     action: AuditAction | string;
@@ -53,7 +54,7 @@ export const auditLogMiddleware = (config: AuditLogConfig) => {
                     userAgent: req.headers['user-agent'],
                 });
             } catch (error) {
-                console.error('Audit Log Middleware execution error:', error);
+                logger.error('Audit Log Middleware execution error', { error });
             }
         });
 
@@ -100,7 +101,7 @@ export const globalModificationAuditMiddleware = (req: Request, res: Response, n
                 userAgent: req.headers['user-agent'],
             });
         } catch (error) {
-            console.error('Global modification audit failed:', error);
+            logger.error('Global modification audit failed', { error });
         }
     });
 

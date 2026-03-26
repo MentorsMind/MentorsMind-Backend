@@ -307,8 +307,11 @@ export const MentorsService = {
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
-    const dateTrunc: Record<string, string> = { day: 'day', week: 'week', month: 'month' };
-    const truncUnit = dateTrunc[groupBy] ?? 'month';
+    const allowedUnits: Record<string, string> = { day: 'day', week: 'week', month: 'month' };
+    const truncUnit = allowedUnits[groupBy];
+    if (!truncUnit) {
+      throw new Error(`Invalid groupBy value: ${groupBy}`);
+    }
 
     const [summaryResult, breakdownResult] = await Promise.all([
       pool.query<{ total_earnings: string; total_sessions: string }>(
@@ -322,15 +325,15 @@ export const MentorsService = {
       ),
       pool.query<{ period: string; earnings: string; sessions: string }>(
         `SELECT
-           DATE_TRUNC('${truncUnit}', s.scheduled_at)::text AS period,
+           DATE_TRUNC($${idx}, s.scheduled_at)::text AS period,
            COALESCE(SUM(u.hourly_rate * (s.duration_minutes / 60.0)), 0) AS earnings,
            COUNT(s.id) AS sessions
          FROM sessions s
          JOIN users u ON u.id = s.mentor_id
          ${whereClause}
-         GROUP BY DATE_TRUNC('${truncUnit}', s.scheduled_at)
+         GROUP BY DATE_TRUNC($${idx}, s.scheduled_at)
          ORDER BY period DESC`,
-        values,
+        [...values, truncUnit],
       ),
     ]);
 

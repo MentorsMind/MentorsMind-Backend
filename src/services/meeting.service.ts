@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import meetingConfig, { MeetingProvider } from '../config/meeting.config';
 import { calculateMeetingExpiry, generateJitsiRoomName } from '../utils/meeting.utils';
+import { logger } from '../utils/logger';
 
 export interface MeetingRoomOptions {
   sessionId: string;
@@ -232,12 +233,12 @@ export const MeetingService = {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Retry logic
       if (isRetryableError(error)) {
-        console.warn(`Meeting provider API failed, retrying... (${errorMessage})`);
+        logger.warn(`Meeting provider API failed, retrying... (${errorMessage})`);
         try {
           return await retryCreateMeetingRoom(options);
         } catch (retryError) {
           const retryErrorMessage = retryError instanceof Error ? retryError.message : 'Unknown error';
-          console.error('Meeting room creation failed after retry:', retryErrorMessage);
+          logger.error('Meeting room creation failed after retry:', retryErrorMessage);
           throw new Error(
             `Failed to create meeting room after retry. Session ${sessionId} requires manual intervention.`
           );
@@ -255,7 +256,7 @@ export const MeetingService = {
       meetingConfig;
       return true;
     } catch (error) {
-      console.error('Meeting configuration validation failed:', error);
+      logger.error('Meeting configuration validation failed:', error);
       return false;
     }
   },

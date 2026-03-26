@@ -4,6 +4,7 @@ import { ExportService } from '../services/export.service';
 import { ExportJobModel } from '../models/export-job.model';
 import { AuditLoggerService } from '../services/audit-logger.service';
 import { LogLevel } from '../utils/log-formatter.utils';
+import { logger } from '../utils/logger';
 
 const redisUrl = config.redis.url || 'redis://localhost:6379';
 const url = new URL(redisUrl);
@@ -26,11 +27,11 @@ export const exportWorker = new Worker(
 );
 
 exportWorker.on('completed', (job) => {
-  console.log(`Export job ${job.id} completed`);
+  logger.info(`Export job ${job.id} completed`);
 });
 
 exportWorker.on('failed', async (job, err) => {
-  console.error(`Export job ${job?.id} failed: ${err.message}`);
+  logger.error(`Export job ${job?.id} failed`, { error: err.message });
   if (job) {
     const { jobId, userId } = job.data;
     await ExportJobModel.updateStatus(jobId, 'failed', undefined, err.message);

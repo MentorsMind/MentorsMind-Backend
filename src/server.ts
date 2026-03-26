@@ -2,8 +2,9 @@
 import config from './config';
 import app from './app';
 import { initializeModels } from './models';
-import { createSocketServer } from './config/socket';
-import { initializeSocketService } from './services/socket.service';
+import { initWebSocketServer } from './websocket/ws-server';
+import { QueryMonitor } from './utils/query-monitor.utils';
+import pool from './config/database';
 import {
   emailWorker,
   paymentWorker,
@@ -12,15 +13,18 @@ import {
   startScheduler,
   stopScheduler,
 } from './workers';
+import { initializeEmailTemplates } from './services/template-initializer.service';
 
-// Initialize database tables
-initializeModels().catch((err) => {
-  console.error('Failed to initialize models:', err);
-});
+// Initialize database tables, then seed email templates
+initializeModels()
+  .then(() => initializeEmailTemplates())
+  .catch((err) => {
+    console.error('Failed to initialize models:', err);
+  });
 
 // Start background job workers and scheduler
 startScheduler().catch((err) => {
-  console.error('Failed to start job scheduler:', err);
+  logger.error('Failed to start job scheduler', { error: err });
 });
 
 const { port: PORT, apiVersion: API_VERSION } = config.server;
@@ -28,21 +32,27 @@ const NODE_ENV = config.env;
 
 // Start server
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📝 Environment: ${NODE_ENV}`);
-  console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
-  console.log(`💚 Health check: http://localhost:${PORT}/health`);
-  console.log(`📚 API Docs: http://localhost:${PORT}/api/${API_VERSION}/docs`);
-  console.log(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`);
+  logger.info('Server started', {
+    port: PORT,
+    env: NODE_ENV,
+    apiUrl: `http://localhost:${PORT}/api/${API_VERSION}`,
+    healthCheck: `http://localhost:${PORT}/health`,
+    apiDocs: `http://localhost:${PORT}/api/${API_VERSION}/docs`,
+    webSocket: `ws://localhost:${PORT}/ws`,
+  });
 });
 
 // Attach Socket.IO server to the same HTTP server
 const io = createSocketServer(server);
 initializeSocketService(io);
 
+// Subscribe to Stellar Horizon SSE for real-time payment confirmations
+startStellarStream();
+
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`${signal} signal received: closing HTTP server`);
+  stopStellarStream();
   await Promise.all([
     emailWorker.close(),
     paymentWorker.close(),
@@ -51,7 +61,7 @@ async function shutdown(signal: string) {
     stopScheduler(),
   ]);
   server.close(() => {
-    console.log('HTTP server closed');
+    logger.info('HTTP server closed');
     process.exit(0);
   });
 }
