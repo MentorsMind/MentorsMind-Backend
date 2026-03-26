@@ -46,6 +46,21 @@ const config = {
     maxRequests: parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10),
   },
 
+  email: {
+    smtp: {
+      host: env.SMTP_HOST,
+      port: parseInt(env.SMTP_PORT, 10),
+      secure: env.SMTP_SECURE === 'true',
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+    gmail: {
+      user: env.GMAIL_USER,
+      pass: env.GMAIL_PASS,
+    },
+    fromEmail: env.FROM_EMAIL,
+  },
+
   redis: {
     url: env.REDIS_URL,
   },

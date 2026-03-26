@@ -2,6 +2,7 @@ import { DateTime } from 'luxon';
 import { CronJob } from 'cron';
 import { logger } from '../utils/logger.utils';
 import { formatInTimezone } from '../utils/timezone.utils';
+import { enqueueEmail } from '../queues/email.queue';
 import pool from '../config/database';
 
 /**
@@ -234,22 +235,42 @@ export class ReminderService {
   }
 
   /**
-   * Placeholder notification integration
-   * TODO: Integrate with email service (Nodemailer/Resend/SendGrid)
-   * TODO: Integrate with SMS service (Twilio/AWS SNS)
+   * Send notification via email queue.
+   * Resolves the user's email from the database and enqueues the job.
    */
   private async sendNotification(
     userId: string,
     content: { subject: string; body: string; type: 'email' | 'sms' }
   ): Promise<void> {
-    logger.info(`[${content.type.toUpperCase()}] To user ${userId}: ${content.subject}`);
-    // TODO: Actual email/SMS integration
-    // Example with Nodemailer:
-    // await emailService.send({
-    //   to: userEmail,
-    //   subject: content.subject,
-    //   text: content.body
-    // });
+    if (content.type !== 'email') {
+      logger.info(`[${content.type.toUpperCase()}] To user ${userId}: ${content.subject}`);
+      return;
+    }
+
+    try {
+      const { rows } = await pool.query<{ email: string }>(
+        'SELECT email FROM users WHERE id = $1',
+        [userId],
+      );
+
+      if (!rows[0]?.email) {
+        logger.warn(`Reminder: no email found for user ${userId}`);
+        return;
+      }
+
+      await enqueueEmail({
+        to: [rows[0].email],
+        subject: content.subject,
+        templateId: 'session_reminder',
+        templateData: { subject: content.subject, body: content.body },
+        textContent: content.body,
+        htmlContent: content.body.replace(/\n/g, '<br>'),
+      });
+
+      logger.info(`Reminder email enqueued for user ${userId}: ${content.subject}`);
+    } catch (error) {
+      logger.error(`Failed to enqueue reminder for user ${userId}:`, error);
+    }
   }
 
   /**

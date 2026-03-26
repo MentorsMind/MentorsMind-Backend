@@ -2,6 +2,7 @@ import { NotificationsModel, NotificationInput, NotificationType, NotificationCh
 import { NotificationPreferencesModel } from '../models/notification-preferences.model';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
 import { NotificationAnalyticsModel } from '../models/notification-analytics.model';
+import { enqueueEmail } from '../queues/email.queue';
 
 export interface NotificationRecord {
   id: string;
@@ -171,34 +172,19 @@ export const NotificationService = {
   },
 
   /**
-   * Send email notification (placeholder - integrate with email provider)
-   * In production, integrate with SendGrid, AWS SES, or similar
+   * Send email notification via the email queue (processed by email worker → EmailService).
    */
   async sendEmail(notification: EmailNotification): Promise<boolean> {
-    // TODO: Integrate with actual email service (SendGrid, SES, etc.)
-    console.log('📧 Sending email:', {
-      to: notification.to,
-      subject: notification.subject,
-      preview: notification.body.substring(0, 100),
-    });
-
-    // Placeholder implementation - log the email
-    // In production, replace with actual email API call
     try {
-      // Example with SendGrid:
-      // const sgMail = require('@sendgrid/mail');
-      // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-      // await sgMail.send({
-      //   to: notification.to,
-      //   from: process.env.FROM_EMAIL,
-      //   subject: notification.subject,
-      //   text: notification.body,
-      //   html: notification.html || notification.body.replace(/\n/g, '<br>'),
-      // });
-
+      await enqueueEmail({
+        to: [notification.to],
+        subject: notification.subject,
+        htmlContent: notification.html || notification.body.replace(/\n/g, '<br>'),
+        textContent: notification.body,
+      });
       return true;
     } catch (error) {
-      console.error('Failed to send email:', error);
+      console.error('Failed to enqueue email:', error);
       return false;
     }
   },

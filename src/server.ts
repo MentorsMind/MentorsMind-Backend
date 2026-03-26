@@ -13,14 +13,14 @@ import {
   startScheduler,
   stopScheduler,
 } from './workers';
+import { initializeEmailTemplates } from './services/template-initializer.service';
 
-// Initialize query monitor with pool for slow query logging
-QueryMonitor.init(pool);
-
-// Initialize database tables
-initializeModels().catch((err) => {
-  console.error('Failed to initialize models:', err);
-});
+// Initialize database tables, then seed email templates
+initializeModels()
+  .then(() => initializeEmailTemplates())
+  .catch((err) => {
+    console.error('Failed to initialize models:', err);
+  });
 
 // Start background job workers and scheduler
 startScheduler().catch((err) => {
@@ -43,9 +43,13 @@ const server = app.listen(PORT, () => {
 // Attach WebSocket server to the same HTTP server
 initWebSocketServer(server);
 
+// Subscribe to Stellar Horizon SSE for real-time payment confirmations
+startStellarStream();
+
 // Graceful shutdown
 async function shutdown(signal: string) {
   console.log(`${signal} signal received: closing HTTP server`);
+  stopStellarStream();
   await Promise.all([
     emailWorker.close(),
     paymentWorker.close(),

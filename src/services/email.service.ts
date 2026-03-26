@@ -54,15 +54,17 @@ export class EmailService {
    * Initialize email providers based on configuration
    */
   private initializeProviders(): void {
+    const { smtp, gmail } = config.email;
+
     // Primary provider: SMTP (Nodemailer)
-    if (process.env.SMTP_HOST) {
+    if (smtp.host) {
       const smtpTransporter = nodemailer.createTransporter({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: process.env.SMTP_SECURE === 'true',
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user: smtp.user,
+          pass: smtp.pass,
         },
         pool: true,
         maxConnections: 5,
@@ -77,12 +79,12 @@ export class EmailService {
     }
 
     // Fallback provider: Gmail (for development)
-    if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+    if (gmail.user && gmail.pass) {
       const gmailTransporter = nodemailer.createTransporter({
         service: 'gmail',
         auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_PASS,
+          user: gmail.user,
+          pass: gmail.pass,
         },
       });
 
@@ -185,7 +187,7 @@ export class EmailService {
       }
 
       const mailOptions: SendMailOptions = {
-        from: process.env.FROM_EMAIL || 'noreply@mentorminds.com',
+        from: config.email.fromEmail,
         to: request.to.join(', '),
         cc: request.cc?.join(', '),
         bcc: request.bcc?.join(', '),
