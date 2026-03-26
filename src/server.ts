@@ -2,7 +2,8 @@
 import config from './config';
 import app from './app';
 import { initializeModels } from './models';
-import { initWebSocketServer } from './websocket/ws-server';
+import { createSocketServer } from './config/socket';
+import { initializeSocketService } from './services/socket.service';
 import {
   emailWorker,
   paymentWorker,
@@ -32,11 +33,12 @@ const server = app.listen(PORT, () => {
   console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
   console.log(`💚 Health check: http://localhost:${PORT}/health`);
   console.log(`📚 API Docs: http://localhost:${PORT}/api/${API_VERSION}/docs`);
-  console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
+  console.log(`🔌 Socket.IO: ws://localhost:${PORT}/socket.io`);
 });
 
-// Attach WebSocket server to the same HTTP server
-initWebSocketServer(server);
+// Attach Socket.IO server to the same HTTP server
+const io = createSocketServer(server);
+initializeSocketService(io);
 
 // Graceful shutdown
 async function shutdown(signal: string) {
