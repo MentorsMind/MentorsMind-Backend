@@ -28,14 +28,18 @@ export const BookingsService = {
   },
 
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
-    // Validate mentee exists
-    const mentee = await UsersService.findById(data.menteeId);
+    // Batch-validate both users in a single query (avoids N+1)
+    const { rows: users } = await pool.query(
+      `SELECT id, role FROM users WHERE id = ANY($1) AND is_active = true`,
+      [[data.menteeId, data.mentorId]]
+    );
+
+    const mentee = users.find((u: any) => u.id === data.menteeId);
+    const mentor = users.find((u: any) => u.id === data.mentorId);
+
     if (!mentee) {
       throw createError('Mentee not found', 404);
     }
-
-    // Validate mentor exists and has mentor role
-    const mentor = await UsersService.findById(data.mentorId);
     if (!mentor) {
       throw createError('Mentor not found', 404);
     }

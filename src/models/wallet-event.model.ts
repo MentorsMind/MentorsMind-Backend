@@ -95,10 +95,10 @@ export const WalletEventModel = {
     offset = 0
   ): Promise<WalletEvent[]> {
     const query = `
-      SELECT * FROM wallet_events 
-      WHERE user_id = $1 AND event_type = $2 
-      ORDER BY created_at DESC 
-      LIMIT $2 OFFSET $3;
+      SELECT * FROM wallet_events
+      WHERE user_id = $1 AND event_type = $2
+      ORDER BY created_at DESC
+      LIMIT $3 OFFSET $4;
     `;
     const { rows } = await pool.query<WalletEvent>(query, [userId, eventType, limit, offset]);
     return rows;
@@ -144,11 +144,11 @@ export const WalletEventModel = {
 
   async deleteOldEvents(daysToKeep = 90): Promise<number> {
     const query = `
-      DELETE FROM wallet_events 
-      WHERE created_at < NOW() - INTERVAL '${daysToKeep} days'
+      DELETE FROM wallet_events
+      WHERE created_at < NOW() - make_interval(days => $1)
       RETURNING id;
     `;
-    const { rows } = await pool.query(query);
+    const { rows } = await pool.query(query, [daysToKeep]);
     return rows.length;
   },
 };

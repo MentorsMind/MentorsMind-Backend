@@ -3,6 +3,8 @@ import config from './config';
 import app from './app';
 import { initializeModels } from './models';
 import { initWebSocketServer } from './websocket/ws-server';
+import { QueryMonitor } from './utils/query-monitor.utils';
+import pool from './config/database';
 import {
   emailWorker,
   paymentWorker,
