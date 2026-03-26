@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger.utils';
+import { getCorrelationId } from '../middleware/correlation-id.middleware';
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -17,6 +18,7 @@ export const errorHandler = (
 
   // Log error
   logger.error(`${req.method} ${req.path}`, {
+    correlationId: getCorrelationId() ?? req.correlationId,
     error: message,
     statusCode,
     stack: err.stack,

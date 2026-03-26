@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface AuditLogRecord {
     id: string; // UUID
@@ -79,7 +80,7 @@ export const AuditLogModel = {
         } catch (error) {
             // In production, you might not want audit log failures to crash the app,
             // but you should probably log to standard terminal output as fallback.
-            console.error('Failed to insert audit log to DB:', error);
+            logger.error('Failed to insert audit log to DB:', error);
             return null;
         }
     }

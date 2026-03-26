@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import config from './index';
+import { logger } from '../utils/logger';
 
 export const pool = new Pool({
   connectionString: config.db.url,
@@ -16,17 +17,17 @@ export const pool = new Pool({
 export const testConnection = async (): Promise<boolean> => {
   try {
     const client = await pool.connect();
-    console.log('✅ Database connected successfully');
+    logger.info('Database connected successfully');
     client.release();
     return true;
   } catch (error) {
-    console.error('❌ Database connection failed:', error instanceof Error ? error.message : error);
+    logger.error('Database connection failed', { error: error instanceof Error ? error.message : error });
     return false;
   }
 };
 
 pool.on('error', (err) => {
-  console.error('Unexpected database pool error:', err.message);
+  logger.error('Unexpected database pool error', { error: err.message });
 });
 
 export default pool;

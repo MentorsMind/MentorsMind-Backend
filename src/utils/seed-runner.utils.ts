@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import pool from '../config/database';
+import { logger } from './logger';
 
 export type SeedFn = (client: PoolClient, size: SeedSize) => Promise<void>;
 
@@ -54,10 +55,10 @@ export async function runSeeds(seeds: SeedFn[], size: SeedSize = 'dev'): Promise
       await seed(client, size);
     }
     await client.query('COMMIT');
-    console.log('✅ All seeds completed successfully');
+    logger.info('All seeds completed successfully');
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ Seed failed, rolled back:', err instanceof Error ? err.message : err);
+    logger.error('Seed failed, rolled back', { error: err instanceof Error ? err.message : err });
     throw err;
   } finally {
     client.release();
@@ -79,10 +80,10 @@ export async function resetDatabase(): Promise<void> {
       RESTART IDENTITY CASCADE
     `);
     await client.query('COMMIT');
-    console.log('✅ Database reset complete');
+    logger.info('Database reset complete');
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('❌ Reset failed:', err instanceof Error ? err.message : err);
+    logger.error('Reset failed', { error: err instanceof Error ? err.message : err });
     throw err;
   } finally {
     client.release();

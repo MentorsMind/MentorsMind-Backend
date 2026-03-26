@@ -7,6 +7,7 @@ import { stellarService } from './stellar.service';
 import { logger } from '../utils/logger.utils';
 import { createError } from '../middleware/errorHandler';
 import { calculateEndTime, calculateRefundEligibility } from '../utils/booking-conflicts.utils';
+import { SocketService } from './socket.service';
 import pool from '../config/database';
 
 export interface CreateBookingData {
@@ -31,14 +32,18 @@ export const BookingsService = {
   },
 
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
-    // Validate mentee exists
-    const mentee = await UsersService.findById(data.menteeId);
+    // Batch-validate both users in a single query (avoids N+1)
+    const { rows: users } = await pool.query(
+      `SELECT id, role FROM users WHERE id = ANY($1) AND is_active = true`,
+      [[data.menteeId, data.mentorId]]
+    );
+
+    const mentee = users.find((u: any) => u.id === data.menteeId);
+    const mentor = users.find((u: any) => u.id === data.mentorId);
+
     if (!mentee) {
       throw createError('Mentee not found', 404);
     }
-
-    // Validate mentor exists and has mentor role
-    const mentor = await UsersService.findById(data.mentorId);
     if (!mentor) {
       throw createError('Mentor not found', 404);
     }
@@ -192,6 +197,17 @@ export const BookingsService = {
     await CacheService.del(CacheKeys.sessionList(booking.mentee_id));
     await CacheService.del(CacheKeys.sessionList(booking.mentor_id));
     logger.debug('Booking cache invalidated on confirmation', { bookingId });
+    // Emit session:updated event to both mentor and mentee
+    SocketService.emitToUser(booking.mentor_id, 'session:updated', {
+      bookingId,
+      status: 'confirmed',
+      updatedAt: updated.updated_at,
+    });
+    SocketService.emitToUser(booking.mentee_id, 'session:updated', {
+      bookingId,
+      status: 'confirmed',
+      updatedAt: updated.updated_at,
+    });
 
     return updated;
   },
@@ -224,6 +240,17 @@ export const BookingsService = {
     await CacheService.del(CacheKeys.sessionList(booking.mentee_id));
     await CacheService.del(CacheKeys.sessionList(booking.mentor_id));
     logger.debug('Booking cache invalidated on completion', { bookingId });
+    // Emit session:updated event to both mentor and mentee
+    SocketService.emitToUser(booking.mentor_id, 'session:updated', {
+      bookingId,
+      status: 'completed',
+      updatedAt: updated.updated_at,
+    });
+    SocketService.emitToUser(booking.mentee_id, 'session:updated', {
+      bookingId,
+      status: 'completed',
+      updatedAt: updated.updated_at,
+    });
 
     return updated;
   },
@@ -258,6 +285,20 @@ export const BookingsService = {
     logger.debug('Booking cache invalidated on cancellation', { bookingId });
 
     // TODO: Process refund via Stellar if eligible
+
+    // Emit session:updated event to both mentor and mentee
+    SocketService.emitToUser(booking.mentor_id, 'session:updated', {
+      bookingId,
+      status: 'cancelled',
+      cancellationReason: reason || 'No reason provided',
+      updatedAt: updated.updated_at,
+    });
+    SocketService.emitToUser(booking.mentee_id, 'session:updated', {
+      bookingId,
+      status: 'cancelled',
+      cancellationReason: reason || 'No reason provided',
+      updatedAt: updated.updated_at,
+    });
 
     return updated;
   },
@@ -297,6 +338,22 @@ export const BookingsService = {
     if (!updated) {
       throw createError('Failed to reschedule booking', 500);
     }
+
+    // Emit session:updated event to both mentor and mentee
+    SocketService.emitToUser(booking.mentor_id, 'session:updated', {
+      bookingId,
+      status: 'rescheduled',
+      newScheduledAt,
+      reason: reason || 'No reason provided',
+      updatedAt: updated.updated_at,
+    });
+    SocketService.emitToUser(booking.mentee_id, 'session:updated', {
+      bookingId,
+      status: 'rescheduled',
+      newScheduledAt,
+      reason: reason || 'No reason provided',
+      updatedAt: updated.updated_at,
+    });
 
     return updated;
   },

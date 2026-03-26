@@ -1,0 +1,17 @@
+Session Cancelled — MentorMinds
+
+Your upcoming mentorship session has been cancelled.
+
+Session Details:
+- Session: {{sessionTitle}}
+- Originally Scheduled: {{sessionDate}} at {{sessionTime}}
+- Cancelled By: {{cancelledBy}}
+- Reason: {{reason}}
+
+Refund Status: {{refundStatus}}
+
+Best regards,
+The MentorMinds Team
+
+Book Another Session: {{platformUrl}}
+Support: {{supportUrl}}

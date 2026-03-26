@@ -9,6 +9,7 @@ import { stellarService } from './stellar.service';
 import { createError } from '../middleware/errorHandler';
 import { logger } from '../utils/logger.utils';
 import { env } from '../config/env';
+import { SocketService } from './socket.service';
 
 export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'refunded';
 export type PaymentType = 'payment' | 'refund' | 'platform_fee' | 'mentor_payout' | 'escrow_hold' | 'escrow_release';
@@ -125,6 +126,16 @@ export const PaymentsService = {
         [payment.booking_id, stellarTxHash],
       );
     }
+
+    // Emit payment:confirmed event to the user
+    SocketService.emitToUser(payment.user_id, 'payment:confirmed', {
+      paymentId,
+      bookingId: payment.booking_id,
+      amount: payment.amount,
+      currency: payment.currency,
+      stellarTxHash,
+      completedAt: rows[0].completed_at,
+    });
 
     logger.info('Payment confirmed', { paymentId, stellarTxHash });
     return rows[0];

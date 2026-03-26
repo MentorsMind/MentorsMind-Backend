@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface NotificationRecord {
   id: string;
@@ -125,7 +126,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to create notification:', error);
+      logger.error('Failed to create notification:', error);
       return null;
     }
   },
@@ -143,7 +144,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, [id]);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to get notification by ID:', error);
+      logger.error('Failed to get notification by ID:', error);
       return null;
     }
   },
@@ -199,7 +200,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows;
     } catch (error) {
-      console.error('Failed to get notifications by user ID:', error);
+      logger.error('Failed to get notifications by user ID:', error);
       return [];
     }
   },
@@ -228,7 +229,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, [limit]);
       return rows;
     } catch (error) {
-      console.error('Failed to get scheduled notifications:', error);
+      logger.error('Failed to get scheduled notifications:', error);
       return [];
     }
   },
@@ -248,7 +249,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      logger.error('Failed to mark notification as read:', error);
       return false;
     }
   },
@@ -268,7 +269,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [userId]);
       return rowCount ?? 0;
     } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
+      logger.error('Failed to mark all notifications as read:', error);
       return 0;
     }
   },
@@ -324,7 +325,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to update notification:', error);
+      logger.error('Failed to update notification:', error);
       return null;
     }
   },
@@ -343,7 +344,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      logger.error('Failed to delete notification:', error);
       return false;
     }
   },
@@ -362,7 +363,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query);
       return rowCount ?? 0;
     } catch (error) {
-      console.error('Failed to delete expired notifications:', error);
+      logger.error('Failed to delete expired notifications:', error);
       return 0;
     }
   },
@@ -389,7 +390,7 @@ export const NotificationsModel = {
         read: parseInt(row.read, 10),
       };
     } catch (error) {
-      console.error('Failed to get notification counts:', error);
+      logger.error('Failed to get notification counts:', error);
       return { total: 0, unread: 0, read: 0 };
     }
   },

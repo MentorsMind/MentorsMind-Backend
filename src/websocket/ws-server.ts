@@ -6,6 +6,11 @@ import {
 } from './ws-auth.middleware';
 import { logger } from '../utils/logger.utils';
 import { WsService } from '../services/ws.service';
+import {
+  isSessionRoomEvent,
+  handleSessionRoomMessage,
+  removeFromRoom,
+} from './ws-handlers/session-room.handler';
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 10_000;
@@ -62,6 +67,7 @@ export function initWebSocketServer(httpServer: Server): WebSocketServer {
     });
 
     client.on('close', (code: number, reason: Buffer) => {
+      removeFromRoom(client);
       WsService.removeClient(authResult.userId, client);
       logger.info('WS: client disconnected', {
         userId: authResult.userId,
@@ -114,6 +120,12 @@ export function initWebSocketServer(httpServer: Server): WebSocketServer {
  * Handle messages sent from the client (e.g. ping, subscribe).
  */
 function handleClientMessage(client: AuthenticatedWebSocket, msg: any): void {
+  // Route session-room events to the dedicated handler
+  if (msg.event && isSessionRoomEvent(msg.event)) {
+    handleSessionRoomMessage(client, msg);
+    return;
+  }
+
   switch (msg.event) {
     case 'ping':
       client.send(JSON.stringify({ event: 'pong', data: { ts: Date.now() } }));

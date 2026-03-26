@@ -13,6 +13,10 @@ const config: Config = {
     '**/__tests__/**/*.unit.test.ts',
     '**/queues/__tests__/**/*.test.ts',
     '**/workers/__tests__/**/*.test.ts',
+    // Logging infrastructure unit tests (no DB required)
+    '**/utils/__tests__/logger.test.ts',
+    '**/middleware/__tests__/correlation-id.middleware.test.ts',
+    '**/middleware/__tests__/request-logger.middleware.test.ts',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {

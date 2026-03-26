@@ -1,5 +1,6 @@
 import { Pool, PoolConfig } from 'pg';
 import config from './index';
+import { logger } from '../utils/logger';
 
 export const poolConfig: PoolConfig = {
   connectionString: config.db.url,
@@ -21,14 +22,14 @@ export const createOptimizedPool = (): Pool => {
   const pool = new Pool(poolConfig);
   
   pool.on('error', (err) => {
-    console.error('Unexpected database pool error:', err.message);
+    logger.error('Unexpected database pool error', { error: err.message });
   });
   
   pool.on('connect', (client) => {
     // Session-level configurations for optimization
     client.query('SET join_collapse_limit = 8').catch(() => {});
     client.on('error', (error) => {
-      console.error('Database client error:', error.message);
+      logger.error('Database client error', { error: error.message });
     });
   });
 

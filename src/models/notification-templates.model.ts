@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface NotificationTemplateRecord {
   id: string;
@@ -77,7 +78,7 @@ export const NotificationTemplatesModel = {
       const { rows } = await pool.query<NotificationTemplateRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to create notification template:', error);
+      logger.error('Failed to create notification template:', error);
       return null;
     }
   },
@@ -95,7 +96,7 @@ export const NotificationTemplatesModel = {
       const { rows } = await pool.query<NotificationTemplateRecord>(query, [id]);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to get notification template:', error);
+      logger.error('Failed to get notification template:', error);
       return null;
     }
   },
@@ -114,7 +115,7 @@ export const NotificationTemplatesModel = {
       const { rows } = await pool.query<NotificationTemplateRecord>(query, [type]);
       return rows;
     } catch (error) {
-      console.error('Failed to get notification templates by type:', error);
+      logger.error('Failed to get notification templates by type:', error);
       return [];
     }
   },
@@ -170,7 +171,7 @@ export const NotificationTemplatesModel = {
       const { rows } = await pool.query<NotificationTemplateRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to update notification template:', error);
+      logger.error('Failed to update notification template:', error);
       return null;
     }
   },
@@ -190,7 +191,7 @@ export const NotificationTemplatesModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      console.error('Failed to delete notification template:', error);
+      logger.error('Failed to delete notification template:', error);
       return false;
     }
   },
@@ -209,7 +210,7 @@ export const NotificationTemplatesModel = {
       const { rows } = await pool.query<NotificationTemplateRecord>(query);
       return rows;
     } catch (error) {
-      console.error('Failed to get all notification templates:', error);
+      logger.error('Failed to get all notification templates:', error);
       return [];
     }
   },

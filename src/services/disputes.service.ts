@@ -1,18 +1,19 @@
 import { DisputeModel, DisputeRecord } from '../models/dispute.model';
 import { DisputeStateMachine } from './dispute-state-machine.service';
 import { AuditLogModel } from '../models/audit-log.model';
+import { logger } from '../utils/logger';
 
 // Placeholder for Escrow API integration (Issue #B10)
 export const EscrowService = {
   async processResolution(transactionId: string, action: 'refund' | 'release'): Promise<void> {
-    console.log(`[EscrowService] Processing ${action} for transaction ${transactionId}`);
+    logger.info(`[EscrowService] Processing ${action} for transaction ${transactionId}`);
   }
 };
 
 // Placeholder for Notification System integration (Issue #B15)
 export const NotificationService = {
   async notifyDisputeUpdate(userId: string, disputeId: string, event: string): Promise<void> {
-    console.log(`[NotificationService] Sending email to ${userId} regarding dispute ${disputeId}: ${event}`);
+    logger.info(`[NotificationService] Sending email to ${userId} regarding dispute ${disputeId}: ${event}`);
   }
 };
 
