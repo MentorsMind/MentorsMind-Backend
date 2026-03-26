@@ -1,85 +1,132 @@
-import { Request, Response } from 'express';
-import { AnalyticsService } from '../services/analytics.service';
-import { ResponseUtil } from '../utils/response.utils';
-import { TtlCache, withCache } from '../utils/cache.utils';
-import { logger } from '../utils/logger.utils';
+import { Response } from "express";
+import { AuthenticatedRequest } from "../types/api.types";
+import { AnalyticsService } from "../services/analytics.service";
+import { ResponseUtil } from "../utils/response.utils";
 
-// 5 minutes TTL
-const ANALYTICS_CACHE_TTL = 5 * 60 * 1000;
-const analyticsCache = new TtlCache<any>(ANALYTICS_CACHE_TTL);
+export const AnalyticsController = {
+  /**
+   * GET /api/v1/admin/analytics/revenue
+   * Get revenue analytics
+   */
+  async getRevenue(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const period = (req.query.period as string) || "30d";
+    const format = req.query.format as string;
 
-export class AnalyticsController {
-  static async getOverview(req: Request, res: Response): Promise<void> {
-    try {
-      const data = await withCache(
-        'analytics:overview',
-        () => AnalyticsService.getOverview(),
-        analyticsCache
+    if (format === "csv") {
+      const csv = await AnalyticsService.exportToCSV("revenue", period);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="revenue-${period}.csv"`,
       );
-      ResponseUtil.success(res, data, 'Platform overview analytics');
-    } catch (error) {
-      logger.error('AnalyticsController.getOverview error', { error });
-      ResponseUtil.error(res, 'Failed to fetch overview analytics');
+      res.send(csv);
+      return;
     }
-  }
 
-  static async getRevenue(req: Request, res: Response): Promise<void> {
-    const period = (req.query.period as string) || '30d';
-    try {
-      const data = await withCache(
-        `analytics:revenue:${period}`,
-        () => AnalyticsService.getRevenueBreakdown(period),
-        analyticsCache
-      );
-      ResponseUtil.success(res, data, `Revenue breakdown for ${period}`);
-    } catch (error) {
-      logger.error('AnalyticsController.getRevenue error', { error });
-      ResponseUtil.error(res, 'Failed to fetch revenue analytics');
-    }
-  }
+    const data = await AnalyticsService.getRevenue(period);
+    ResponseUtil.success(res, data, "Revenue analytics retrieved");
+  },
 
-  static async getUsers(req: Request, res: Response): Promise<void> {
-    const period = (req.query.period as string) || '30d';
-    try {
-      const data = await withCache(
-        `analytics:users:${period}`,
-        () => AnalyticsService.getUserGrowth(period),
-        analyticsCache
-      );
-      ResponseUtil.success(res, data, `User growth for ${period}`);
-    } catch (error) {
-      logger.error('AnalyticsController.getUsers error', { error });
-      ResponseUtil.error(res, 'Failed to fetch user analytics');
-    }
-  }
+  /**
+   * GET /api/v1/admin/analytics/users
+   * Get user growth analytics
+   */
+  async getUserGrowth(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const period = (req.query.period as string) || "30d";
+    const format = req.query.format as string;
 
-  static async getSessions(req: Request, res: Response): Promise<void> {
-    const period = (req.query.period as string) || '30d';
-    try {
-      const data = await withCache(
-        `analytics:sessions:${period}`,
-        () => AnalyticsService.getSessionMetrics(period),
-        analyticsCache
+    if (format === "csv") {
+      const csv = await AnalyticsService.exportToCSV("users", period);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="users-${period}.csv"`,
       );
-      ResponseUtil.success(res, data, `Session metrics for ${period}`);
-    } catch (error) {
-      logger.error('AnalyticsController.getSessions error', { error });
-      ResponseUtil.error(res, 'Failed to fetch session analytics');
+      res.send(csv);
+      return;
     }
-  }
 
-  static async getPayments(req: Request, res: Response): Promise<void> {
-    const period = (req.query.period as string) || '30d';
-    try {
-      const data = await withCache(
-        `analytics:payments:${period}`,
-        () => AnalyticsService.getPaymentMetrics(period),
-        analyticsCache
+    const data = await AnalyticsService.getUserGrowth(period);
+    ResponseUtil.success(res, data, "User growth analytics retrieved");
+  },
+
+  /**
+   * GET /api/v1/admin/analytics/sessions
+   * Get session analytics
+   */
+  async getSessions(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const period = (req.query.period as string) || "30d";
+    const format = req.query.format as string;
+
+    if (format === "csv") {
+      const csv = await AnalyticsService.exportToCSV("sessions", period);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="sessions-${period}.csv"`,
       );
-      ResponseUtil.success(res, data, `Payment metrics for ${period}`);
-    } catch (error) {
-      logger.error('AnalyticsController.getPayments error', { error });
-      ResponseUtil.error(res, 'Failed to fetch payment analytics');
+      res.send(csv);
+      return;
     }
-  }
-}
+
+    const data = await AnalyticsService.getSessions(period);
+    ResponseUtil.success(res, data, "Session analytics retrieved");
+  },
+
+  /**
+   * GET /api/v1/admin/analytics/top-mentors
+   * Get top mentors
+   */
+  async getTopMentors(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const limit = parseInt(req.query.limit as string) || 10;
+    const format = req.query.format as string;
+
+    if (format === "csv") {
+      const csv = await AnalyticsService.exportToCSV("top-mentors");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="top-mentors.csv"',
+      );
+      res.send(csv);
+      return;
+    }
+
+    const data = await AnalyticsService.getTopMentors(limit);
+    ResponseUtil.success(res, data, "Top mentors retrieved");
+  },
+
+  /**
+   * GET /api/v1/admin/analytics/asset-distribution
+   * Get asset distribution
+   */
+  async getAssetDistribution(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const format = req.query.format as string;
+
+    if (format === "csv") {
+      const csv = await AnalyticsService.exportToCSV("asset-distribution");
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="asset-distribution.csv"',
+      );
+      res.send(csv);
+      return;
+    }
+
+    const data = await AnalyticsService.getAssetDistribution();
+    ResponseUtil.success(res, data, "Asset distribution retrieved");
+  },
+
+  /**
+   * POST /api/v1/admin/analytics/refresh
+   * Refresh analytics views
+   */
+  async refreshViews(req: AuthenticatedRequest, res: Response): Promise<void> {
+    await AnalyticsService.refreshViews();
+    ResponseUtil.success(res, null, "Analytics views refreshed successfully");
+  },
+};

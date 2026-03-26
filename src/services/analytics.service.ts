@@ -1,189 +1,294 @@
-import pool from '../config/database';
+import pool from "../config/database";
+import { CacheService } from "./cache.service";
+import { logger } from "../utils/logger";
 
-export interface AnalyticsPeriod {
-  start: Date;
-  end: Date;
-}
-
-export interface RevenueBreakdown {
-  total: number;
-  fees: number;
-  payouts: number;
-}
-
-export interface UserGrowth {
+export interface RevenueData {
   date: string;
-  count: number;
+  currency: string;
+  transaction_count: number;
+  total_amount: string;
+  total_platform_fee: string;
+  avg_amount: string;
 }
 
-export interface SessionMetrics {
-  total: number;
-  completed: number;
-  cancelled: number;
-  completionRate: number;
+export interface UserGrowthData {
+  date: string;
+  role: string;
+  new_users: number;
+  verified_users: number;
 }
 
-export interface PaymentMetrics {
-  totalVolume: number;
-  count: number;
-  methods: Record<string, number>;
+export interface SessionData {
+  date: string;
+  status: string;
+  session_count: number;
+  avg_duration_minutes: number;
 }
 
-export interface PlatformOverview {
-  totalRevenue: number;
-  totalUsers: number;
-  activeSessions: number;
-  completionRate: number;
+export interface TopMentor {
+  id: string;
+  full_name: string;
+  email: string;
+  total_sessions: number;
+  total_revenue: string;
+  avg_rating: number;
+  review_count: number;
 }
 
-export class AnalyticsService {
+export interface AssetDistribution {
+  currency: string;
+  transaction_count: number;
+  total_volume: string;
+  percentage: number;
+}
+
+const CACHE_TTL = 300; // 5 minutes
+
+export const AnalyticsService = {
   /**
-   * Helper to parse period string into start/end dates
+   * Parse period parameter to days
    */
-  static getPeriodDates(period: string = '30d'): AnalyticsPeriod {
-    const end = new Date();
-    const start = new Date();
-    
-    switch (period) {
-      case '7d':
-        start.setDate(end.getDate() - 7);
-        break;
-      case '90d':
-        start.setDate(end.getDate() - 90);
-        break;
-      case '1y':
-        start.setFullYear(end.getFullYear() - 1);
-        break;
-      case '30d':
-      default:
-        start.setDate(end.getDate() - 30);
-        break;
-    }
-    
-    return { start, end };
-  }
+  parsePeriod(period: string): number {
+    const periodMap: Record<string, number> = {
+      "7d": 7,
+      "30d": 30,
+      "90d": 90,
+      "1y": 365,
+    };
+    return periodMap[period] || 30;
+  },
 
-  static async getOverview(): Promise<PlatformOverview> {
-    const queries = {
-      revenue: 'SELECT SUM(amount) as total FROM payments WHERE status = \'completed\'',
-      users: 'SELECT COUNT(*) as total FROM users WHERE is_active = true',
-      sessions: 'SELECT COUNT(*) as total FROM sessions WHERE status = \'confirmed\'',
-      completion: `
+  /**
+   * Get revenue analytics
+   */
+  async getRevenue(period: string = "30d"): Promise<RevenueData[]> {
+    const cacheKey = `analytics:revenue:${period}`;
+
+    return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
+      const days = this.parsePeriod(period);
+
+      const query = `
         SELECT 
-          COUNT(*) FILTER (WHERE status = 'completed') as completed,
-          COUNT(*) as total
-        FROM sessions
-        WHERE status IN ('completed', 'cancelled')
-      `
-    };
+          date::text,
+          currency,
+          transaction_count,
+          total_amount::text,
+          total_platform_fee::text,
+          avg_amount::text
+        FROM mv_daily_revenue
+        WHERE date >= CURRENT_DATE - $1::integer
+        ORDER BY date DESC
+      `;
 
-    const [revRes, usersRes, sessionsRes, compRes] = await Promise.all([
-      pool.query(queries.revenue),
-      pool.query(queries.users),
-      pool.query(queries.sessions),
-      pool.query(queries.completion)
-    ]);
+      const { rows } = await pool.query<RevenueData>(query, [days]);
 
-    const completed = parseInt(compRes.rows[0].completed, 10) || 0;
-    const total = parseInt(compRes.rows[0].total, 10) || 0;
-    const completionRate = total > 0 ? (completed / total) * 100 : 0;
-
-    return {
-      totalRevenue: parseFloat(revRes.rows[0].total) || 0,
-      totalUsers: parseInt(usersRes.rows[0].total, 10) || 0,
-      activeSessions: parseInt(sessionsRes.rows[0].total, 10) || 0,
-      completionRate
-    };
-  }
-
-  static async getRevenueBreakdown(period: string): Promise<RevenueBreakdown> {
-    const { start, end } = this.getPeriodDates(period);
-    const query = `
-      SELECT 
-        SUM(amount) as total,
-        SUM(fee_amount) as fees,
-        SUM(payout_amount) as payouts
-      FROM payments
-      WHERE status = 'completed'
-        AND created_at BETWEEN $1 AND $2
-    `;
-    const { rows } = await pool.query(query, [start, end]);
-    return {
-      total: parseFloat(rows[0].total) || 0,
-      fees: parseFloat(rows[0].fees) || 0,
-      payouts: parseFloat(rows[0].payouts) || 0
-    };
-  }
-
-  static async getUserGrowth(period: string): Promise<UserGrowth[]> {
-    const { start, end } = this.getPeriodDates(period);
-    const query = `
-      SELECT 
-        DATE_TRUNC('day', created_at) as date,
-        COUNT(*) as count
-      FROM users
-      WHERE created_at BETWEEN $1 AND $2
-      GROUP BY 1
-      ORDER BY 1 ASC
-    `;
-    const { rows } = await pool.query(query, [start, end]);
-    return rows.map((r: any) => ({
-      date: r.date.toISOString(),
-      count: parseInt(r.count, 10)
-    }));
-  }
-
-  static async getSessionMetrics(period: string): Promise<SessionMetrics> {
-    const { start, end } = this.getPeriodDates(period);
-    const query = `
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'completed') as completed,
-        COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
-      FROM sessions
-      WHERE created_at BETWEEN $1 AND $2
-    `;
-    const { rows } = await pool.query(query, [start, end]);
-    const total = parseInt(rows[0].total, 10) || 0;
-    const completed = parseInt(rows[0].completed, 10) || 0;
-    
-    return {
-      total,
-      completed,
-      cancelled: parseInt(rows[0].cancelled, 10) || 0,
-      completionRate: total > 0 ? (completed / total) * 100 : 0
-    };
-  }
-
-  static async getPaymentMetrics(period: string): Promise<PaymentMetrics> {
-    const { start, end } = this.getPeriodDates(period);
-    // Better query for volume and distribution
-    const volumeQuery = `
-      SELECT SUM(amount) as total_volume, COUNT(*) as count
-      FROM payments
-      WHERE created_at BETWEEN $1 AND $2
-    `;
-    const distributionQuery = `
-      SELECT method, COUNT(*) as count
-      FROM payments
-      WHERE created_at BETWEEN $1 AND $2
-      GROUP BY method
-    `;
-
-    const [volRes, distRes] = await Promise.all([
-      pool.query(volumeQuery, [start, end]),
-      pool.query(distributionQuery, [start, end])
-    ]);
-
-    const methods: Record<string, number> = {};
-    distRes.rows.forEach((r: any) => {
-      methods[r.method] = parseInt(r.count, 10);
+      logger.debug("Revenue analytics fetched", { period, rows: rows.length });
+      return rows;
     });
+  },
 
-    return {
-      totalVolume: parseFloat(volRes.rows[0].total_volume) || 0,
-      count: parseInt(volRes.rows[0].count, 10) || 0,
-      methods
+  /**
+   * Get user growth analytics
+   */
+  async getUserGrowth(period: string = "30d"): Promise<UserGrowthData[]> {
+    const cacheKey = `analytics:users:${period}`;
+
+    return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
+      const days = this.parsePeriod(period);
+
+      const query = `
+        SELECT 
+          date::text,
+          role,
+          new_users,
+          verified_users
+        FROM mv_daily_users
+        WHERE date >= CURRENT_DATE - $1::integer
+        ORDER BY date DESC
+      `;
+
+      const { rows } = await pool.query<UserGrowthData>(query, [days]);
+
+      logger.debug("User growth analytics fetched", {
+        period,
+        rows: rows.length,
+      });
+      return rows;
+    });
+  },
+
+  /**
+   * Get session analytics
+   */
+  async getSessions(period: string = "30d"): Promise<SessionData[]> {
+    const cacheKey = `analytics:sessions:${period}`;
+
+    return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
+      const days = this.parsePeriod(period);
+
+      const query = `
+        SELECT 
+          date::text,
+          status,
+          session_count,
+          COALESCE(avg_duration_minutes, 0) as avg_duration_minutes
+        FROM mv_session_stats
+        WHERE date >= CURRENT_DATE - $1::integer
+        ORDER BY date DESC
+      `;
+
+      const { rows } = await pool.query<SessionData>(query, [days]);
+
+      logger.debug("Session analytics fetched", { period, rows: rows.length });
+      return rows;
+    });
+  },
+
+  /**
+   * Get top mentors
+   */
+  async getTopMentors(limit: number = 10): Promise<TopMentor[]> {
+    const cacheKey = `analytics:top-mentors:${limit}`;
+
+    return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
+      const query = `
+        SELECT 
+          id,
+          full_name,
+          email,
+          total_sessions,
+          total_revenue::text,
+          COALESCE(avg_rating, 0) as avg_rating,
+          review_count
+        FROM mv_top_mentors
+        WHERE total_revenue IS NOT NULL
+        ORDER BY total_revenue DESC
+        LIMIT $1
+      `;
+
+      const { rows } = await pool.query<TopMentor>(query, [limit]);
+
+      logger.debug("Top mentors analytics fetched", {
+        limit,
+        rows: rows.length,
+      });
+      return rows;
+    });
+  },
+
+  /**
+   * Get asset distribution
+   */
+  async getAssetDistribution(): Promise<AssetDistribution[]> {
+    const cacheKey = "analytics:asset-distribution";
+
+    return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
+      const query = `
+        SELECT 
+          currency,
+          transaction_count,
+          total_volume::text,
+          percentage
+        FROM mv_asset_distribution
+        ORDER BY total_volume DESC
+      `;
+
+      const { rows } = await pool.query<AssetDistribution>(query);
+
+      logger.debug("Asset distribution analytics fetched", {
+        rows: rows.length,
+      });
+      return rows;
+    });
+  },
+
+  /**
+   * Export analytics data as CSV
+   */
+  async exportToCSV(type: string, period: string = "30d"): Promise<string> {
+    const csvConfig: Record<
+      string,
+      { headers: string[]; fetchFn: () => Promise<any[]> }
+    > = {
+      revenue: {
+        headers: [
+          "date",
+          "currency",
+          "transaction_count",
+          "total_amount",
+          "total_platform_fee",
+          "avg_amount",
+        ],
+        fetchFn: () => this.getRevenue(period),
+      },
+      users: {
+        headers: ["date", "role", "new_users", "verified_users"],
+        fetchFn: () => this.getUserGrowth(period),
+      },
+      sessions: {
+        headers: ["date", "status", "session_count", "avg_duration_minutes"],
+        fetchFn: () => this.getSessions(period),
+      },
+      "top-mentors": {
+        headers: [
+          "id",
+          "full_name",
+          "email",
+          "total_sessions",
+          "total_revenue",
+          "avg_rating",
+          "review_count",
+        ],
+        fetchFn: () => this.getTopMentors(100),
+      },
+      "asset-distribution": {
+        headers: [
+          "currency",
+          "transaction_count",
+          "total_volume",
+          "percentage",
+        ],
+        fetchFn: () => this.getAssetDistribution(),
+      },
     };
-  }
-}
+
+    const config = csvConfig[type];
+    if (!config) throw new Error(`Unknown analytics type: ${type}`);
+
+    const data = await config.fetchFn();
+    const { headers } = config;
+
+    // Convert to CSV
+    const csvRows = [headers.join(",")];
+
+    for (const row of data) {
+      const values = headers.map((header) => {
+        const value = row[header];
+        // Escape values containing commas or quotes
+        if (
+          typeof value === "string" &&
+          (value.includes(",") || value.includes('"'))
+        ) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value ?? "";
+      });
+      csvRows.push(values.join(","));
+    }
+
+    return csvRows.join("\n");
+  },
+
+  /**
+   * Refresh all analytics materialized views
+   */
+  async refreshViews(): Promise<void> {
+    try {
+      await pool.query("SELECT refresh_analytics_views()");
+      logger.info("Analytics views refreshed successfully");
+    } catch (error) {
+      logger.error("Failed to refresh analytics views", { error });
+      throw error;
+    }
+  },
+};

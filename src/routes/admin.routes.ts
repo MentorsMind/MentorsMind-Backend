@@ -1,8 +1,10 @@
-import { Router } from 'express';
-import { AdminController } from '../controllers/admin.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { requireAdmin } from '../middleware/admin-auth.middleware';
-import { asyncHandler } from '../utils/asyncHandler.utils';
+import { Router } from "express";
+import { AdminController } from "../controllers/admin.controller";
+import { AnalyticsController } from "../controllers/analytics.controller";
+import { ModerationController } from "../controllers/moderation.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { requireAdmin } from "../middleware/admin-auth.middleware";
+import { asyncHandler } from "../utils/asyncHandler.utils";
 
 const router = Router();
 
@@ -36,7 +38,7 @@ router.use(requireAdmin);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/stats', asyncHandler(AdminController.getStats));
+router.get("/stats", asyncHandler(AdminController.getStats));
 
 /**
  * @swagger
@@ -82,7 +84,7 @@ router.get('/stats', asyncHandler(AdminController.getStats));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/users', asyncHandler(AdminController.listUsers));
+router.get("/users", asyncHandler(AdminController.listUsers));
 
 /**
  * @swagger
@@ -121,7 +123,43 @@ router.get('/users', asyncHandler(AdminController.listUsers));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put('/users/:id/status', asyncHandler(AdminController.updateUserStatus));
+router.put("/users/:id/status", asyncHandler(AdminController.updateUserStatus));
+
+/**
+ * @swagger
+ * /admin/users/{id}/suspend:
+ *   put:
+ *     summary: Suspend user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/schemas/UUIDParam'
+ *     responses:
+ *       200:
+ *         description: User suspended
+ *       404:
+ *         description: User not found
+ */
+router.put("/users/:id/suspend", asyncHandler(AdminController.suspendUser));
+
+/**
+ * @swagger
+ * /admin/users/{id}/unsuspend:
+ *   put:
+ *     summary: Restore suspended user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/schemas/UUIDParam'
+ *     responses:
+ *       200:
+ *         description: User unsuspended
+ *       404:
+ *         description: User not found
+ */
+router.put("/users/:id/unsuspend", asyncHandler(AdminController.unsuspendUser));
 
 /**
  * @swagger
@@ -152,7 +190,58 @@ router.put('/users/:id/status', asyncHandler(AdminController.updateUserStatus));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/transactions', asyncHandler(AdminController.listTransactions));
+router.get("/transactions", asyncHandler(AdminController.listTransactions));
+
+/**
+ * @swagger
+ * /admin/sessions:
+ *   get:
+ *     summary: List all sessions with optional status filter
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 50 }
+ *       - name: offset
+ *         in: query
+ *         schema: { type: integer, default: 0 }
+ *       - name: status
+ *         in: query
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Paginated list of sessions
+ */
+router.get("/sessions", asyncHandler(AdminController.listSessions));
+
+/**
+ * @swagger
+ * /admin/payments:
+ *   get:
+ *     summary: List all payments with optional date range filter
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 50 }
+ *       - name: offset
+ *         in: query
+ *         schema: { type: integer, default: 0 }
+ *       - name: startDate
+ *         in: query
+ *         schema: { type: string, format: date }
+ *       - name: endDate
+ *         in: query
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Paginated list of payments
+ */
+router.get("/payments", asyncHandler(AdminController.listPayments));
 
 /**
  * @swagger
@@ -183,7 +272,7 @@ router.get('/transactions', asyncHandler(AdminController.listTransactions));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/disputes', asyncHandler(AdminController.listDisputes));
+router.get("/disputes", asyncHandler(AdminController.listDisputes));
 
 /**
  * @swagger
@@ -219,7 +308,7 @@ router.get('/disputes', asyncHandler(AdminController.listDisputes));
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
-  '/disputes/:id/resolve',
+  "/disputes/:id/resolve",
   asyncHandler(AdminController.resolveDispute),
 );
 
@@ -249,7 +338,7 @@ router.post(
  *                         redis: { type: string, enum: [healthy, degraded, down] }
  *                         uptime: { type: number }
  */
-router.get('/system-health', asyncHandler(AdminController.getSystemHealth));
+router.get("/system-health", asyncHandler(AdminController.getSystemHealth));
 
 /**
  * @swagger
@@ -287,7 +376,7 @@ router.get('/system-health', asyncHandler(AdminController.getSystemHealth));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/logs', asyncHandler(AdminController.getLogs));
+router.get("/logs", asyncHandler(AdminController.getLogs));
 
 /**
  * @swagger
@@ -320,6 +409,260 @@ router.get('/logs', asyncHandler(AdminController.getLogs));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/config', asyncHandler(AdminController.updateConfig));
+router.post("/config", asyncHandler(AdminController.updateConfig));
+
+// ── Analytics Routes ─────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/analytics/revenue:
+ *   get:
+ *     summary: Get revenue analytics
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: period
+ *         in: query
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [json, csv] }
+ *     responses:
+ *       200:
+ *         description: Revenue analytics data
+ */
+router.get("/analytics/revenue", asyncHandler(AnalyticsController.getRevenue));
+
+/**
+ * @swagger
+ * /admin/analytics/users:
+ *   get:
+ *     summary: Get user growth analytics
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: period
+ *         in: query
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [json, csv] }
+ *     responses:
+ *       200:
+ *         description: User growth analytics data
+ */
+router.get("/analytics/users", asyncHandler(AnalyticsController.getUserGrowth));
+
+/**
+ * @swagger
+ * /admin/analytics/sessions:
+ *   get:
+ *     summary: Get session analytics
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: period
+ *         in: query
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [json, csv] }
+ *     responses:
+ *       200:
+ *         description: Session analytics data
+ */
+router.get(
+  "/analytics/sessions",
+  asyncHandler(AnalyticsController.getSessions),
+);
+
+/**
+ * @swagger
+ * /admin/analytics/top-mentors:
+ *   get:
+ *     summary: Get top mentors by revenue and sessions
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 10 }
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [json, csv] }
+ *     responses:
+ *       200:
+ *         description: Top mentors data
+ */
+router.get(
+  "/analytics/top-mentors",
+  asyncHandler(AnalyticsController.getTopMentors),
+);
+
+/**
+ * @swagger
+ * /admin/analytics/asset-distribution:
+ *   get:
+ *     summary: Get payment asset distribution
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [json, csv] }
+ *     responses:
+ *       200:
+ *         description: Asset distribution data
+ */
+router.get(
+  "/analytics/asset-distribution",
+  asyncHandler(AnalyticsController.getAssetDistribution),
+);
+
+/**
+ * @swagger
+ * /admin/analytics/refresh:
+ *   post:
+ *     summary: Refresh analytics materialized views
+ *     tags: [Admin, Analytics]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Views refreshed successfully
+ */
+router.post(
+  "/analytics/refresh",
+  asyncHandler(AnalyticsController.refreshViews),
+);
+
+// ── Moderation Routes ────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/moderation/queue:
+ *   get:
+ *     summary: Get moderation queue
+ *     tags: [Admin, Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 50 }
+ *       - name: offset
+ *         in: query
+ *         schema: { type: integer, default: 0 }
+ *     responses:
+ *       200:
+ *         description: Moderation queue items
+ */
+router.get("/moderation/queue", asyncHandler(ModerationController.getQueue));
+
+/**
+ * @swagger
+ * /admin/moderation/{id}/approve:
+ *   put:
+ *     summary: Approve flagged content
+ *     tags: [Admin, Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes: { type: string }
+ *     responses:
+ *       200:
+ *         description: Content approved
+ */
+router.put(
+  "/moderation/:id/approve",
+  asyncHandler(ModerationController.approveContent),
+);
+
+/**
+ * @swagger
+ * /admin/moderation/{id}/reject:
+ *   put:
+ *     summary: Reject flagged content
+ *     tags: [Admin, Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes: { type: string }
+ *     responses:
+ *       200:
+ *         description: Content rejected
+ */
+router.put(
+  "/moderation/:id/reject",
+  asyncHandler(ModerationController.rejectContent),
+);
+
+/**
+ * @swagger
+ * /admin/moderation/{id}/escalate:
+ *   put:
+ *     summary: Escalate flag to senior admin
+ *     tags: [Admin, Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes: { type: string }
+ *     responses:
+ *       200:
+ *         description: Flag escalated
+ */
+router.put(
+  "/moderation/:id/escalate",
+  asyncHandler(ModerationController.escalateFlag),
+);
+
+/**
+ * @swagger
+ * /admin/moderation/stats:
+ *   get:
+ *     summary: Get moderation statistics
+ *     tags: [Admin, Moderation]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Moderation statistics
+ */
+router.get("/moderation/stats", asyncHandler(ModerationController.getStats));
 
 export default router;
