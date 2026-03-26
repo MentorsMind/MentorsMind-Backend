@@ -25,6 +25,11 @@ BookingsService.initialize().catch((err) => {
   logger.error("Failed to initialize bookings tables:", err);
 });
 
+// Initialize notification cleanup service (async, don't block)
+notificationCleanupService.initialize().catch(err => {
+  logger.error('Failed to initialize notification cleanup service:', err);
+});
+
 // Mount route modules
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);

@@ -3,6 +3,8 @@ import { NotificationPreferencesModel } from '../models/notification-preferences
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
 import { NotificationAnalyticsModel } from '../models/notification-analytics.model';
 import { enqueueEmail } from '../queues/email.queue';
+import { SocketService } from './socket.service';
+import { logger } from '../utils/logger';
 
 export interface NotificationRecord {
   id: string;
@@ -144,18 +146,44 @@ export const NotificationService = {
     const notification = await NotificationsModel.create(input);
 
     if (notification) {
-      // Emit notification:new event to the user
-      SocketService.emitToUser(notification.user_id, 'notification:new', {
-        notificationId: notification.id,
-        type: notification.type,
-        title: notification.title,
-        message: notification.message,
-        data: notification.data,
-        createdAt: notification.created_at,
-      });
+      // Emit notification:new event to the user via WebSocket
+      try {
+        SocketService.emitToUser(notification.user_id, 'notification:new', {
+          notificationId: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          data: notification.data,
+          createdAt: notification.created_at,
+        });
+      } catch (error) {
+        logger.error('Failed to emit notification:new event', { error, notificationId: notification.id });
+      }
     }
 
     return notification;
+  },
+
+  /**
+   * Create a notification using simplified parameters (backward compatibility)
+   * @param userId - User ID to send notification to
+   * @param type - Notification type (e.g., 'session_booked', 'payment_received')
+   * @param payload - Object containing title, message, and optional data
+   */
+  async create(
+    userId: string,
+    type: string,
+    payload: { title: string; message: string; data?: Record<string, any> }
+  ): Promise<NotificationRecord | null> {
+    return this.createNotification({
+      user_id: userId,
+      type,
+      channel: NotificationChannel.IN_APP,
+      priority: NotificationPriority.NORMAL,
+      title: payload.title,
+      message: payload.message,
+      data: payload.data || {},
+    });
   },
 
   /**
