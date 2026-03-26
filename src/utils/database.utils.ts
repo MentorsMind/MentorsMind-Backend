@@ -1,5 +1,5 @@
 import pool from '../config/database';
-import { logger } from './logger';
+import { logger } from './logger.utils';
 import type {
   PaginationOptions,
   PaginatedResult,

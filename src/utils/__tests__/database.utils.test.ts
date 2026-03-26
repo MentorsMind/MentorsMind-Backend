@@ -20,7 +20,7 @@ jest.mock('../../config/database', () => ({
   },
 }));
 
-jest.mock('../logger', () => ({
+jest.mock('../logger.utils', () => ({
   logger: { error: jest.fn(), warn: jest.fn(), debug: jest.fn(), info: jest.fn() },
 }));
 

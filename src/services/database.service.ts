@@ -1,5 +1,5 @@
 import pool from '../config/database';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 import { toDatabaseError, isSerializationFailure, getPoolStats } from '../utils/database.utils';
 import type {
   TransactionOptions,
