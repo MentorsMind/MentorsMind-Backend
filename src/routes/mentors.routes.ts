@@ -2,13 +2,15 @@
  * Mentor Routes
  */
 
-import { Router } from 'express';
-import { MentorsController } from '../controllers/mentors.controller';
-import { VerificationController } from '../controllers/verification.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { requireOwnerOrAdmin } from '../middleware/rbac.middleware';
-import { validate } from '../middleware/validation.middleware';
-import { asyncHandler } from '../utils/asyncHandler.utils';
+import { Router } from "express";
+import { MentorsController } from "../controllers/mentors.controller";
+import { VerificationController } from "../controllers/verification.controller";
+import { ReviewsController } from "../controllers/reviews.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { requireOwnerOrAdmin } from "../middleware/rbac.middleware";
+import { validate } from "../middleware/validation.middleware";
+import { asyncHandler } from "../utils/asyncHandler.utils";
+import { mentorIdParamSchema } from "../validators/reviews.validator";
 import {
   createMentorProfileSchema,
   updateMentorProfileSchema,
@@ -18,9 +20,9 @@ import {
   getMentorSessionsSchema,
   getMentorEarningsSchema,
   submitVerificationSchema,
-} from '../validators/schemas/mentors.schemas';
-import { submitVerificationSchema as verificationSubmitSchema } from '../validators/schemas/verification.schemas';
-import { idParamSchema } from '../validators/schemas/common.schemas';
+} from "../validators/schemas/mentors.schemas";
+import { submitVerificationSchema as verificationSubmitSchema } from "../validators/schemas/verification.schemas";
+import { idParamSchema } from "../validators/schemas/common.schemas";
 
 const router = Router();
 
@@ -60,7 +62,7 @@ const router = Router();
  *         description: Profile already exists
  */
 router.post(
-  '/',
+  "/",
   authenticate,
   validate(createMentorProfileSchema),
   asyncHandler(MentorsController.createProfile),
@@ -105,7 +107,7 @@ router.post(
  *         description: List of mentors
  */
 router.get(
-  '/',
+  "/",
   validate(listMentorsSchema),
   asyncHandler(MentorsController.listMentors),
 );
@@ -128,7 +130,7 @@ router.get(
  *         description: Mentor not found
  */
 router.get(
-  '/:id',
+  "/:id",
   validate(idParamSchema),
   asyncHandler(MentorsController.getProfile),
 );
@@ -155,7 +157,7 @@ router.get(
  *         description: Mentor not found
  */
 router.put(
-  '/:id',
+  "/:id",
   authenticate,
   requireOwnerOrAdmin,
   validate(updateMentorProfileSchema),
@@ -180,7 +182,7 @@ router.put(
  *         description: Availability updated
  */
 router.post(
-  '/:id/availability',
+  "/:id/availability",
   authenticate,
   requireOwnerOrAdmin,
   validate(setAvailabilitySchema),
@@ -203,7 +205,7 @@ router.post(
  *         description: Mentor availability schedule
  */
 router.get(
-  '/:id/availability',
+  "/:id/availability",
   validate(idParamSchema),
   asyncHandler(MentorsController.getAvailability),
 );
@@ -236,7 +238,7 @@ router.get(
  *         description: Pricing updated
  */
 router.put(
-  '/:id/pricing',
+  "/:id/pricing",
   authenticate,
   requireOwnerOrAdmin,
   validate(updatePricingSchema),
@@ -270,7 +272,7 @@ router.put(
  *         description: List of sessions
  */
 router.get(
-  '/:id/sessions',
+  "/:id/sessions",
   authenticate,
   requireOwnerOrAdmin,
   validate(getMentorSessionsSchema),
@@ -304,7 +306,7 @@ router.get(
  *         description: Earnings summary and breakdown
  */
 router.get(
-  '/:id/earnings',
+  "/:id/earnings",
   authenticate,
   requireOwnerOrAdmin,
   validate(getMentorEarningsSchema),
@@ -341,7 +343,7 @@ router.get(
  *         description: Verification request submitted
  */
 router.post(
-  '/:id/verify',
+  "/:id/verify",
   authenticate,
   requireOwnerOrAdmin,
   validate(submitVerificationSchema),
@@ -374,9 +376,9 @@ router.post(
  *         description: Verification submitted
  */
 router.post(
-  '/verification/submit',
+  "/verification/submit",
   authenticate,
-  requireRole('mentor'),
+  requireRole("mentor"),
   validate(verificationSubmitSchema),
   asyncHandler(VerificationController.submit),
 );
@@ -399,9 +401,34 @@ router.post(
  *         description: No verification record found
  */
 router.get(
-  '/:id/verification-status',
+  "/:id/verification-status",
   validate(idParamSchema),
   asyncHandler(VerificationController.getVerificationStatus),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/{id}/rating-summary:
+ *   get:
+ *     summary: Get aggregated rating summary for a mentor (public)
+ *     tags: [Mentors, Reviews]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Rating summary
+ *       404:
+ *         description: Mentor not found
+ *       422:
+ *         description: Validation error
+ */
+router.get(
+  "/:id/rating-summary",
+  validate(mentorIdParamSchema),
+  asyncHandler(ReviewsController.getRatingSummary),
 );
 
 export default router;
