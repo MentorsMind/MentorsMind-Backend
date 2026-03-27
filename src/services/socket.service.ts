@@ -96,8 +96,4 @@ export const SocketService = {
       this.emitToUser(userId, event, data);
     });
   },
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)

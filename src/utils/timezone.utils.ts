@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-// @ts-nocheck
-import { DateTime, Settings, IANAZone, Interval } from 'luxon';
-=======
 import { DateTime, Settings, IANAZone, Interval } from "luxon";
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
 
 /**
  * Timezone Utilities - Robust IANA timezone handling with DST awareness
@@ -36,35 +31,11 @@ export const isValidIANATimezone = (tz: string): boolean => {
  */
 export const getAllTimezones = (): string[] => {
   if (validIANATimezones.length === 0) {
-<<<<<<< HEAD
     try {
-      validIANATimezones = [...Intl.supportedValuesOf('timeZone')];
+      validIANATimezones = [...(Intl as any).supportedValuesOf("timeZone")];
     } catch {
-      validIANATimezones = ['UTC'];
+      validIANATimezones = ["UTC"];
     }
-    const popular = [
-      'America/New_York',
-      'America/Chicago',
-      'America/Denver',
-      'America/Los_Angeles',
-      'Europe/London',
-      'Europe/Paris',
-      'Europe/Berlin',
-      'Europe/Moscow',
-      'Asia/Tokyo',
-      'Asia/Singapore',
-      'Asia/Dubai',
-      'Australia/Sydney',
-      'UTC',
-      'Etc/UTC',
-=======
-    validIANATimezones = DateTime.local()
-      .resolvedZone!.names.map(
-        (name) => name.split("/")[1]?.replace(/_/g, " ") || name,
-      )
-      .filter(Boolean);
-
-    // Add popular zones explicitly
     const popular = [
       "America/New_York",
       "America/Chicago",
@@ -80,7 +51,6 @@ export const getAllTimezones = (): string[] => {
       "Australia/Sydney",
       "UTC",
       "Etc/UTC",
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
     ];
     validIANATimezones.unshift(...popular);
     validIANATimezones = [...new Set(validIANATimezones)].sort();
@@ -130,15 +100,9 @@ export const utcToLocal = (utcISO: string, timezone: string): DateTime => {
  * Format datetime for display in user timezone
  */
 export const formatInTimezone = (
-<<<<<<< HEAD
-  utcISO: string, 
-  timezone: string, 
-  format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz"
-=======
   utcISO: string,
   timezone: string,
   format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz",
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
 ): string => {
   return utcToLocal(utcISO, timezone).toFormat(format);
 };
@@ -172,18 +136,8 @@ export const getLocalNow = (timezone: string): DateTime => {
 /**
  * DST transition info for timezone (next DST change)
  */
-<<<<<<< HEAD
 export const nextDSTTransition = (_timezone: string): DateTime | null => {
   return null;
-=======
-export const nextDSTTransition = (timezone: string): DateTime | null => {
-  const zone = IANAZone.create(timezone);
-  const now = DateTime.now().setZone(timezone);
-  const untilUndefined = zone.untilUndefined(now);
-  return untilUndefined
-    ? DateTime.fromMillis(untilUndefined, { zone: timezone })
-    : null;
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
 };
 
 // Export types

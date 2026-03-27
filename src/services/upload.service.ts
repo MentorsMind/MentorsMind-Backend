@@ -1,6 +1,11 @@
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from "@aws-sdk/client-s3";
 import pool from "../config/database";
 import { createError } from "../middleware/errorHandler";
 import { logger } from "../utils/logger.utils";
@@ -53,22 +58,13 @@ class LocalStorageBackend implements StorageBackend {
 
 // ---------------------------------------------------------------------------
 // S3StorageBackend
-// Uses dynamic require so the module compiles even when @aws-sdk/client-s3
-// is not yet installed (it will be installed in production environments).
 // ---------------------------------------------------------------------------
 
 class S3StorageBackend implements StorageBackend {
-  private client: any;
+  private readonly client: S3Client;
   private readonly bucket: string;
 
   constructor() {
-    // Dynamic require to avoid hard compile-time dependency
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const {
-      S3Client,
-      PutObjectCommand: _Put,
-      DeleteObjectCommand: _Del,
-    } = require("@aws-sdk/client-s3");
     this.client = new S3Client({
       region: env.AWS_REGION,
       credentials: {
@@ -80,8 +76,6 @@ class S3StorageBackend implements StorageBackend {
   }
 
   async put(key: string, buffer: Buffer, mimeType: string): Promise<string> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PutObjectCommand } = require("@aws-sdk/client-s3");
     await this.client.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -94,8 +88,6 @@ class S3StorageBackend implements StorageBackend {
   }
 
   async delete(key: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
     await this.client.send(
       new DeleteObjectCommand({
         Bucket: this.bucket,

@@ -73,10 +73,6 @@ export const SessionModel = {
       CREATE INDEX IF NOT EXISTS idx_sessions_meeting_expires_at ON sessions(meeting_expires_at) WHERE meeting_expires_at IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_sessions_needs_manual_intervention ON sessions(needs_manual_intervention) WHERE needs_manual_intervention = TRUE;
     `;
-<<<<<<< HEAD
-
-=======
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
     await pool.query(query);
   },
 
