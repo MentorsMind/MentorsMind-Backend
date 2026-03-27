@@ -5,26 +5,15 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-<<<<<<< openapi-contract-testing
-    "build": "tsc && npm run generate:spec",
-=======
     "build": "tsc -p tsconfig.build.json",
->>>>>>> main
     "start": "node dist/server.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-<<<<<<< openapi-contract-testing
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "test:contract": "jest --config=jest.contract.config.ts",
-=======
     "test": "jest -c jest.unit.config.ts",
     "test:watch": "jest -c jest.unit.config.ts --watch",
     "test:coverage": "jest -c jest.unit.config.ts --coverage",
     "test:all": "jest",
->>>>>>> main
     "seed": "ts-node --project tsconfig.seed.json database/seeds/index.ts",
     "seed:reset": "ts-node --project tsconfig.seed.json database/seeds/index.ts --reset",
     "seed:test": "ts-node --project tsconfig.seed.json database/seeds/index.ts --size=test",
@@ -112,6 +101,7 @@
     "eslint": "^10.0.2",
     "husky": "^9.1.7",
     "jest": "^30.3.0",
+    "jest-mock-extended": "^4.0.0",
     "lint-staged": "^16.4.0",
     "node-pg-migrate": "^8.0.4",
     "nodemon": "^3.1.14",
