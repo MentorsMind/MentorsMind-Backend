@@ -11,35 +11,41 @@ import paymentsRoutes from "./payments.routes";
 import reviewsRoutes from "./reviews.routes";
 import { AdminService } from "../services/admin.service";
 import { BookingsService } from "../services/bookings.service";
+import { VerificationService } from "../services/verification.service";
 import { logger } from "../utils/logger";
 
 const router = Router();
 
 // Initialize admin tables (async, don't block)
-AdminService.initialize().catch((err) => {
-  logger.error("Failed to initialize admin tables:", err);
+AdminService.initialize().catch((err: unknown) => {
+  logger.error('Failed to initialize admin tables:', err);
 });
 
 // Initialize bookings tables (async, don't block)
-BookingsService.initialize().catch((err) => {
-  logger.error("Failed to initialize bookings tables:", err);
+BookingsService.initialize().catch((err: unknown) => {
+  logger.error('Failed to initialize bookings tables:', err);
+});
+
+// Initialize verification tables (async, don't block)
+VerificationService.initialize().catch((err) => {
+  logger.error("Failed to initialize verification tables:", err);
 });
 
 // Initialize notification cleanup service (async, don't block)
-notificationCleanupService.initialize().catch(err => {
+notificationCleanupService.initialize().catch((err: unknown) => {
   logger.error('Failed to initialize notification cleanup service:', err);
 });
 
 // Mount route modules
-router.use("/auth", authRoutes);
-router.use("/users", usersRoutes);
-router.use("/", exportRoutes);
-router.use("/admin", adminRoutes);
-router.use("/bookings", bookingsRoutes);
-router.use("/timezones", timezoneRoutes);
-router.use("/mentors", mentorsRoutes);
-router.use("/payments", paymentsRoutes);
-router.use("/reviews", reviewsRoutes);
+router.use('/auth', authRoutes);
+router.use('/users', usersRoutes);
+router.use('/', exportRoutes);
+router.use('/admin', adminRoutes);
+router.use('/bookings', bookingsRoutes);
+router.use('/timezones', timezoneRoutes);
+router.use('/mentors', mentorsRoutes);
+router.use('/payments', paymentsRoutes);
+router.use('/reviews', reviewsRoutes);
 
 // ── Root info ────────────────────────────────────────────────────────────────
 /**
@@ -52,23 +58,23 @@ router.use("/reviews", reviewsRoutes);
  *       200:
  *         description: API info
  */
-router.get("/", (_req, res) => {
+router.get('/', (_req, res) => {
   ResponseUtil.success(
     res,
     {
       version: CURRENT_VERSION,
       supportedVersions: SUPPORTED_VERSIONS,
-      name: "MentorMinds Stellar API",
-      description: "Backend API for MentorMinds platform",
+      name: 'MentorMinds Stellar API',
+      description: 'Backend API for MentorMinds platform',
       endpoints: {
-        health: "/health",
-        auth: "/api/v1/auth",
-        users: "/api/v1/users",
-        bookings: "/api/v1/bookings",
+        health: '/health',
+        auth: '/api/v1/auth',
+        users: '/api/v1/users',
+        bookings: '/api/v1/bookings',
       },
-      documentation: "/api/v1/docs",
+      documentation: '/api/v1/docs',
     },
-    "Welcome to MentorMinds API",
+    'Welcome to MentorMinds API',
   );
 });
 
@@ -83,7 +89,7 @@ router.get("/", (_req, res) => {
  *       200:
  *         description: Service is healthy
  */
-router.get("/health", asyncHandler(HealthController.getHealth));
+router.get('/health', HealthController.getHealth);
 
 /**
  * @swagger
@@ -98,14 +104,14 @@ router.get("/health", asyncHandler(HealthController.getHealth));
  *         description: Service not ready
  */
 router.get(
-  "/ready",
+  '/ready',
   asyncHandler(async (_req, res) => {
     const health = await HealthService.checkHealth();
-    const isReady = health.overall === "healthy";
+    const isReady = health.overall === 'healthy';
     ResponseUtil.success(
       res,
       { ...health, isReady },
-      isReady ? "Service is ready" : "Service degraded",
+      isReady ? 'Service is ready' : 'Service degraded',
       isReady ? 200 : 503,
     );
   }),

@@ -4,8 +4,9 @@
 
 import { Router } from 'express';
 import { MentorsController } from '../controllers/mentors.controller';
+import { VerificationController } from '../controllers/verification.controller';
 import { authenticate } from '../middleware/auth.middleware';
-import { requireOwnerOrAdmin, requireRole } from '../middleware/rbac.middleware';
+import { requireOwnerOrAdmin } from '../middleware/rbac.middleware';
 import { validate } from '../middleware/validation.middleware';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 import {
@@ -18,6 +19,7 @@ import {
   getMentorEarningsSchema,
   submitVerificationSchema,
 } from '../validators/schemas/mentors.schemas';
+import { submitVerificationSchema as verificationSubmitSchema } from '../validators/schemas/verification.schemas';
 import { idParamSchema } from '../validators/schemas/common.schemas';
 
 const router = Router();
@@ -344,6 +346,62 @@ router.post(
   requireOwnerOrAdmin,
   validate(submitVerificationSchema),
   asyncHandler(MentorsController.submitVerification),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/verification/submit:
+ *   post:
+ *     summary: Submit mentor verification documents
+ *     tags: [Mentors, Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [documentType, documentUrl]
+ *             properties:
+ *               documentType: { type: string, enum: [passport, national_id, drivers_license, professional_certificate] }
+ *               documentUrl: { type: string, format: uri }
+ *               credentialUrl: { type: string, format: uri }
+ *               linkedinUrl: { type: string, format: uri }
+ *               additionalNotes: { type: string }
+ *     responses:
+ *       201:
+ *         description: Verification submitted
+ */
+router.post(
+  '/verification/submit',
+  authenticate,
+  requireRole('mentor'),
+  validate(verificationSubmitSchema),
+  asyncHandler(VerificationController.submit),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/{id}/verification-status:
+ *   get:
+ *     summary: Get mentor verification status (public)
+ *     tags: [Mentors, Verification]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Verification status
+ *       404:
+ *         description: No verification record found
+ */
+router.get(
+  '/:id/verification-status',
+  validate(idParamSchema),
+  asyncHandler(VerificationController.getVerificationStatus),
 );
 
 export default router;

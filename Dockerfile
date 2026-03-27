@@ -1,26 +1,39 @@
-# Stage 1: Build
-FROM node:20-slim AS builder
+# -----------------------------------------------------------------------------
+# Stage 1 — builder: install all deps and compile TypeScript
+# -----------------------------------------------------------------------------
+FROM node:20-bookworm-slim AS builder
+
 WORKDIR /app
+
 COPY package*.json ./
-RUN npm ci
+RUN npm install
+
 COPY . .
 RUN npm run build
 
-# Stage 2: Production
-FROM node:20-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-RUN apk add --no-cache curl
+# -----------------------------------------------------------------------------
+# Stage 2 — runner: production image (Node slim, non-root, prod deps only)
+# -----------------------------------------------------------------------------
+FROM node:20-bookworm-slim AS runner
 
-# Copy only production artifacts
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+RUN groupadd --gid 1001 appgroup \
+  && useradd --uid 1001 --gid appgroup --shell /usr/sbin/nologin --create-home appuser
+
+COPY package*.json ./
+RUN npm install --omit=dev && npm cache clean --force
+
 COPY --from=builder /app/dist ./dist
 
-USER node
-EXPOSE 3000
+USER appuser
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+ENV PORT=5000
+EXPOSE 5000
 
-CMD ["node", "dist/index.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||5000)+'/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+
+CMD ["node", "dist/server.js"]

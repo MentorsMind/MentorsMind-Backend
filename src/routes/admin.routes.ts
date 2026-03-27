@@ -2,9 +2,16 @@ import { Router } from "express";
 import { AdminController } from "../controllers/admin.controller";
 import { AnalyticsController } from "../controllers/analytics.controller";
 import { ModerationController } from "../controllers/moderation.controller";
+import { VerificationController } from "../controllers/verification.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireAdmin } from "../middleware/admin-auth.middleware";
+import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
+import {
+  rejectVerificationSchema,
+  requestMoreInfoSchema,
+  listVerificationsSchema,
+} from "../validators/schemas/verification.schemas";
 
 const router = Router();
 
@@ -411,6 +418,120 @@ router.get("/logs", asyncHandler(AdminController.getLogs));
  */
 router.post("/config", asyncHandler(AdminController.updateConfig));
 
+// ── Audit Log Routes ─────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/audit-log:
+ *   get:
+ *     summary: Query audit logs with filtering and pagination
+ *     tags: [Admin, Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 50 }
+ *       - name: userId
+ *         in: query
+ *         schema: { type: string, format: uuid }
+ *         description: Filter by user ID
+ *       - name: action
+ *         in: query
+ *         schema: { type: string }
+ *         description: Filter by action type
+ *       - name: resourceType
+ *         in: query
+ *         schema: { type: string }
+ *         description: Filter by resource type
+ *       - name: startDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *       - name: endDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Paginated audit logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ApiResponse'
+ */
+router.get("/audit-log", asyncHandler(AdminController.getAuditLogs));
+
+/**
+ * @swagger
+ * /admin/audit-log/export:
+ *   get:
+ *     summary: Export audit logs as CSV for compliance reporting
+ *     tags: [Admin, Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: userId
+ *         in: query
+ *         schema: { type: string, format: uuid }
+ *       - name: action
+ *         in: query
+ *         schema: { type: string }
+ *       - name: resourceType
+ *         in: query
+ *         schema: { type: string }
+ *       - name: startDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *       - name: endDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: CSV file download
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ */
+router.get("/audit-log/export", asyncHandler(AdminController.exportAuditLogs));
+
+/**
+ * @swagger
+ * /admin/audit-log/verify:
+ *   get:
+ *     summary: Verify audit log chain integrity
+ *     tags: [Admin, Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Chain integrity verification result
+ */
+router.get("/audit-log/verify", asyncHandler(AdminController.verifyAuditLogIntegrity));
+
+/**
+ * @swagger
+ * /admin/audit-log/stats:
+ *   get:
+ *     summary: Get audit log statistics
+ *     tags: [Admin, Audit]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: startDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *       - name: endDate
+ *         in: query
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Audit log statistics
+ */
+router.get("/audit-log/stats", asyncHandler(AdminController.getAuditLogStats));
+
 // ── Analytics Routes ─────────────────────────────────────────────────────────
 
 /**
@@ -664,5 +785,121 @@ router.put(
  *         description: Moderation statistics
  */
 router.get("/moderation/stats", asyncHandler(ModerationController.getStats));
+
+// ── Verification Routes ──────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /admin/verifications:
+ *   get:
+ *     summary: List all mentor verification submissions
+ *     tags: [Admin, Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema: { type: string, enum: [pending, approved, rejected, more_info_requested, expired] }
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Paginated list of verifications
+ */
+router.get(
+  "/verifications",
+  validate(listVerificationsSchema),
+  asyncHandler(VerificationController.listVerifications),
+);
+
+/**
+ * @swagger
+ * /admin/verifications/{id}/approve:
+ *   put:
+ *     summary: Approve a mentor verification
+ *     tags: [Admin, Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Verification approved
+ */
+router.put(
+  "/verifications/:id/approve",
+  asyncHandler(VerificationController.approve),
+);
+
+/**
+ * @swagger
+ * /admin/verifications/{id}/reject:
+ *   put:
+ *     summary: Reject a mentor verification
+ *     tags: [Admin, Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason: { type: string, minLength: 10 }
+ *     responses:
+ *       200:
+ *         description: Verification rejected
+ */
+router.put(
+  "/verifications/:id/reject",
+  validate(rejectVerificationSchema),
+  asyncHandler(VerificationController.reject),
+);
+
+/**
+ * @swagger
+ * /admin/verifications/{id}/request-more:
+ *   put:
+ *     summary: Request additional documents from mentor
+ *     tags: [Admin, Verification]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message: { type: string, minLength: 10 }
+ *     responses:
+ *       200:
+ *         description: Additional info requested
+ */
+router.put(
+  "/verifications/:id/request-more",
+  validate(requestMoreInfoSchema),
+  asyncHandler(VerificationController.requestMoreInfo),
+);
 
 export default router;

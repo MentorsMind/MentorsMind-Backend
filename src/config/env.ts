@@ -66,13 +66,8 @@ const envSchema = z.object({
   // Platform
   PLATFORM_FEE_PERCENTAGE: z.string().regex(/^\d+$/).default('5'),
 
-  // Firebase Cloud Messaging
-  FIREBASE_PROJECT_ID: z.string().optional(),
-  FIREBASE_PRIVATE_KEY: z.string().optional(),
-  FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
-
-  // Monitoring
-  PROMETHEUS_ENABLED: z.enum(['true', 'false']).optional(),
+  // Monitoring (optional)
+  PROMETHEUS_ENABLED: z.string().optional(),
   PROMETHEUS_PORT: z.string().regex(/^\d+$/).optional(),
   PROMETHEUS_ENDPOINT: z.string().optional(),
   HEALTH_CHECK_INTERVAL: z.string().regex(/^\d+$/).optional(),

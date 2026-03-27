@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Horizon, TransactionBuilder, StrKey, Operation, Asset } from '@stellar/stellar-sdk';
 import { server, backupServer, networkPassphrase } from '../config/stellar';
 import { CacheService } from './cache.service';

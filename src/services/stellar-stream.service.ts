@@ -52,7 +52,7 @@ export function startStellarStream(): void {
  */
 async function handleIncomingPayment(
   payment: StellarPaymentRecord,
-  platformKey: string,
+  _platformKey: string,
 ): Promise<void> {
   logger.info('StellarStream: payment received', {
     txHash: payment.transactionHash,

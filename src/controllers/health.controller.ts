@@ -4,6 +4,7 @@ import { ResponseUtil } from '../utils/response.utils';
 import HealthService, { HealthStatus } from '../services/health.service';
 import monitoringConfig from '../config/monitoring.config';
 import { logger } from '../utils/logger.utils';
+import * as promClient from 'prom-client';
 
 /**
  * Health Controller

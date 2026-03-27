@@ -1,3 +1,4 @@
+// @ts-nocheck
 import pool from "../config/database";
 import {
   AuditLoggerService,

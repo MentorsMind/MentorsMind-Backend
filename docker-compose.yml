@@ -1,54 +1,57 @@
-version: '3.8'
+# Production-style stack: API + PostgreSQL + Redis.
+# Copy .env.example → .env and set DATABASE_URL / DB_* to use Docker service hostnames
+# (postgres, redis) and credentials that match POSTGRES_* below.
 
 services:
-  backend:
-    build: .
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    env_file:
+      - .env
     ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/mentorsmind
-      - REDIS_URL=redis://cache:6379
+      - "${PORT:-5000}:5000"
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-      cache:
+      redis:
         condition: service_healthy
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512M
     networks:
-      - mentorsmind-network
+      - mentorminds-network
 
-  db:
+  postgres:
     image: postgres:15-alpine
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mentorsmind
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d mentorsmind"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
     networks:
-      - mentorsmind-network
+      - mentorminds-network
 
-  cache:
+  redis:
     image: redis:7-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
     networks:
-      - mentorsmind-network
+      - mentorminds-network
 
 volumes:
   pgdata:
 
 networks:
-  mentorsmind-network:
+  mentorminds-network:

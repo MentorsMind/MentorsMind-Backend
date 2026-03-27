@@ -86,8 +86,6 @@ async function createWherebyRoom(
   expiresAt: Date,
   _options: MeetingRoomOptions
 ): Promise<MeetingRoomResult> {
-  const roomName = `mentorminds-${sessionId}`;
-
   const response = await axios.post<WherebyRoomResponse>(
     `${meetingConfig.baseUrl}/meetings`,
     {
@@ -253,8 +251,7 @@ export const MeetingService = {
    */
   validateConfig(): boolean {
     try {
-      meetingConfig;
-      return true;
+      return Boolean(meetingConfig?.provider);
     } catch (error) {
       logger.error('Meeting configuration validation failed:', error);
       return false;

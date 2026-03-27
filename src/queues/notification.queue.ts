@@ -1,5 +1,8 @@
-import { Queue, Worker, Job } from 'bullmq';
-import config from '../config';
-import { EmailService } from '../services/email.service';
-import { TemplateEngineService } from '../services/template-engine.service';
-imp
+import { Queue } from 'bullmq';
+import { redisConnection, defaultJobOptions } from './queue.config';
+
+/** BullMQ queue for notification-related jobs (reserved for future use). */
+export const notificationQueue = new Queue('notification-queue', {
+  connection: redisConnection,
+  defaultJobOptions,
+});

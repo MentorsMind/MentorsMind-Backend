@@ -34,7 +34,11 @@ const getProviderBaseUrl = (provider: MeetingProvider): string => {
 };
 
 const validateMeetingConfig = (): MeetingConfig => {
-  const provider = (process.env.MEETING_PROVIDER || MeetingProvider.DAILY).toLowerCase() as MeetingProvider;
+  const defaultProvider =
+    process.env.NODE_ENV === 'test' ? MeetingProvider.JITSI : MeetingProvider.DAILY;
+  const provider = (
+    process.env.MEETING_PROVIDER || defaultProvider
+  ).toLowerCase() as MeetingProvider;
   const apiKey = process.env.MEETING_API_KEY || '';
   const apiSecret = process.env.MEETING_API_SECRET;
   const roomExpiryMinutes = parseInt(process.env.MEETING_ROOM_EXPIRY_MINUTES || '30', 10);

@@ -10,16 +10,29 @@ import {
 } from '../validators/auth.validator';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { ZodError } from 'zod';
+import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 
 export const AuthController = {
     async register(req: Request, res: Response) {
         try {
             const validatedData = registerSchema.parse(req).body;
             const result = await AuthService.register(validatedData);
+            
+            // Log registration
+            await AuditLogService.log({
+                userId: result.userId || null,
+                action: 'USER_REGISTERED',
+                resourceType: 'auth',
+                resourceId: result.userId || null,
+                ipAddress: extractIpAddress(req),
+                userAgent: req.headers['user-agent'] || null,
+                metadata: { email: validatedData.email, role: validatedData.role },
+            });
+            
             return res.status(201).json({ success: true, data: result });
         } catch (error: any) {
             if (error instanceof ZodError) {
-                return res.status(400).json({ success: false, error: 'Validation failed', details: error.errors });
+                return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
             }
             return res.status(400).json({ success: false, error: error.message });
         }
@@ -29,10 +42,38 @@ export const AuthController = {
         try {
             const validatedData = loginSchema.parse(req).body;
             const result = await AuthService.login(validatedData);
+            
+            // Log successful login
+            await AuditLogService.log({
+                userId: result.userId,
+                action: 'LOGIN_SUCCESS',
+                resourceType: 'auth',
+                resourceId: result.userId,
+                ipAddress: extractIpAddress(req),
+                userAgent: req.headers['user-agent'] || null,
+                metadata: { email: validatedData.email },
+            });
+            
             return res.status(200).json({ success: true, data: result });
         } catch (error: any) {
+            // Log failed login attempt
+            const validatedData = loginSchema.safeParse(req);
+            if (validatedData.success) {
+                await AuditLogService.log({
+                    userId: null,
+                    action: 'LOGIN_FAILED',
+                    resourceType: 'auth',
+                    ipAddress: extractIpAddress(req),
+                    userAgent: req.headers['user-agent'] || null,
+                    metadata: { 
+                        email: validatedData.data.body.email,
+                        reason: error.message 
+                    },
+                });
+            }
+            
             if (error instanceof ZodError) {
-                return res.status(400).json({ success: false, error: 'Validation failed', details: error.errors });
+                return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
             }
             if (error.message.includes('Invalid email or password')) {
                 return res.status(401).json({ success: false, error: error.message });
@@ -46,6 +87,16 @@ export const AuthController = {
             const userId = req.user?.userId;
             if (userId) {
                 await AuthService.logout(userId);
+                
+                // Log logout
+                await AuditLogService.log({
+                    userId,
+                    action: 'LOGOUT',
+                    resourceType: 'auth',
+                    resourceId: userId,
+                    ipAddress: extractIpAddress(req),
+                    userAgent: req.headers['user-agent'] || null,
+                });
             }
             return res.status(200).json({ success: true, message: 'Logged out successfully.' });
         } catch (error: any) {
@@ -60,7 +111,7 @@ export const AuthController = {
             return res.status(200).json({ success: true, data: result });
         } catch (error: any) {
             if (error instanceof ZodError) {
-                return res.status(400).json({ success: false, error: 'Validation failed', details: error.errors });
+                return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
             }
             return res.status(401).json({ success: false, error: error.message });
         }
@@ -79,7 +130,7 @@ export const AuthController = {
             });
         } catch (error: any) {
             if (error instanceof ZodError) {
-                return res.status(400).json({ success: false, error: 'Validation failed', details: error.errors });
+                return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
             }
             return res.status(400).json({ success: false, error: error.message });
         }
@@ -88,11 +139,25 @@ export const AuthController = {
     async resetPassword(req: Request, res: Response) {
         try {
             const validatedData = resetPasswordSchema.parse(req).body;
-            await AuthService.resetPassword(validatedData);
+            const userId = await AuthService.resetPassword(validatedData);
+            
+            // Log password change
+            if (userId) {
+                await AuditLogService.log({
+                    userId,
+                    action: 'PASSWORD_CHANGED',
+                    resourceType: 'auth',
+                    resourceId: userId,
+                    ipAddress: extractIpAddress(req),
+                    userAgent: req.headers['user-agent'] || null,
+                    metadata: { method: 'reset_token' },
+                });
+            }
+            
             return res.status(200).json({ success: true, message: 'Password reset successfully. You can now login with your new password.' });
         } catch (error: any) {
             if (error instanceof ZodError) {
-                return res.status(400).json({ success: false, error: 'Validation failed', details: error.errors });
+                return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
             }
             return res.status(400).json({ success: false, error: error.message });
         }

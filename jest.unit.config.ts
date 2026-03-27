@@ -22,6 +22,9 @@ const config: Config = {
     '**/services/__tests__/database.service.test.ts',
     // Environment config unit tests
     '**/config/__tests__/env.test.ts',
+    // Session reminder and verification unit tests
+    '**/__tests__/jobs/**/*.unit.test.ts',
+    '**/__tests__/services/**/*.unit.test.ts',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {

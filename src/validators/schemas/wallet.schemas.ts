@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { stellarAddressSchema, paginationSchema } from './common.schemas';
+import { stellarAddressSchema } from './common.schemas';
 
 // ---------------------------------------------------------------------------
 // Amount validation schema
@@ -17,7 +17,8 @@ export const stellarAmountSchema = z
   .regex(/^\d+(\.\d{1,7})?$/, 'Amount must be a valid decimal with up to 7 decimal places')
   .refine((v) => {
     const num = parseFloat(v);
-    return num > 0 && num <= 922337203685.4775807; // Max Stellar amount
+    // Stellar int64 max scaled by 1e7 — avoid float literal precision issues
+    return num > 0 && num <= 922337203685.4775;
   }, 'Amount must be positive and within Stellar limits');
 
 /** Asset code validation (1-12 alphanumeric characters) */

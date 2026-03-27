@@ -59,7 +59,7 @@ export class EmailService {
 
     // Primary provider: SMTP (Nodemailer)
     if (smtp.host) {
-      const smtpTransporter = nodemailer.createTransporter({
+      const smtpTransporter = nodemailer.createTransport({
         host: smtp.host,
         port: smtp.port,
         secure: smtp.secure,
@@ -81,7 +81,7 @@ export class EmailService {
 
     // Fallback provider: Gmail (for development)
     if (gmail.user && gmail.pass) {
-      const gmailTransporter = nodemailer.createTransporter({
+      const gmailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
           user: gmail.user,
@@ -98,7 +98,7 @@ export class EmailService {
 
     // Default test provider for development
     if (this.providers.length === 0 || config.isDevelopment) {
-      const testTransporter = nodemailer.createTransporter({
+      const testTransporter = nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,

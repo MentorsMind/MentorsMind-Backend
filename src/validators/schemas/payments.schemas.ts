@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { idParamSchema, uuidSchema, longTextSchema, stellarTxHashSchema, paginationSchema } from './common.schemas';
+import { idParamSchema, uuidSchema, longTextSchema, stellarTxHashSchema } from './common.schemas';
 
 const amountSchema = z
   .string()

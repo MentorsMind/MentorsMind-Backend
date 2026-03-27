@@ -83,6 +83,7 @@ const config: Config = {
   // Map imports
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^uuid$': '<rootDir>/src/tests/mocks/uuid.ts',
   },
 };
 

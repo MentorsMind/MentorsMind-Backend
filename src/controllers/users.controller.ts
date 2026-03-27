@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/api.types';
 import { UsersService } from '../services/users.service';
 import { ResponseUtil } from '../utils/response.utils';
+import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 
 export const UsersController = {
   /** GET /users/:id */
@@ -17,21 +18,59 @@ export const UsersController = {
   /** PUT /users/:id */
   async updateUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { firstName, lastName, bio } = req.body;
-    const updated = await UsersService.update(req.params.id as string, { firstName, lastName, bio });
+    const userId = req.params.id as string;
+    
+    // Get old values for audit
+    const oldUser = await UsersService.findById(userId);
+    
+    const updated = await UsersService.update(userId, { firstName, lastName, bio });
     if (!updated) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log profile update
+    await AuditLogService.log({
+      userId: req.user!.id,
+      action: 'PROFILE_UPDATED',
+      resourceType: 'user',
+      resourceId: userId,
+      oldValue: oldUser ? { 
+        first_name: oldUser.first_name, 
+        last_name: oldUser.last_name, 
+        bio: oldUser.bio 
+      } : null,
+      newValue: { 
+        first_name: updated.first_name, 
+        last_name: updated.last_name, 
+        bio: updated.bio 
+      },
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.success(res, updated, 'User updated successfully');
   },
 
   /** DELETE /users/:id */
   async deleteUser(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const deleted = await UsersService.deactivate(req.params.id as string);
+    const userId = req.params.id as string;
+    const deleted = await UsersService.deactivate(userId);
     if (!deleted) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log user deactivation
+    await AuditLogService.log({
+      userId: req.user!.id,
+      action: 'USER_DEACTIVATED',
+      resourceType: 'user',
+      resourceId: userId,
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.noContent(res);
   },
 
@@ -48,11 +87,37 @@ export const UsersController = {
   /** PUT /users/me */
   async updateMe(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { firstName, lastName, bio } = req.body;
-    const updated = await UsersService.update(req.user!.id, { firstName, lastName, bio });
+    const userId = req.user!.id;
+    
+    // Get old values for audit
+    const oldUser = await UsersService.findById(userId);
+    
+    const updated = await UsersService.update(userId, { firstName, lastName, bio });
     if (!updated) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log profile update
+    await AuditLogService.log({
+      userId,
+      action: 'PROFILE_UPDATED',
+      resourceType: 'user',
+      resourceId: userId,
+      oldValue: oldUser ? { 
+        first_name: oldUser.first_name, 
+        last_name: oldUser.last_name, 
+        bio: oldUser.bio 
+      } : null,
+      newValue: { 
+        first_name: updated.first_name, 
+        last_name: updated.last_name, 
+        bio: updated.bio 
+      },
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.success(res, updated, 'Profile updated successfully');
   },
 

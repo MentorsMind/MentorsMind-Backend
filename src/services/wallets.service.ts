@@ -3,10 +3,7 @@ import { PayoutRequestModel, type PayoutRequest } from '../models/payout-request
 import { WalletEventModel, type WalletEvent } from '../models/wallet-event.model';
 import { PaymentModel } from '../models/payment.model';
 import { stellarService } from './stellar.service';
-import { CacheService } from './cache.service';
-import { CacheKeys, CacheTTL } from '../utils/cache-key.utils';
 import { logger } from '../utils/logger.utils';
-import type { StellarBalance } from '../types/stellar.types';
 
 export interface WalletInfo {
   id: string;
@@ -181,7 +178,7 @@ export const WalletsService = {
               balance: balance.balance,
             });
           }
-        } catch (error) {
+        } catch {
           // Ignore balance check errors
         }
       }

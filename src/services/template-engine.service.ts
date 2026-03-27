@@ -256,9 +256,6 @@ export const TemplateEngineService = {
     if (!html) return '';
 
     // Allow only safe HTML tags and attributes
-    const allowedTags = ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'span', 'a'];
-    const allowedAttributes = ['href', 'style', 'class'];
-
     // Simple HTML sanitization (in production, use a library like DOMPurify)
     let sanitized = html;
 

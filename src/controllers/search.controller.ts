@@ -9,7 +9,7 @@ export const findMentors = async (req: Request, res: Response) => {
       data: results.mentors,
       meta: results.meta
     });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ success: false, message: 'Search failed' });
   }
 };

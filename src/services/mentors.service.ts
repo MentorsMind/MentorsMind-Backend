@@ -214,9 +214,11 @@ export const MentorsService = {
         const whereClause = `WHERE ${conditions.join(' AND ')}`;
         const orderClause = `ORDER BY ${sortColumn[sortBy] ?? 'created_at'} ${sortOrder.toUpperCase()}`;
 
+        const limitIdx = idx;
+        const offsetIdx = idx + 1;
         const [dataResult, countResult] = await Promise.all([
           pool.query<MentorRecord>(
-            `SELECT ${MENTOR_COLUMNS} FROM users ${whereClause} ${orderClause} LIMIT $${idx++} OFFSET $${idx++}`,
+            `SELECT ${MENTOR_COLUMNS} FROM users ${whereClause} ${orderClause} LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
             [...values, limit, offset],
           ),
           pool.query<{ count: string }>(
@@ -322,9 +324,11 @@ export const MentorsService = {
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
+    const sessionLimitIdx = idx;
+    const sessionOffsetIdx = idx + 1;
     const [dataResult, countResult] = await Promise.all([
       pool.query<MentorSessionRecord>(
-        `SELECT * FROM sessions ${whereClause} ORDER BY scheduled_at DESC LIMIT $${idx++} OFFSET $${idx++}`,
+        `SELECT * FROM sessions ${whereClause} ORDER BY scheduled_at DESC LIMIT $${sessionLimitIdx} OFFSET $${sessionOffsetIdx}`,
         [...values, limit, offset],
       ),
       pool.query<{ count: string }>(

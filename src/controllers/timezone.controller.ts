@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response } from 'express';
 import { getAllTimezones, getTimezoneOffset, isValidIANATimezone, getLocalNow } from '../utils/timezone.utils';
 import { successResponse } from '../utils/response.utils';

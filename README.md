@@ -397,13 +397,39 @@ For issues and questions:
 
 Built with ❤️ for the MentorMinds Stellar platform
 
-## 🐳 Docker Containerization
-Run the full stack locally:
-\`bash
-docker-compose up --build
-\`
+## 🐳 Docker & Docker Compose
 
-Run the test suite in Docker:
-\`bash
-docker-compose -f docker-compose.test.yml up --exit-code-from test-backend
-\`
+The API is containerized with a **multi-stage Dockerfile** (`builder` compiles TypeScript; `runner` is `node:20-bookworm-slim`, runs as non-root `appuser`, production dependencies only). The HTTP health check uses `GET /health` on `PORT` (default `5000`).
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and Docker Compose v2
+- A project `.env` created from `.env.example` — for Compose, set `DATABASE_URL`, `DB_HOST`, `DB_*`, and `REDIS_URL` to use Docker service hostnames (`postgres`, `redis`), not `localhost`
+
+### Scripts
+
+| Command | Description |
+|--------|-------------|
+| `npm run docker:build` | Build the API image (`runner` target) |
+| `npm run docker:dev` | Postgres + Redis + API with `src/` mounted for hot reload (`ts-node-dev`) |
+| `npm run docker:test` | Run Jest (with coverage) against Postgres and Redis in containers |
+
+### Production-style stack (no hot reload)
+
+```bash
+cp .env.example .env
+# Edit .env: set DATABASE_URL=postgresql://USER:PASS@postgres:5432/DBNAME, DB_HOST=postgres, REDIS_URL=redis://redis:6379
+docker compose up --build
+```
+
+### Integration tests in Docker
+
+Uses `.env.docker.test` (committed) for test DB/Redis URLs inside the Compose network:
+
+```bash
+npm run docker:test
+```
+
+### Image size
+
+The final `runner` image uses Debian slim and `npm ci --omit=dev`. If the image exceeds ~200MB on your machine, prune unused images (`docker image prune`) and ensure you are measuring the `runner` stage, not the `builder` stage.

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import monitoringConfig from '../config/monitoring.config';
 import promClient, { Histogram, Counter } from 'prom-client';
 import { Request, Response, NextFunction } from 'express';

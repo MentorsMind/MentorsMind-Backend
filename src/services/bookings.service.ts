@@ -1,9 +1,6 @@
 import { BookingModel, BookingRecord } from '../models/booking.model';
-import { TransactionModel } from '../models/transaction.model';
-import { UsersService } from './users.service';
 import { CacheService } from './cache.service';
 import { CacheKeys, CacheTTL } from '../utils/cache-key.utils';
-import { stellarService } from './stellar.service';
 import { logger } from '../utils/logger.utils';
 import { createError } from '../middleware/errorHandler';
 import { calculateEndTime, calculateRefundEligibility } from '../utils/booking-conflicts.utils';

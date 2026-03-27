@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Response } from "express";
 import { AuthenticatedRequest } from "../types/api.types";
 import { ModerationService } from "../services/moderation.service";

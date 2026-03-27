@@ -93,3 +93,4 @@ export const SocketService = {
       this.emitToUser(userId, event, data);
     });
   },
+};

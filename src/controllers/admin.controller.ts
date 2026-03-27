@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "../types/api.types";
 import { AdminService } from "../services/admin.service";
 import { ResponseUtil } from "../utils/response.utils";
+import { AuditLogService } from "../services/auditLog.service";
 
 export const AdminController = {
   /** GET /admin/stats */
@@ -231,5 +232,75 @@ export const AdminController = {
 
     await AdminService.updateConfig(key, value);
     ResponseUtil.success(res, null, "Configuration updated successfully");
+  },
+
+  /** GET /admin/audit-log */
+  async getAuditLogs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const userId = req.query.userId as string;
+    const action = req.query.action as string;
+    const resourceType = req.query.resourceType as string;
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+
+    const result = await AuditLogService.query({
+      userId,
+      action,
+      resourceType,
+      startDate,
+      endDate,
+      page,
+      limit,
+    });
+
+    ResponseUtil.success(
+      res,
+      result.logs,
+      "Audit logs retrieved successfully",
+      200,
+      {
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        totalPages: result.totalPages,
+      } as any,
+    );
+  },
+
+  /** GET /admin/audit-log/export */
+  async exportAuditLogs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.query.userId as string;
+    const action = req.query.action as string;
+    const resourceType = req.query.resourceType as string;
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+
+    const csv = await AuditLogService.exportToCSV({
+      userId,
+      action,
+      resourceType,
+      startDate,
+      endDate,
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=audit-logs.csv');
+    res.send(csv);
+  },
+
+  /** GET /admin/audit-log/verify */
+  async verifyAuditLogIntegrity(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    const result = await AuditLogService.verifyChainIntegrity();
+    ResponseUtil.success(res, result, "Audit log integrity check completed");
+  },
+
+  /** GET /admin/audit-log/stats */
+  async getAuditLogStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const startDate = req.query.startDate as string;
+    const endDate = req.query.endDate as string;
+
+    const stats = await AuditLogService.getStats(startDate, endDate);
+    ResponseUtil.success(res, stats, "Audit log statistics retrieved successfully");
   },
 };

@@ -28,6 +28,7 @@ export const QUEUE_NAMES = {
   ESCROW_RELEASE: 'escrow-release-queue',
   REPORT: 'report-queue',
   EXPORT: 'export-queue',
+  SESSION_REMINDER: 'session-reminder-queue',
 } as const;
 
 export const CONCURRENCY = {
@@ -35,4 +36,5 @@ export const CONCURRENCY = {
   PAYMENT_POLL: 5,
   ESCROW_RELEASE: 3,
   REPORT: 2,
+  SESSION_REMINDER: 1,
 } as const;

@@ -1,4 +1,6 @@
 import { reportQueue } from '../queues/report.queue';
+import { sessionReminderQueue } from '../queues/sessionReminder.queue';
+import { VerificationService } from '../services/verification.service';
 import { logger } from '../utils/logger.utils';
 
 /**
@@ -21,7 +23,33 @@ export async function startScheduler(): Promise<void> {
     },
   );
 
-  logger.info('Job scheduler started — weekly earnings report registered');
+  // Session reminders — every 5 minutes
+  await sessionReminderQueue.add(
+    'session-reminder-scheduled',
+    { jobType: 'session-reminder' },
+    {
+      repeat: { pattern: '*/5 * * * *' },
+      jobId: 'session-reminder-recurring',
+    },
+  );
+
+  logger.info('Job scheduler started — weekly earnings report and session reminders registered');
+}
+
+export async function stopScheduler(): Promise<void> {
+  // Remove repeatable jobs on shutdown (optional — comment out to persist across restarts)
+  // await reportQueue.removeRepeatable('weekly-earnings-scheduled', { pattern: '0 8 * * 1' });
+  logger.info('Job scheduler stopped');
+}
+
+/**
+ * Run periodic maintenance tasks (called externally or via a daily cron).
+ */
+export async function runMaintenanceTasks(): Promise<void> {
+  const expired = await VerificationService.flagExpiredVerifications();
+  if (expired > 0) {
+    logger.info('Maintenance: expired verifications flagged', { count: expired });
+  }
 }
 
 export async function stopScheduler(): Promise<void> {
