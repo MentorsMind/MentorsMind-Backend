@@ -83,6 +83,7 @@ jobs:
         shell: bash
       - name: Comment coverage report on PR
         if: ${{ github.event_name == 'pull_request' }}
+        continue-on-error: true
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
