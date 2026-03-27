@@ -48,6 +48,22 @@ const config: Config = {
   verbose: true,
   forceExit: true,
   testTimeout: 30000,
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.d.ts',
+    '!src/**/index.ts',
+    '!src/tests/**',
+    '!src/docs/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
+  coverageThreshold: {
+    global: {
+      statements: 80,
+      branches: 75,
+      functions: 80,
+    },
+  },
 };
 
 export default config;
