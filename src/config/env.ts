@@ -74,6 +74,11 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().url("REDIS_URL must be a valid URL").optional(),
 
+  // Firebase (push notifications)
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
+
   // Monitoring / Prometheus
   PROMETHEUS_ENABLED: z.enum(["true", "false"]).default("false"),
   PROMETHEUS_PORT: z
@@ -97,18 +102,7 @@ const envSchema = z.object({
   BCRYPT_ROUNDS: z.string().regex(/^\d+$/).default("10"),
 
   // Platform
-<<<<<<< HEAD
-  PLATFORM_FEE_PERCENTAGE: z.string().regex(/^\d+$/).default('5'),
-
-  // Monitoring (optional)
-  PROMETHEUS_ENABLED: z.string().optional(),
-  PROMETHEUS_PORT: z.string().regex(/^\d+$/).optional(),
-  PROMETHEUS_ENDPOINT: z.string().optional(),
-  HEALTH_CHECK_INTERVAL: z.string().regex(/^\d+$/).optional(),
-  HEALTH_CHECK_TIMEOUT: z.string().regex(/^\d+$/).optional(),
-=======
   PLATFORM_FEE_PERCENTAGE: z.string().regex(/^\d+$/).default("5"),
->>>>>>> 65c470c (fix(testing): stabilize integration setup and unit test execution)
 });
 
 function validateEnv() {
@@ -119,7 +113,7 @@ function validateEnv() {
       .map((err) => `  - ${err.path.join(".")}: ${err.message}`)
       .join("\n");
 
-    console.error("\n❌ Invalid environment configuration:\n");
+    console.error("\nInvalid environment configuration:\n");
     console.error(formatted);
     console.error("\nCheck your .env file against .env.example\n");
     process.exit(1);
