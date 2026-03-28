@@ -21,9 +21,9 @@ jest.mock('../../models/push-tokens.model', () => ({
   },
 }));
 
-jest.mock('../../models/notification-preferences.model', () => ({
-  NotificationPreferencesModel: {
-    getByUserId: jest.fn(),
+jest.mock('../../services/users.service', () => ({
+  UsersService: {
+    findById: jest.fn(),
   },
 }));
 
@@ -46,7 +46,7 @@ jest.mock('../../config/env', () => ({
 
 import { PushService } from '../push.service';
 import { PushTokensModel } from '../../models/push-tokens.model';
-import { NotificationPreferencesModel } from '../../models/notification-preferences.model';
+import { UsersService } from '../../services/users.service';
 import * as admin from 'firebase-admin';
 
 describe('PushService - Unit Tests', () => {
@@ -83,7 +83,7 @@ describe('PushService - Unit Tests', () => {
         mockUserId,
         'Test Title',
         'Test Body',
-        { key: 'value' }
+        { type: 'test_type', key: 'value' }
       );
 
       expect(result.success).toBe(true);
@@ -93,19 +93,23 @@ describe('PushService - Unit Tests', () => {
       expect(PushTokensModel.updateLastUsed).toHaveBeenCalledWith(mockToken);
     });
 
-    it('should not send if user has disabled push notifications', async () => {
-      (NotificationPreferencesModel.getByUserId as jest.Mock).mockResolvedValue({
-        push_enabled: false,
+    it('should not send if user has disabled push notifications for the type', async () => {
+      (UsersService.findById as jest.Mock).mockResolvedValue({
+        id: mockUserId,
+        notification_preferences: {
+          test_type: { push: false },
+        },
       });
 
       const result = await PushService.sendToUser(
         mockUserId,
         'Test Title',
-        'Test Body'
+        'Test Body',
+        { type: 'test_type' }
       );
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('User has disabled push notifications');
+      expect(result.errors).toContain('User has disabled push notifications for type: test_type');
       expect(PushTokensModel.getActiveTokensByUserId).not.toHaveBeenCalled();
     });
 
@@ -140,7 +144,8 @@ describe('PushService - Unit Tests', () => {
       const result = await PushService.sendToUser(
         mockUserId,
         'Test Title',
-        'Test Body'
+        'Test Body',
+        { type: 'test_type' }
       );
 
       expect(result.success).toBe(false);

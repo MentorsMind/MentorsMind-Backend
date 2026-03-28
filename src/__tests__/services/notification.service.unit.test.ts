@@ -1,6 +1,6 @@
 import { NotificationService } from '../../services/notification.service';
 import { NotificationsModel } from '../../models/notifications.model';
-import { NotificationPreferencesModel } from '../../models/notification-preferences.model';
+import { UsersService } from '../../services/users.service';
 import { NotificationDeliveryTrackingModel } from '../../models/notification-delivery-tracking.model';
 import { NotificationAnalyticsModel } from '../../models/notification-analytics.model';
 import { SocketService } from '../../services/socket.service';
@@ -10,7 +10,7 @@ import { mockDeep, mockReset } from 'jest-mock-extended';
 
 // Mock external dependencies
 jest.mock('../../models/notifications.model');
-jest.mock('../../models/notification-preferences.model');
+jest.mock('../../services/users.service');
 jest.mock('../../models/notification-delivery-tracking.model');
 jest.mock('../../models/notification-analytics.model');
 jest.mock('../../services/socket.service');
@@ -18,7 +18,7 @@ jest.mock('../../services/push.service');
 jest.mock('../../queues/email.queue');
 
 const mockNotificationsModel = NotificationsModel as jest.Mocked<typeof NotificationsModel>;
-const mockPreferencesModel = NotificationPreferencesModel as jest.Mocked<typeof NotificationPreferencesModel>;
+const mockUsersService = UsersService as jest.Mocked<typeof UsersService>;
 const mockDeliveryTrackingModel = NotificationDeliveryTrackingModel as jest.Mocked<typeof NotificationDeliveryTrackingModel>;
 const mockAnalyticsModel = NotificationAnalyticsModel as jest.Mocked<typeof NotificationAnalyticsModel>;
 const mockSocketService = SocketService as jest.Mocked<typeof SocketService>;
@@ -28,7 +28,7 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 describe('NotificationService', () => {
   beforeEach(() => {
     mockReset(mockNotificationsModel);
-    mockReset(mockPreferencesModel);
+    mockReset(mockUsersService);
     mockReset(mockDeliveryTrackingModel);
     mockReset(mockAnalyticsModel);
     mockReset(mockSocketService);
@@ -46,10 +46,11 @@ describe('NotificationService', () => {
         message: 'Your booking has been confirmed',
       };
 
-      const mockPreferences = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: false,
+      const mockUser = {
+        id: 'user-123',
+        notification_preferences: {
+          booking_confirmed: { email: true, push: false, in_app: true },
+        },
       };
 
       const mockNotification = {
@@ -61,7 +62,7 @@ describe('NotificationService', () => {
         message: request.message,
       };
 
-      mockPreferencesModel.getByUserId.mockResolvedValue(mockPreferences);
+      mockUsersService.findById.mockResolvedValue(mockUser as any);
       mockNotificationsModel.create.mockResolvedValue(mockNotification as any);
       mockDeliveryTrackingModel.create.mockResolvedValue({} as any);
       mockAnalyticsModel.incrementMetric.mockResolvedValue();
@@ -82,13 +83,14 @@ describe('NotificationService', () => {
         message: 'Your booking has been confirmed',
       };
 
-      const mockPreferences = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: false, // Push disabled
+      const mockUser = {
+        id: 'user-123',
+        notification_preferences: {
+          booking_confirmed: { email: true, push: false, in_app: true },
+        },
       };
 
-      mockPreferencesModel.getByUserId.mockResolvedValue(mockPreferences);
+      mockUsersService.findById.mockResolvedValue(mockUser as any);
       mockNotificationsModel.create.mockResolvedValue({
         id: 'notif-123',
         user_id: request.userId,
@@ -286,28 +288,22 @@ describe('NotificationService', () => {
     it('should return user preferences if they exist', async () => {
       const userId = 'user-123';
       const mockPreferences = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: false,
+        booking_confirmed: { email: true, push: false, in_app: true },
       };
+      const mockUser = { id: userId, notification_preferences: mockPreferences };
 
-      mockPreferencesModel.getByUserId.mockResolvedValue(mockPreferences);
+      mockUsersService.findById.mockResolvedValue(mockUser as any);
 
       const result = await NotificationService.getUserPreferences(userId);
 
       expect(result).toEqual(mockPreferences);
     });
 
-    it('should return default preferences if user has none', async () => {
+    it('should return default preferences if user or preferences not found', async () => {
       const userId = 'user-123';
-      const mockDefaults = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: true,
-      };
+      const mockDefaults = NotificationService.getDefaultPreferences();
 
-      mockPreferencesModel.getByUserId.mockResolvedValue(null);
-      mockPreferencesModel.getDefaultPreferences.mockReturnValue(mockDefaults);
+      mockUsersService.findById.mockResolvedValue(null);
 
       const result = await NotificationService.getUserPreferences(userId);
 
@@ -316,34 +312,13 @@ describe('NotificationService', () => {
   });
 
   describe('filterChannelsByPreferences', () => {
-    it('should filter channels based on global preferences', () => {
+    it('should filter channels based on type-specific preferences', () => {
       const requestedChannels = ['in_app' as any, 'email' as any, 'push' as any];
       const preferences = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: false,
-      };
-      const notificationType = 'booking_confirmed';
-
-      const result = NotificationService.filterChannelsByPreferences(
-        requestedChannels,
-        preferences,
-        notificationType
-      );
-
-      expect(result).toEqual(['in_app', 'email']);
-    });
-
-    it('should filter channels based on type-specific preferences', () => {
-      const requestedChannels = ['in_app' as any, 'email' as any];
-      const preferences = {
-        email_enabled: true,
-        in_app_enabled: true,
-        push_enabled: true,
-        preferences: {
-          booking_confirmed: {
-            email: false, // Disable email for booking confirmations
-          },
+        booking_confirmed: {
+          email: true,
+          in_app: true,
+          push: false,
         },
       };
       const notificationType = 'booking_confirmed';
@@ -354,7 +329,7 @@ describe('NotificationService', () => {
         notificationType
       );
 
-      expect(result).toEqual(['in_app']);
+      expect(result).toEqual(['in_app', 'email']);
     });
   });
 
