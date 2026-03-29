@@ -44,6 +44,7 @@
   "dependencies": {
     "@bull-board/api": "^6.20.6",
     "@bull-board/express": "^6.20.6",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@stellar/stellar-sdk": "^14.5.0",
     "@types/archiver": "^7.0.0",
     "@types/multer": "^2.1.0",

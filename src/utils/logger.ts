@@ -1,3 +1,4 @@
+import os from 'os';
 import winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
 import path from 'path';
@@ -77,6 +78,15 @@ const LOG_MAX_FILES = process.env.LOG_MAX_FILES || '14d';
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const IS_TEST = process.env.NODE_ENV === 'test';
 
+/**
+ * Stable identifier for this process/pod.
+ * Priority: INSTANCE_ID env var → hostname → random suffix.
+ * Included in every log line so logs from multiple instances can be
+ * correlated and filtered independently in Grafana / CloudWatch / Datadog.
+ */
+export const INSTANCE_ID: string =
+  process.env.INSTANCE_ID || os.hostname() || `instance-${Math.random().toString(36).slice(2, 8)}`;
+
 // ---------------------------------------------------------------------------
 // Transports
 // ---------------------------------------------------------------------------
@@ -116,9 +126,18 @@ if (IS_PRODUCTION) {
 // ---------------------------------------------------------------------------
 // Winston logger instance
 // ---------------------------------------------------------------------------
+// Attach instanceId to every log entry so log streams from multiple
+// API replicas can be distinguished without grep.
+const instanceFormat = winston.format((info) => {
+  (info as any).instanceId = INSTANCE_ID;
+  return info;
+});
+
 export const logger = winston.createLogger({
   level: LOG_LEVEL,
   levels: winston.config.npm.levels,
+  defaultMeta: { instanceId: INSTANCE_ID },
+  format: instanceFormat(),
   transports,
   // Never exit on uncaught exceptions within the logger itself
   exitOnError: false,

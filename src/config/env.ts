@@ -95,6 +95,10 @@ const envSchema = z.object({
     .regex(/^\d+$/, "HEALTH_CHECK_TIMEOUT must be a number")
     .default("5000"),
 
+  // Instance identity (set by orchestrator, e.g. Kubernetes pod name or Docker --name)
+  // Falls back to hostname at runtime when absent.
+  INSTANCE_ID: z.string().optional(),
+
   // Logging
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 

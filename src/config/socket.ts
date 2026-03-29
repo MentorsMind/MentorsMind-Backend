@@ -1,5 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
 import { Server as HTTPServer } from 'http';
+import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { env } from './env';
 import { logger } from '../utils/logger.utils';
@@ -49,6 +51,33 @@ async function broadcastPresence(
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
+/**
+ * Creates a pair of dedicated ioredis connections for the Socket.IO Redis
+ * adapter. Pub/sub requires separate connections — never share the main
+ * application Redis client for this purpose.
+ *
+ * Returns null when REDIS_URL is not set so that the server can fall back to
+ * the in-memory adapter (single-instance dev mode).
+ */
+function createAdapterClients(): { pubClient: Redis; subClient: Redis } | null {
+  const redisUrl = env.REDIS_URL;
+  if (!redisUrl) {
+    logger.warn(
+      'Socket.IO: REDIS_URL not set — using in-memory adapter. ' +
+      'WebSocket events will NOT be broadcast across multiple instances.',
+    );
+    return null;
+  }
+
+  const pubClient = new Redis(redisUrl, { lazyConnect: true });
+  const subClient = pubClient.duplicate();
+
+  pubClient.on('error', (err) => logger.error('Socket.IO pubClient error', { error: err }));
+  subClient.on('error', (err) => logger.error('Socket.IO subClient error', { error: err }));
+
+  return { pubClient, subClient };
+}
+
 export function createSocketServer(httpServer: HTTPServer): SocketIOServer {
   io = new SocketIOServer(httpServer, {
     path: '/socket.io',
@@ -61,6 +90,27 @@ export function createSocketServer(httpServer: HTTPServer): SocketIOServer {
     pingTimeout: 10_000,
     pingInterval: 25_000,
   });
+
+  // ── Redis adapter — required for multi-instance pub/sub ───────────────────
+  // Without the adapter, a WebSocket event emitted on instance A would only
+  // reach clients connected to instance A. With the adapter all instances
+  // share a pub/sub channel and fan-out to the right socket regardless of
+  // which instance holds the connection.
+  const adapterClients = createAdapterClients();
+  if (adapterClients) {
+    const { pubClient, subClient } = adapterClients;
+    Promise.all([pubClient.connect(), subClient.connect()])
+      .then(() => {
+        io.adapter(createAdapter(pubClient, subClient));
+        logger.info('Socket.IO: Redis adapter attached — multi-instance pub/sub active');
+      })
+      .catch((err) => {
+        logger.error(
+          'Socket.IO: Failed to connect Redis adapter clients — falling back to in-memory',
+          { error: err },
+        );
+      });
+  }
 
   // ── JWT authentication middleware ──────────────────────────────────────────
   io.use((socket: any, next) => {
