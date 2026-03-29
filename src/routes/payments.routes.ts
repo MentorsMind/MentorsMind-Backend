@@ -10,12 +10,12 @@
  * POST   /api/v1/payments/:id/refund  - Process refund
  */
 
-import { Router } from 'express';
-import { PaymentsController } from '../controllers/payments.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { idempotency } from '../middleware/idempotency.middleware';
-import { validate } from '../middleware/validation.middleware';
-import { asyncHandler } from '../utils/asyncHandler.utils';
+import { Router } from "express";
+import { PaymentsController } from "../controllers/payments.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { idempotency } from "../middleware/idempotency.middleware";
+import { validate } from "../middleware/validation.middleware";
+import { asyncHandler } from "../utils/asyncHandler.utils";
 import {
   initiatePaymentSchema,
   confirmPaymentSchema,
@@ -23,7 +23,8 @@ import {
   webhookPaymentSchema,
   listPaymentsSchema,
   getPaymentByIdSchema,
-} from '../validators/schemas/payments.schemas';
+} from "../validators/schemas/payments.schemas";
+import { FeeEstimateController } from "../controllers/feeEstimate.controller";
 
 const router = Router();
 
@@ -54,7 +55,11 @@ const router = Router();
  *       200:
  *         description: Webhook processed
  */
-router.post('/webhook', validate(webhookPaymentSchema), asyncHandler(PaymentsController.handleWebhook));
+router.post(
+  "/webhook",
+  validate(webhookPaymentSchema),
+  asyncHandler(PaymentsController.handleWebhook),
+);
 
 // All routes below require authentication
 router.use(authenticate);
@@ -102,7 +107,12 @@ router.use(authenticate);
  *       201:
  *         description: Payment initiated
  */
-router.post('/', idempotency, validate(initiatePaymentSchema), asyncHandler(PaymentsController.initiatePayment));
+router.post(
+  "/",
+  idempotency,
+  validate(initiatePaymentSchema),
+  asyncHandler(PaymentsController.initiatePayment),
+);
 
 /**
  * @swagger
@@ -133,7 +143,11 @@ router.post('/', idempotency, validate(initiatePaymentSchema), asyncHandler(Paym
  *       200:
  *         description: List of payments
  */
-router.get('/', validate(listPaymentsSchema), asyncHandler(PaymentsController.listPayments));
+router.get(
+  "/",
+  validate(listPaymentsSchema),
+  asyncHandler(PaymentsController.listPayments),
+);
 
 /**
  * @swagger
@@ -147,7 +161,32 @@ router.get('/', validate(listPaymentsSchema), asyncHandler(PaymentsController.li
  *       200:
  *         description: Payment history with total volume
  */
-router.get('/history', validate(listPaymentsSchema), asyncHandler(PaymentsController.getPaymentHistory));
+router.get(
+  "/history",
+  validate(listPaymentsSchema),
+  asyncHandler(PaymentsController.getPaymentHistory),
+);
+
+/**
+ * @swagger
+ * /payments/fee-estimate:
+ *   get:
+ *     summary: Get Stellar fee estimate
+ *     tags: [Payments]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: operations
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Number of operations in transaction
+ *     responses:
+ *       200:
+ *         description: Fee estimate retrieved successfully
+ */
+router.get("/fee-estimate", asyncHandler(FeeEstimateController.getFeeEstimate));
 
 /**
  * @swagger
@@ -168,7 +207,11 @@ router.get('/history', validate(listPaymentsSchema), asyncHandler(PaymentsContro
  *       404:
  *         description: Payment not found
  */
-router.get('/:id', validate(getPaymentByIdSchema), asyncHandler(PaymentsController.getPayment));
+router.get(
+  "/:id",
+  validate(getPaymentByIdSchema),
+  asyncHandler(PaymentsController.getPayment),
+);
 
 /**
  * @swagger
@@ -187,7 +230,11 @@ router.get('/:id', validate(getPaymentByIdSchema), asyncHandler(PaymentsControll
  *       200:
  *         description: Payment status
  */
-router.get('/:id/status', validate(getPaymentByIdSchema), asyncHandler(PaymentsController.getPaymentStatus));
+router.get(
+  "/:id/status",
+  validate(getPaymentByIdSchema),
+  asyncHandler(PaymentsController.getPaymentStatus),
+);
 
 /**
  * @swagger
@@ -217,7 +264,11 @@ router.get('/:id/status', validate(getPaymentByIdSchema), asyncHandler(PaymentsC
  *       200:
  *         description: Payment confirmed
  */
-router.post('/:id/confirm', validate(confirmPaymentSchema), asyncHandler(PaymentsController.confirmPayment));
+router.post(
+  "/:id/confirm",
+  validate(confirmPaymentSchema),
+  asyncHandler(PaymentsController.confirmPayment),
+);
 
 /**
  * @swagger
@@ -247,6 +298,10 @@ router.post('/:id/confirm', validate(confirmPaymentSchema), asyncHandler(Payment
  *       200:
  *         description: Refund processed
  */
-router.post('/:id/refund', validate(refundPaymentSchema), asyncHandler(PaymentsController.refundPayment));
+router.post(
+  "/:id/refund",
+  validate(refundPaymentSchema),
+  asyncHandler(PaymentsController.refundPayment),
+);
 
 export default router;
