@@ -12,6 +12,7 @@ import {
   requestMoreInfoSchema,
   listVerificationsSchema,
 } from "../validators/schemas/verification.schemas";
+import { ConsentController } from "../controllers/consent.controller";
 
 const router = Router();
 
@@ -509,7 +510,10 @@ router.get("/audit-log/export", asyncHandler(AdminController.exportAuditLogs));
  *       200:
  *         description: Chain integrity verification result
  */
-router.get("/audit-log/verify", asyncHandler(AdminController.verifyAuditLogIntegrity));
+router.get(
+  "/audit-log/verify",
+  asyncHandler(AdminController.verifyAuditLogIntegrity),
+);
 
 /**
  * @swagger
@@ -900,6 +904,29 @@ router.put(
   "/verifications/:id/request-more",
   validate(requestMoreInfoSchema),
   asyncHandler(VerificationController.requestMoreInfo),
+);
+
+/**
+ * @swagger
+ * /api/v1/admin/consent/stats:
+ *   get:
+ *     summary: Aggregate consent rates by type (Admin only)
+ *     tags: [Consent, Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Consent statistics aggregated successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Admin access required
+ */
+router.get(
+  "/consent/stats",
+  authenticate,
+  requireAdmin,
+  asyncHandler(ConsentController.getConsentStats),
 );
 
 export default router;
