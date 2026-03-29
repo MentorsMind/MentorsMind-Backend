@@ -61,7 +61,10 @@
     "swagger-ui-express": "^5.0.1",
     "uuid": "^13.0.0",
     "ws": "^8.20.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@apollo/server": "^4.13.0",
+    "graphql": "^16.8.0",
+    "dataloader": "^2.2.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

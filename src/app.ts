@@ -16,6 +16,7 @@ import routes from './routes';
 import HealthService from './services/health.service';
 import { metricsMiddleware } from './middleware/metrics.middleware';
 import { versioningMiddleware } from './middleware/versioning.middleware';
+import { initializeGraphQL } from './graphql/server';
 import { CURRENT_VERSION } from './config/api-versions.config';
 
 const app: Application = express();
@@ -36,6 +37,11 @@ app.use(generalLimiter);
 app.use(metricsMiddleware);
 app.use(versioningMiddleware);
 app.set('trust proxy', 1);
+
+// GraphQL endpoint
+initializeGraphQL(app).catch((err) => {
+  console.error('Failed to initialize GraphQL server:', err);
+});
 
 // Swagger docs
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
