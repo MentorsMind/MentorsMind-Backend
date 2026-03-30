@@ -95,42 +95,6 @@ router.get("/", (_req, res) => {
 });
 
 // ── Health ───────────────────────────────────────────────────────────────────
-/**
- * @swagger
- * /health:
- *   get:
- *     summary: Service health check
- *     tags: [Health]
- *     responses:
- *       200:
- *         description: Service is healthy
- */
-router.get("/health", HealthController.getHealth);
-
-/**
- * @swagger
- * /ready:
- *   get:
- *     summary: Service readiness check
- *     tags: [Health]
- *     responses:
- *       200:
- *         description: Service is ready
- *       503:
- *         description: Service not ready
- */
-router.get(
-  "/ready",
-  asyncHandler(async (_req, res) => {
-    const health = await HealthService.checkHealth();
-    const isReady = health.overall === "healthy";
-    ResponseUtil.success(
-      res,
-      { ...health, isReady },
-      isReady ? "Service is ready" : "Service degraded",
-      isReady ? 200 : 503,
-    );
-  }),
-);
+// Health routes moved to app.ts for global accessibility
 
 export default router;

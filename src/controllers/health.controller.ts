@@ -1,55 +1,63 @@
 import { Response } from 'express';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 import { ResponseUtil } from '../utils/response.utils';
-import HealthService, { HealthStatus } from '../services/health.service';
-import monitoringConfig from '../config/monitoring.config';
+import HealthService from '../services/health.service';
 import { logger } from '../utils/logger.utils';
-import * as promClient from 'prom-client';
 
 /**
  * Health Controller
- * Public endpoints for health checks and metrics.
- * /health - JSON health status (component level)
- * /metrics - Prometheus metrics (text/plain)
+ * Public endpoints for health checks and readiness probes.
  */
 export const HealthController = {
   /**
-   * GET /health
-   * Comprehensive component health status
+   * GET /health/live
+   * Liveness probe: returns 200 if process is running.
    */
-  getHealth: asyncHandler(async (_req: any, res: Response) => {
-    const healthStatus: HealthStatus = await HealthService.checkHealth();
-    
-    if (monitoringConfig.logging.logHealthEvents) {
-      logger.info('Health endpoint called', {
-        overall: healthStatus.overall,
-        clientIp: res.req.ip,
-        userAgent: res.req.get('User-Agent'),
-      });
+  getLive: asyncHandler(async (_req: any, res: Response) => {
+    if (HealthService.isLive()) {
+      return res.status(200).json({ status: 'healthy' });
     }
-
-    // Use 503 for down, 200 otherwise (consistent with readiness)
-    const statusCode = healthStatus.overall === 'down' ? 503 : 200;
-    
-    ResponseUtil.success(res, healthStatus, 'Health status', statusCode);
+    return res.status(503).json({ status: 'unhealthy' });
   }),
 
   /**
-   * GET /metrics
-   * Prometheus metrics endpoint
+   * GET /health/ready
+   * Readiness probe: checks critical dependencies.
    */
-  getMetrics: asyncHandler(async (_req: any, res: Response) => {
-    if (!monitoringConfig.prometheus.enabled) {
-      return ResponseUtil.error(res, 'Metrics disabled', 503);
+  getReady: asyncHandler(async (_req: any, res: Response) => {
+    const healthStatus = await HealthService.checkReadiness();
+    
+    // Readiness returns 503 if any critical component is down (unhealthy)
+    const statusCode = healthStatus.status === 'unhealthy' ? 503 : 200;
+    
+    if (statusCode === 503) {
+      logger.warn('Readiness check failed', { components: healthStatus.components });
     }
 
-    const metrics = await HealthService.getMetrics();
-    logger.debug('Metrics endpoint called', { bytes: metrics.length });
+    // Response structure as requested: { status, components, uptime, version }
+    const response = {
+      status: healthStatus.status,
+      components: {
+        db: healthStatus.components.db.status,
+        redis: healthStatus.components.redis.status,
+        horizon: healthStatus.components.horizon.status,
+      },
+      uptime: healthStatus.uptime,
+      version: healthStatus.version,
+    };
+
+    return res.status(statusCode).json(response);
+  }),
+
+  /**
+   * GET /health/detailed
+   * Admin only: returns full component-level status with latency and system info.
+   */
+  getDetailed: asyncHandler(async (_req: any, res: Response) => {
+    const healthStatus = await HealthService.checkReadiness(); // Detail check
     
-    res.set('Content-Type', promClient.register.contentType);
-    res.status(200).send(metrics);
+    ResponseUtil.success(res, healthStatus, 'Detailed health status', 200);
   }),
 };
 
 export default HealthController;
-

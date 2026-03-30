@@ -127,6 +127,16 @@ if (resolvedApiVersion !== 'v1' && resolvedApiVersion !== 'v2') {
   app.use(`/api/${resolvedApiVersion}`, routes);
 }
 
+import HealthController from './controllers/health.controller';
+import { requireAdmin } from './middleware/admin-auth.middleware';
+import { authenticate } from './middleware/auth.middleware';
+
+// ─── Health Routes ───────────────────────────────────────────────────────────
+app.get('/health/live', HealthController.getLive);
+app.get('/health/ready', HealthController.getReady);
+app.get('/health/detailed', authenticate as any, requireAdmin as any, HealthController.getDetailed);
+app.get('/health', (_req, res) => res.redirect('/health/ready'));
+
 // ─── Root info ────────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
   res.json({
@@ -136,7 +146,7 @@ app.get('/', (_req, res) => {
     supportedVersions: SUPPORTED_VERSIONS,
     documentation: `/api/${CURRENT_VERSION}/docs`,
     versions: '/api/versions',
-    health: '/health',
+    health: '/health/ready',
   });
 });
 
