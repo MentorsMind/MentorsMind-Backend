@@ -1,0 +1,29 @@
+# OWASP ZAP Baseline Scan Rules Configuration
+# Format: rule_id	alert_name	risk_level	confidence
+
+# Exclude informational alerts
+10000	Informational	Informational	Low
+
+# Exclude low-risk alerts that are typically false positives
+10001	Passive Scan Rules	Low	Low
+10002	Passive Scan Rules	Low	Medium
+
+# Focus on high and critical vulnerabilities
+10003	SQL Injection	High	High
+10004	Cross Site Scripting (XSS)	High	High
+10005	Cross Site Request Forgery (CSRF)	High	High
+10006	Authentication Bypass	Critical	High
+10007	Insecure Direct Object Reference	High	High
+10008	Broken Access Control	High	High
+10009	Sensitive Data Exposure	High	High
+10010	XML External Entity (XXE)	High	High
+10011	Broken Authentication	Critical	High
+10012	Using Components with Known Vulnerabilities	High	High
+10013	Insufficient Logging & Monitoring	Medium	Medium
+10014	Weak Cryptography	High	High
+10015	Insecure Deserialization	High	High
+10016	Broken Access Control	High	High
+10017	Security Misconfiguration	Medium	Medium
+10018	Insufficient Transport Layer Protection	High	High
+10019	Unvalidated Redirects and Forwards	Medium	Medium
+10020	Improper Input Validation	High	High
