@@ -1,5 +1,7 @@
 import { EscrowModel, EscrowRecord, EscrowStatus } from '../models/escrow.model';
 import { DisputeModel } from '../models/dispute.model';
+import pool from '../config/database';
+import { SorobanEscrowService } from './sorobanEscrow.service';
 import { logger } from '../utils/logger.utils';
 
 export class EscrowApiService {
@@ -14,8 +16,31 @@ export class EscrowApiService {
     description?: string;
   }): Promise<EscrowRecord> {
     logger.info('Creating escrow', { learnerId: data.learnerId, mentorId: data.mentorId, amount: data.amount });
-    
+
     const escrow = await EscrowModel.create(data);
+
+    if (SorobanEscrowService.isConfigured()) {
+      const onChain = await SorobanEscrowService.createEscrow({
+        bookingId: escrow.id,
+        learnerId: data.learnerId,
+        mentorId: data.mentorId,
+        amount: data.amount,
+        currency: data.currency,
+      });
+
+      if (onChain.txHash) {
+        await EscrowModel.updateStatus(escrow.id, escrow.status, {
+          stellar_tx_hash: onChain.txHash,
+        });
+      }
+
+      logger.info('Soroban create_escrow invoked', {
+        escrowId: escrow.id,
+        contractAddress: onChain.contractAddress,
+        onChainEscrowId: onChain.escrowId,
+        txHash: onChain.txHash,
+      });
+    }
     
     logger.info('Escrow created', { escrowId: escrow.id });
     return escrow;
@@ -54,8 +79,17 @@ export class EscrowApiService {
 
     logger.info('Releasing escrow', { escrowId, userId });
 
+    let txHashFromChain: string | null = null;
+    if (SorobanEscrowService.isConfigured()) {
+      const chainResult = await SorobanEscrowService.releaseFunds({
+        escrowId,
+        releasedBy: userId,
+      });
+      txHashFromChain = chainResult.txHash;
+    }
+
     const updated = await EscrowModel.updateStatus(escrowId, 'released', {
-      stellar_tx_hash: stellarTxHash || escrow.stellar_tx_hash,
+      stellar_tx_hash: stellarTxHash || txHashFromChain || escrow.stellar_tx_hash,
       released_at: new Date(),
     });
 
@@ -97,6 +131,14 @@ export class EscrowApiService {
 
     logger.info('Opening dispute', { escrowId, userId, reason });
 
+    if (SorobanEscrowService.isConfigured()) {
+      await SorobanEscrowService.openDispute({
+        escrowId,
+        raisedBy: userId,
+        reason,
+      });
+    }
+
     // Create dispute record (assuming we need to create it in disputes table)
     const dispute = await pool.query(
       `INSERT INTO disputes (transaction_id, reporter_id, reason, status)
@@ -126,7 +168,8 @@ export class EscrowApiService {
     escrowId: string,
     resolution: 'release_to_mentor' | 'refund_to_learner',
     notes?: string,
-    stellarTxHash?: string
+    stellarTxHash?: string,
+    splitPercentage?: number,
   ): Promise<EscrowRecord> {
     const escrow = await EscrowModel.findById(escrowId);
     
@@ -144,12 +187,26 @@ export class EscrowApiService {
 
     logger.info('Resolving dispute', { escrowId, resolution, disputeId: escrow.dispute_id });
 
+    let txHashFromChain: string | null = null;
+    if (SorobanEscrowService.isConfigured()) {
+      const resolvedSplit =
+        splitPercentage ?? (resolution === 'release_to_mentor' ? 100 : 0);
+      const chainResult = await SorobanEscrowService.resolveDispute({
+        escrowId,
+        splitPercentage: resolvedSplit,
+        resolvedBy: 'admin',
+      });
+      txHashFromChain = chainResult.txHash;
+    }
+
     // Update dispute status
     await DisputeModel.updateStatus(escrow.dispute_id, 'resolved', notes);
 
     // Update escrow based on resolution
     const newStatus: EscrowStatus = resolution === 'release_to_mentor' ? 'released' : 'refunded';
-    const additionalFields: any = { stellar_tx_hash: stellarTxHash || escrow.stellar_tx_hash };
+    const additionalFields: any = {
+      stellar_tx_hash: stellarTxHash || txHashFromChain || escrow.stellar_tx_hash,
+    };
 
     if (resolution === 'release_to_mentor') {
       additionalFields.released_at = new Date();
@@ -193,8 +250,17 @@ export class EscrowApiService {
 
     logger.info('Refunding escrow', { escrowId, userId });
 
+    let txHashFromChain: string | null = null;
+    if (SorobanEscrowService.isConfigured()) {
+      const chainResult = await SorobanEscrowService.refund({
+        escrowId,
+        refundedBy: userId,
+      });
+      txHashFromChain = chainResult.txHash;
+    }
+
     const updated = await EscrowModel.updateStatus(escrowId, 'refunded', {
-      stellar_tx_hash: stellarTxHash || escrow.stellar_tx_hash,
+      stellar_tx_hash: stellarTxHash || txHashFromChain || escrow.stellar_tx_hash,
       refunded_at: new Date(),
     });
 
@@ -285,6 +351,3 @@ export class EscrowApiService {
     return validTransitions[currentStatus]?.includes(newStatus) || false;
   }
 }
-
-// Import pool for dispute creation
-import pool from '../config/database';

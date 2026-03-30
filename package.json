@@ -14,6 +14,10 @@
     "test:watch": "jest -c jest.unit.config.ts --watch",
     "test:coverage": "jest -c jest.unit.config.ts --coverage",
     "test:all": "jest",
+    "test:security": "jest -c jest.unit.config.ts src/__tests__/security",
+    "test:security:watch": "jest -c jest.unit.config.ts src/__tests__/security --watch",
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix",
     "seed": "ts-node --project tsconfig.seed.json database/seeds/index.ts",
     "seed:reset": "ts-node --project tsconfig.seed.json database/seeds/index.ts --reset",
     "seed:test": "ts-node --project tsconfig.seed.json database/seeds/index.ts --size=test",
@@ -88,7 +92,10 @@
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.20.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@apollo/server": "^4.13.0",
+    "graphql": "^16.8.0",
+    "dataloader": "^2.2.2"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",

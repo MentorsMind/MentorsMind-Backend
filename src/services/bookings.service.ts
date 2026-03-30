@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.utils';
 import { createError } from '../middleware/errorHandler';
 import { calculateEndTime, calculateRefundEligibility } from '../utils/booking-conflicts.utils';
 import { SocketService } from './socket.service';
+import { SorobanEscrowService } from './sorobanEscrow.service';
 import pool from '../config/database';
 
 export interface CreateBookingData {
@@ -23,9 +24,62 @@ export interface UpdateBookingData {
   notes?: string;
 }
 
+interface BookingEscrowMetadata {
+  escrow_id: string | null;
+  escrow_contract_address: string | null;
+}
+
+async function ensureEscrowMetadataColumns(): Promise<void> {
+  await pool.query(
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_contract_address VARCHAR(255)`,
+  );
+  await pool.query(
+    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(255)`,
+  );
+}
+
+async function getBookingEscrowMetadata(
+  bookingId: string,
+): Promise<BookingEscrowMetadata> {
+  const { rows } = await pool.query<BookingEscrowMetadata>(
+    `SELECT escrow_id, escrow_contract_address FROM bookings WHERE id = $1`,
+    [bookingId],
+  );
+
+  return (
+    rows[0] || {
+      escrow_id: null,
+      escrow_contract_address: null,
+    }
+  );
+}
+
+async function setBookingEscrowMetadata(
+  bookingId: string,
+  contractAddress: string,
+  escrowId: string,
+  txHash: string | null,
+): Promise<void> {
+  await pool.query(
+    `UPDATE bookings
+     SET escrow_contract_address = $2,
+         escrow_id = $3,
+         stellar_tx_hash = COALESCE($4, stellar_tx_hash),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [bookingId, contractAddress, escrowId, txHash],
+  );
+}
+
+function isCancelledBeforeSession(booking: BookingRecord): boolean {
+  return booking.scheduled_at > new Date();
+}
+
 export const BookingsService = {
   async initialize(): Promise<void> {
     await BookingModel.initializeTable();
+    await ensureEscrowMetadataColumns();
+    SorobanEscrowService.startPendingEscrowMonitoring();
   },
 
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
@@ -184,6 +238,20 @@ export const BookingsService = {
       throw createError('Payment must be completed before confirmation', 400);
     }
 
+    let onChainEscrow:
+      | { contractAddress: string; escrowId: string; txHash: string | null }
+      | null = null;
+
+    if (SorobanEscrowService.isConfigured()) {
+      onChainEscrow = await SorobanEscrowService.createEscrow({
+        bookingId,
+        learnerId: booking.mentee_id,
+        mentorId: booking.mentor_id,
+        amount: booking.amount,
+        currency: booking.currency,
+      });
+    }
+
     const updated = await BookingModel.update(bookingId, { status: 'confirmed' });
     
     if (!updated) {
@@ -194,6 +262,16 @@ export const BookingsService = {
     await CacheService.del(CacheKeys.sessionList(booking.mentee_id));
     await CacheService.del(CacheKeys.sessionList(booking.mentor_id));
     logger.debug('Booking cache invalidated on confirmation', { bookingId });
+
+    if (onChainEscrow) {
+      await setBookingEscrowMetadata(
+        bookingId,
+        onChainEscrow.contractAddress,
+        onChainEscrow.escrowId,
+        onChainEscrow.txHash,
+      );
+    }
+
     // Emit session:updated event to both mentor and mentee
     SocketService.emitToUser(booking.mentor_id, 'session:updated', {
       bookingId,
@@ -225,6 +303,21 @@ export const BookingsService = {
     const sessionEnd = calculateEndTime(booking.scheduled_at, booking.duration_minutes);
     if (sessionEnd > new Date()) {
       throw createError('Cannot complete booking before session ends', 400);
+    }
+
+    if (userId === booking.mentee_id && SorobanEscrowService.isConfigured()) {
+      const metadata = await getBookingEscrowMetadata(bookingId);
+      if (metadata.escrow_id) {
+        await SorobanEscrowService.releaseFunds({
+          escrowId: metadata.escrow_id,
+          releasedBy: userId,
+          contractAddress: metadata.escrow_contract_address || undefined,
+        });
+      } else {
+        logger.warn('Skipping Soroban release_funds: no escrow metadata on booking', {
+          bookingId,
+        });
+      }
     }
 
     const updated = await BookingModel.update(bookingId, { status: 'completed' });
@@ -265,6 +358,21 @@ export const BookingsService = {
 
     // Calculate refund eligibility
     const refundInfo = calculateRefundEligibility(booking.scheduled_at);
+
+    if (isCancelledBeforeSession(booking) && SorobanEscrowService.isConfigured()) {
+      const metadata = await getBookingEscrowMetadata(bookingId);
+      if (metadata.escrow_id) {
+        await SorobanEscrowService.refund({
+          escrowId: metadata.escrow_id,
+          refundedBy: userId,
+          contractAddress: metadata.escrow_contract_address || undefined,
+        });
+      } else {
+        logger.warn('Skipping Soroban refund: no escrow metadata on booking', {
+          bookingId,
+        });
+      }
+    }
 
     const updated = await BookingModel.update(bookingId, {
       status: 'cancelled',

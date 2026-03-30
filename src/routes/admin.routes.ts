@@ -3,22 +3,27 @@ import { AdminController } from "../controllers/admin.controller";
 import { AnalyticsController } from "../controllers/analytics.controller";
 import { ModerationController } from "../controllers/moderation.controller";
 import { VerificationController } from "../controllers/verification.controller";
+import { RevenueReportController } from "../controllers/revenueReport.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireAdmin } from "../middleware/admin-auth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
+import { logger } from "../utils/logger.utils";
 import {
   rejectVerificationSchema,
   requestMoreInfoSchema,
   listVerificationsSchema,
 } from "../validators/schemas/verification.schemas";
 import { ConsentController } from "../controllers/consent.controller";
-import { JwksController } from "../controllers/jwks.controller";
+import { refreshAnalyticsJob } from "../jobs/refreshAnalytics.job";
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireAdmin);
+refreshAnalyticsJob.initialize().catch((error: unknown) => {
+  logger.error("Failed to initialize hourly analytics refresh job", { error });
+});
 
 /**
  * @swagger
@@ -703,6 +708,115 @@ router.get(
 router.post(
   "/analytics/refresh",
   asyncHandler(AnalyticsController.refreshViews),
+);
+
+/**
+ * @swagger
+ * /admin/reports/revenue:
+ *   get:
+ *     summary: Get platform revenue summary for a period
+ *     tags: [Admin, Reporting]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: period
+ *         in: query
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *     responses:
+ *       200:
+ *         description: Revenue summary with period comparison
+ */
+router.get(
+  "/reports/revenue",
+  asyncHandler(RevenueReportController.getRevenueSummary),
+);
+
+/**
+ * @swagger
+ * /admin/reports/revenue/daily:
+ *   get:
+ *     summary: Get daily revenue time series
+ *     tags: [Admin, Reporting]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: from
+ *         in: query
+ *         required: true
+ *         schema: { type: string, format: date }
+ *       - name: to
+ *         in: query
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Daily revenue report
+ */
+router.get(
+  "/reports/revenue/daily",
+  asyncHandler(RevenueReportController.getDailyRevenue),
+);
+
+/**
+ * @swagger
+ * /admin/reports/transactions:
+ *   get:
+ *     summary: Get filterable transaction report
+ *     tags: [Admin, Reporting]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema: { type: string }
+ *       - name: from
+ *         in: query
+ *         required: true
+ *         schema: { type: string, format: date }
+ *       - name: to
+ *         in: query
+ *         required: true
+ *         schema: { type: string, format: date }
+ *     responses:
+ *       200:
+ *         description: Transaction report list
+ */
+router.get(
+  "/reports/transactions",
+  asyncHandler(RevenueReportController.getTransactions),
+);
+
+/**
+ * @swagger
+ * /admin/reports/export:
+ *   get:
+ *     summary: Export report data as CSV
+ *     tags: [Admin, Reporting]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: type
+ *         in: query
+ *         schema: { type: string, enum: [revenue], default: revenue }
+ *       - name: format
+ *         in: query
+ *         schema: { type: string, enum: [csv], default: csv }
+ *       - name: from
+ *         in: query
+ *         schema: { type: string, format: date }
+ *       - name: to
+ *         in: query
+ *         schema: { type: string, format: date }
+ *       - name: status
+ *         in: query
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: CSV export generated
+ */
+router.get(
+  "/reports/export",
+  asyncHandler(RevenueReportController.exportReport),
 );
 
 // ── Moderation Routes ────────────────────────────────────────────────────────
