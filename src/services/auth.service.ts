@@ -80,11 +80,14 @@ export const AuthService = {
     /**
      * Login an existing user
      */
-    async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null): Promise<{ tokens: AuthTokens; userId: string; role: string }> {
+    /**
+     * Login an existing user
+     */
+    async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null): Promise<any> {
         const { email, password } = input;
 
         const query = `
-      SELECT id, role, password_hash 
+      SELECT id, role, password_hash, mfa_enabled 
       FROM users 
       WHERE email = $1 AND is_active = true
     `;
@@ -99,6 +102,16 @@ export const AuthService = {
 
         if (!isMatch) {
             throw new Error('Invalid email or password.');
+        }
+
+        // If MFA is enabled, return MFA required status and a short-lived token
+        if (user.mfa_enabled) {
+            const mfaToken = jwt.sign(
+                { sub: user.id, mfaPending: true },
+                JWT_SECRET,
+                { expiresIn: '5m' }
+            );
+            return { mfaRequired: true, mfaToken, userId: user.id };
         }
 
         const tokens = await this.generateTokens(user.id, user.role);
@@ -241,37 +254,4 @@ export const AuthService = {
 
         return { accessToken, refreshToken };
     }
-
-    const userId = rows[0].id;
-    const salt = await bcrypt.genSalt(10);
-    const passwordHash = await bcrypt.hash(input.newPassword, salt);
-
-    await pool.query(
-      `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
-      [passwordHash, userId],
-    );
-
-    return userId;
-  },
-
-  /**
-   * Generate access and refresh tokens, and save refresh token to DB
-   */
-  async generateTokens(userId: string, role: string): Promise<AuthTokens> {
-    const accessToken = jwt.sign({ sub: userId, role }, JWT_SECRET, {
-      expiresIn: ACCESS_TOKEN_EXPIRED_IN,
-    });
-
-    const refreshToken = jwt.sign({ sub: userId, role }, JWT_REFRESH_SECRET, {
-      expiresIn: REFRESH_TOKEN_EXPIRED_IN,
-    });
-
-    // Save refresh token to DB (basic token rotation implementation)
-    await pool.query(`UPDATE users SET refresh_token = $1 WHERE id = $2`, [
-      refreshToken,
-      userId,
-    ]);
-
-    return { accessToken, refreshToken };
-  },
 };

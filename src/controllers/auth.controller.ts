@@ -79,6 +79,14 @@ export const AuthController = {
       // ── Attempt login ──
       const result = await AuthService.login(validatedData, ipAddress, userAgent);
 
+      if (result.mfaRequired) {
+        return res.status(200).json({
+          success: true,
+          mfa_required: true,
+          mfa_token: result.mfaToken,
+        });
+      }
+
       // Success — reset counter
       await LoginAttemptsService.resetAttempts(email);
 

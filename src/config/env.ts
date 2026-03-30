@@ -107,6 +107,8 @@ const envSchema = z.object({
 
   // Security
   BCRYPT_ROUNDS: z.string().regex(/^\d+$/).default("10"),
+  ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY must be at least 32 characters"),
+  MFA_TOTP_ISSUER: z.string().default("MentorMinds"),
 
   // Platform
   PLATFORM_FEE_PERCENTAGE: z.string().regex(/^\d+$/).default("5"),
@@ -137,6 +139,7 @@ const SENSITIVE_KEYS = new Set([
   "FIREBASE_PRIVATE_KEY",
   "VAULT_TOKEN",
   "AWS_SECRET_ID",
+  "ENCRYPTION_KEY",
 ]);
 
 function validateEnv() {
