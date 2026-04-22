@@ -2,7 +2,7 @@ export interface RegisterBody {
   name: string;
   email: string;
   password: string;
-  role: 'mentor' | 'learner';
+  role: 'mentor' | 'mentee';
 }
 
 export interface LoginBody {

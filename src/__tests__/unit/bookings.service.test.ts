@@ -100,7 +100,7 @@ describe("BookingsService", () => {
 
     it("valida que exista el mentor", async () => {
       mockPool.query.mockResolvedValue({
-        rows: [{ id: "mentee-1", role: "learner" }],
+        rows: [{ id: "mentee-1", role: "mentee" }],
       });
 
       await expect(BookingsService.createBooking(createData)).rejects.toThrow(
@@ -111,8 +111,8 @@ describe("BookingsService", () => {
     it("valida rol mentor", async () => {
       mockPool.query.mockResolvedValue({
         rows: [
-          { id: "mentee-1", role: "learner" },
-          { id: "mentor-1", role: "learner" },
+          { id: "mentee-1", role: "mentee" },
+          { id: "mentor-1", role: "mentor" },
         ],
       });
 

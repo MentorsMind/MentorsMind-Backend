@@ -95,7 +95,7 @@ export const listEscrowsSchema = z.object({
     status: z
       .enum(['pending', 'funded', 'released', 'disputed', 'resolved', 'refunded', 'cancelled'])
       .optional(),
-    role: z.enum(['learner', 'mentor']).optional(),
+    role: z.enum(['mentee', 'mentor']).optional(),
   }),
 });
 

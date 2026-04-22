@@ -5,9 +5,9 @@ import { createGoalValidator } from '../validators/learners.validator';
 
 const router = Router();
 
-// All routes here require the user to be logged in and be a 'learner'
+// All routes here require the user to be logged in and be a 'mentee'
 router.use(authenticate);
-router.use(requireRole(['learner']));
+router.use(requireRole(['mentee']));
 
 router.get('/me/progress', getLearnerProgress);
 router.get('/me/stats', getStats);

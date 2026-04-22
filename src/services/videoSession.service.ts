@@ -30,7 +30,7 @@ class VideoSessionService {
     throw new Error("Unsupported provider");
   }
 
-  async generateToken(roomName: string, role: "mentor" | "learner") {
+  async generateToken(roomName: string, role: "mentor" | "mentee") {
     if (this.provider === "daily") {
       const response = await axios.post(
         "https://api.daily.co/v1/meeting-tokens",

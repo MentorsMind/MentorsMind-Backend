@@ -94,7 +94,7 @@ describe("SessionsService (BookingsService)", () => {
       };
 
       mockPool.query.mockResolvedValue({
-        rows: [{ id: "mentee-123", role: "learner" }],
+        rows: [{ id: "mentee-123", role: "mentee" }],
       });
 
       await expect(SessionsService.createBooking(data)).rejects.toThrow(

@@ -308,7 +308,7 @@ export class EscrowApiService {
       page?: number;
       limit?: number;
       status?: EscrowStatus;
-      role?: 'learner' | 'mentor';
+      role?: 'mentee' | 'mentor';
     } = {}
   ): Promise<{ escrows: EscrowRecord[]; total: number }> {
     const page = options.page || 1;
@@ -322,7 +322,7 @@ export class EscrowApiService {
       escrows = escrows.filter(e => e.status === options.status);
     }
 
-    if (options.role === 'learner') {
+    if (options.role === 'mentee') {
       escrows = escrows.filter(e => e.learner_id === userId);
     } else if (options.role === 'mentor') {
       escrows = escrows.filter(e => e.mentor_id === userId);
