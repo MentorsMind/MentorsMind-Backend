@@ -379,14 +379,13 @@ export const MentorsService = {
   async getEarnings(id: string, query: GetMentorEarningsQuery): Promise<EarningsSummary> {
     const { from, to, groupBy } = query;
 
-    const conditions: string[] = ["s.mentor_id = $1", "s.status = 'completed'"];
     const values: unknown[] = [id];
     let idx = 2;
 
-    if (from) { conditions.push(`s.scheduled_at >= $${idx++}`); values.push(from); }
-    if (to) { conditions.push(`s.scheduled_at <= $${idx++}`); values.push(to); }
-
-    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+    const dateFilters: string[] = [];
+    if (from) { dateFilters.push(`AND b.created_at >= $${idx++}`); values.push(from); }
+    if (to) { dateFilters.push(`AND b.created_at <= $${idx++}`); values.push(to); }
+    const dateFilterClause = dateFilters.join(' ');
 
     const allowedUnits: Record<string, string> = { day: 'day', week: 'week', month: 'month' };
     const truncUnit = allowedUnits[groupBy];
@@ -394,25 +393,25 @@ export const MentorsService = {
       throw new Error(`Invalid groupBy value: ${groupBy}`);
     }
 
+    const baseWhere = `WHERE b.mentor_id = $1 AND b.status = 'completed' AND b.payment_status = 'released' ${dateFilterClause}`;
+
     const [summaryResult, breakdownResult] = await Promise.all([
       pool.query<{ total_earnings: string; total_sessions: string }>(
         `SELECT
-           COALESCE(SUM(u.hourly_rate * (s.duration_minutes / 60.0)), 0) AS total_earnings,
-           COUNT(s.id) AS total_sessions
-         FROM sessions s
-         JOIN users u ON u.id = s.mentor_id
-         ${whereClause}`,
+           COALESCE(SUM(b.mentor_payout), 0) AS total_earnings,
+           COUNT(b.id) AS total_sessions
+         FROM bookings b
+         ${baseWhere}`,
         values,
       ),
       pool.query<{ period: string; earnings: string; sessions: string }>(
         `SELECT
-           DATE_TRUNC($${idx}, s.scheduled_at)::text AS period,
-           COALESCE(SUM(u.hourly_rate * (s.duration_minutes / 60.0)), 0) AS earnings,
-           COUNT(s.id) AS sessions
-         FROM sessions s
-         JOIN users u ON u.id = s.mentor_id
-         ${whereClause}
-         GROUP BY DATE_TRUNC($${idx}, s.scheduled_at)
+           DATE_TRUNC($${idx}, b.created_at)::text AS period,
+           COALESCE(SUM(b.mentor_payout), 0) AS earnings,
+           COUNT(b.id) AS sessions
+         FROM bookings b
+         ${baseWhere}
+         GROUP BY DATE_TRUNC($${idx}, b.created_at)
          ORDER BY period DESC`,
         [...values, truncUnit],
       ),
