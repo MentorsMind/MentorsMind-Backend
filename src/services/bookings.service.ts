@@ -36,14 +36,7 @@ interface BookingEscrowMetadata {
   escrow_contract_address: string | null;
 }
 
-async function ensureEscrowMetadataColumns(): Promise<void> {
-  await pool.query(
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_contract_address VARCHAR(255)`,
-  );
-  await pool.query(
-    `ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(255)`,
-  );
-}
+
 
 async function getBookingEscrowMetadata(
   bookingId: string,
@@ -85,7 +78,6 @@ function isCancelledBeforeSession(booking: BookingRecord): boolean {
 export const BookingsService = {
   async initialize(): Promise<void> {
     await BookingModel.initializeTable();
-    await ensureEscrowMetadataColumns();
     SorobanEscrowService.startPendingEscrowMonitoring();
   },
 

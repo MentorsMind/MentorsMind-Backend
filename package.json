@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\"",
-    "test": "jest -c jest.unit.config.ts",
+    "test": "npx jest -c jest.unit.config.ts",
     "test:watch": "jest -c jest.unit.config.ts --watch",
     "test:coverage": "jest -c jest.unit.config.ts --coverage",
     "test:all": "jest",

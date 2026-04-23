@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import pool from '../config/database';
 import { logger } from '../utils/logger.utils';
 import {
@@ -196,6 +197,10 @@ class StellarSorobanClient implements SorobanEscrowClient {
   }
 }
 
+const CreateEscrowResponseSchema = z.object({
+  escrowId: z.string(),
+}).passthrough();
+
 class SorobanEscrowServiceImpl {
   private pollTimer: NodeJS.Timeout | null = null;
   private stopStream: (() => void) | null = null;
@@ -243,8 +248,30 @@ class SorobanEscrowServiceImpl {
       },
     );
 
-    const escrowId =
-      extractEscrowIdFromResult(tx.result) || input.bookingId;
+    // Validate the transaction result against the schema
+    const validationResult = CreateEscrowResponseSchema.safeParse(tx.result);
+    if (!validationResult.success) {
+      logger.error('Soroban create_escrow response validation failed', {
+        bookingId: input.bookingId,
+        txHash: tx.txHash,
+        txResult: tx.result,
+        validationErrors: validationResult.error.errors,
+      });
+      throw new Error(`Invalid create_escrow response for booking ${input.bookingId}.`);
+    }
+
+    const extractedEscrowId = extractEscrowIdFromResult(tx.result);
+
+    if (!extractedEscrowId) {
+      logger.warn('Failed to extract escrowId from create_escrow transaction result. Falling back to bookingId.', {
+        bookingId: input.bookingId,
+        txHash: tx.txHash,
+        txResult: tx.result,
+      });
+      throw new Error(`Failed to create escrow for booking ${input.bookingId}: could not extract escrow ID from contract response.`);
+    }
+
+    const escrowId = extractedEscrowId;
 
     return {
       contractAddress,

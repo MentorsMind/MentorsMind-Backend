@@ -1,0 +1,2 @@
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_contract_address VARCHAR(255);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(255);

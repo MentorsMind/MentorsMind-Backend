@@ -42,33 +42,8 @@ export interface LockStatus {
 
 // ─── Redis client (lazy, same pattern as rate-limiter.service.ts) ─────────────
 
-let redisClient: any = null;
-let redisAvailable = false;
+import { redis } from "../config/redis";
 
-async function getRedis(): Promise<any | null> {
-  if (redisClient) return redisAvailable ? redisClient : null;
-
-  const redisUrl = process.env.REDIS_URL;
-  if (!redisUrl) return null;
-
-  try {
-    const { default: Redis } = await import('ioredis');
-    redisClient = new Redis(redisUrl, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      enableOfflineQueue: false,
-    });
-
-    redisClient.on('error', () => { redisAvailable = false; });
-    redisClient.on('connect', () => { redisAvailable = true; });
-
-    await redisClient.connect();
-    return redisClient;
-  } catch {
-    return null;
-  }
-}
 
 // ─── In-memory fallback ───────────────────────────────────────────────────────
 
@@ -86,9 +61,9 @@ export const LoginAttemptsService = {
     const key = PREFIX + email.toLowerCase();
     const permKey = PERMANENT_PREFIX + email.toLowerCase();
 
-    const redis = await getRedis();
+    const client = redis;
 
-    if (redis && redisAvailable) {
+    if (redis.status === 'ready') {
       // Check permanent lock first
       const isPermanent = await redis.exists(permKey);
       if (isPermanent) {
@@ -123,9 +98,7 @@ export const LoginAttemptsService = {
     const key = PREFIX + email.toLowerCase();
     const permKey = PERMANENT_PREFIX + email.toLowerCase();
 
-    const redis = await getRedis();
-
-    if (redis && redisAvailable) {
+    if (redis.status === 'ready') {
       const [isPermanent, rawCount, ttl] = await Promise.all([
         redis.exists(permKey),
         redis.get(key),
@@ -188,9 +161,7 @@ export const LoginAttemptsService = {
    */
   async resetAttempts(email: string): Promise<void> {
     const key = PREFIX + email.toLowerCase();
-    const redis = await getRedis();
-
-    if (redis && redisAvailable) {
+    if (redis.status === 'ready') {
       await redis.del(key);
     } else {
       const entry = memStore.get(key);
@@ -208,7 +179,7 @@ export const LoginAttemptsService = {
   async adminUnlock(email: string): Promise<void> {
     const key = PREFIX + email.toLowerCase();
     const permKey = PERMANENT_PREFIX + email.toLowerCase();
-    const redis = await getRedis();
+    const client = redis;
 
     if (redis && redisAvailable) {
       await redis.del(key, permKey);
