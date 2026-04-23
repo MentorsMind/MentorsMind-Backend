@@ -13,7 +13,15 @@ import { PaymentsService } from "../services/payments.service";
 import type { StellarTxJobData } from "../queues/stellar-tx.queue";
 
 async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
-  const { txEnvelopeXdr, userId, paymentId, type, amount, currency, description } = job.data;
+  const {
+    txEnvelopeXdr,
+    userId,
+    paymentId,
+    type,
+    amount,
+    currency,
+    description,
+  } = job.data;
 
   logger.info("Stellar TX job started", {
     jobId: job.id,
@@ -24,19 +32,26 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
   });
 
   let xdr = txEnvelopeXdr;
-  if (!xdr && type === 'refund' && paymentId && amount && currency) {
+  if (!xdr && type === "refund" && paymentId && amount && currency) {
     // Build refund XDR
-    const payment = await pool.query('SELECT from_address FROM transactions WHERE id = $1', [paymentId]);
+    const payment = await pool.query(
+      "SELECT from_address FROM transactions WHERE id = $1",
+      [paymentId],
+    );
     if (!payment.rows[0]?.from_address) {
-      throw new Error('No from_address found for refund');
+      throw new Error("No from_address found for refund");
     }
     const toPublicKey = payment.rows[0].from_address;
-    xdr = await stellarService.buildRefundTransaction(toPublicKey, amount, currency === 'XLM' ? undefined : new Asset(currency, 'GA...')); // Need to handle assets
+    xdr = await stellarService.buildRefundTransaction(
+      toPublicKey,
+      amount,
+      currency === "XLM" ? undefined : new Asset(currency, "GA..."),
+    ); // Need to handle assets
     // For now, assume XLM
   }
 
   if (!xdr) {
-    throw new Error('No transaction XDR to submit');
+    throw new Error("No transaction XDR to submit");
   }
 
   const result = await stellarService.submitTransaction(xdr);
@@ -51,7 +66,7 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
 
     if (paymentId) {
       await pool.query(
-        "UPDATE payments SET status = 'failed', updated_at = NOW() WHERE id = $1",
+        "UPDATE transactions SET status = 'failed', updated_at = NOW() WHERE id = $1",
         [paymentId],
       );
     }
@@ -70,9 +85,15 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
   });
 
   if (paymentId) {
-    if (type === 'refund') {
+    if (type === "refund") {
       // For refunds, call refundPayment to create the refund record and update booking
-      await PaymentsService.refundPayment(paymentId, userId, amount, description, result.hash);
+      await PaymentsService.refundPayment(
+        paymentId,
+        userId,
+        amount,
+        description,
+        result.hash,
+      );
     } else {
       // For regular payments, update the payment record
       await pool.query(

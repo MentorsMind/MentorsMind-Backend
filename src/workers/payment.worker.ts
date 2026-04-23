@@ -23,7 +23,7 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
   const { rows } = await pool.query<{
     status: string;
     transaction_hash: string | null;
-  }>("SELECT status, transaction_hash FROM payments WHERE id = $1", [
+  }>("SELECT status, transaction_hash FROM transactions WHERE id = $1", [
     paymentId,
   ]);
 
@@ -52,7 +52,7 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
 
       if (confirmed) {
         await pool.query(
-          "UPDATE payments SET status = 'completed', updated_at = NOW() WHERE id = $1",
+          "UPDATE transactions SET status = 'completed', updated_at = NOW() WHERE id = $1",
           [paymentId],
         );
         logger.info("Payment marked completed via Stellar", {
