@@ -200,11 +200,10 @@ export const AuthController = {
   async forgotPassword(req: Request, res: Response) {
     try {
       const validatedData = forgotPasswordSchema.parse(req).body;
-      const token = await AuthService.forgotPassword(validatedData.email);
+      await AuthService.forgotPassword(validatedData.email);
       return res.status(200).json({
         success: true,
         message: 'If the email exists, a reset link has been generated.',
-        data: { token },
       });
     } catch (error: any) {
       if (error instanceof ZodError) {
