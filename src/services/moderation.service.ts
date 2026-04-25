@@ -150,7 +150,7 @@ export const ModerationService = {
       SELECT 
         f.*,
         u.email as flagger_email,
-        u.full_name as flagger_name,
+        CONCAT(u.first_name, ' ', u.last_name) AS flagger_name,
         (SELECT COUNT(*) FROM flags f2 
          WHERE f2.entity_type = f.entity_type 
          AND f2.entity_id = f.entity_id 
@@ -302,7 +302,7 @@ export const ModerationService = {
 
       if (flag.entity_type === "review") {
         const reviewQuery = `
-          SELECT u.email, u.full_name
+          SELECT u.email, CONCAT(u.first_name, ' ', u.last_name) AS full_name
           FROM reviews r
           JOIN users u ON r.reviewer_id = u.id
           WHERE r.id = $1
@@ -314,7 +314,7 @@ export const ModerationService = {
         }
       } else {
         const userQuery = `
-          SELECT email, full_name FROM users WHERE id = $1
+          SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM users WHERE id = $1
         `;
         const { rows } = await pool.query(userQuery, [flag.entity_id]);
         if (rows[0]) {

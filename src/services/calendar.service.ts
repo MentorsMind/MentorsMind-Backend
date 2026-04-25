@@ -30,34 +30,33 @@ async function fetchSessionsForUser(userId: string): Promise<ICalSession[]> {
   const { rows } = await pool.query(
     `SELECT
        b.id,
-       b.start_time,
-       b.end_time,
-       b.meeting_link,
-       b.location,
+       b.scheduled_start,
+       b.scheduled_end,
+       b.meeting_url,
        b.status,
        mentor.first_name  AS mentor_first,
        mentor.last_name   AS mentor_last,
-       learner.first_name AS learner_first,
-       learner.last_name  AS learner_last
+       mentee.first_name AS mentee_first,
+       mentee.last_name  AS mentee_last
      FROM bookings b
      JOIN users mentor  ON mentor.id  = b.mentor_id
-     JOIN users learner ON learner.id = b.learner_id
-     WHERE (b.mentor_id = $1 OR b.learner_id = $1)
-       AND b.status IN ('confirmed', 'rescheduled')
-       AND b.end_time >= NOW()
-     ORDER BY b.start_time ASC`,
+     JOIN users mentee ON mentee.id = b.mentee_id
+     WHERE (b.mentor_id = $1 OR b.mentee_id = $1)
+       AND b.status IN ('confirmed', 'in_progress', 'completed')
+       AND b.scheduled_end >= NOW()
+     ORDER BY b.scheduled_start ASC`,
     [userId],
   );
 
   return rows.map((row) => ({
     uid: row.id,
-    title: `Mentoring Session: ${row.mentor_first} ${row.mentor_last} & ${row.learner_first} ${row.learner_last}`,
+    title: `Mentoring Session: ${row.mentor_first} ${row.mentor_last} & ${row.mentee_first} ${row.mentee_last}`,
     mentorName: `${row.mentor_first} ${row.mentor_last}`,
-    learnerName: `${row.learner_first} ${row.learner_last}`,
-    startTime: new Date(row.start_time),
-    endTime: new Date(row.end_time),
-    meetingLink: row.meeting_link ?? undefined,
-    location: row.location ?? undefined,
+    learnerName: `${row.mentee_first} ${row.mentee_last}`,
+    startTime: new Date(row.scheduled_start),
+    endTime: new Date(row.scheduled_end),
+    meetingLink: row.meeting_url ?? undefined,
+    location: undefined,
   }));
 }
 
@@ -267,15 +266,15 @@ export const CalendarService = {
   async createGoogleCalendarEvent(bookingId: string): Promise<void> {
     const { rows } = await pool.query(
       `SELECT
-         b.id, b.start_time, b.end_time, b.meeting_link, b.location,
-         b.mentor_id, b.learner_id,
+         b.id, b.scheduled_start, b.scheduled_end, b.meeting_url,
+         b.mentor_id, b.mentee_id,
          mentor.first_name  AS mentor_first,  mentor.last_name  AS mentor_last,
          mentor.email       AS mentor_email,
-         learner.first_name AS learner_first, learner.last_name AS learner_last,
-         learner.email      AS learner_email
+         mentee.first_name AS mentee_first, mentee.last_name AS mentee_last,
+         mentee.email      AS mentee_email
        FROM bookings b
        JOIN users mentor  ON mentor.id  = b.mentor_id
-       JOIN users learner ON learner.id = b.learner_id
+       JOIN users mentee ON mentee.id = b.mentee_id
        WHERE b.id = $1`,
       [bookingId],
     );
@@ -283,17 +282,17 @@ export const CalendarService = {
     const booking = rows[0];
 
     const eventBody = {
-      summary: `Mentoring Session: ${booking.mentor_first} ${booking.mentor_last} & ${booking.learner_first} ${booking.learner_last}`,
-      location: booking.location ?? booking.meeting_link ?? "",
-      description: booking.meeting_link
-        ? `Meeting Link: ${booking.meeting_link}`
+      summary: `Mentoring Session: ${booking.mentor_first} ${booking.mentor_last} & ${booking.mentee_first} ${booking.mentee_last}`,
+      location: booking.meeting_url ?? "",
+      description: booking.meeting_url
+        ? `Meeting Link: ${booking.meeting_url}`
         : "MentorMinds session",
       start: {
-        dateTime: new Date(booking.start_time).toISOString(),
+        dateTime: new Date(booking.scheduled_start).toISOString(),
         timeZone: "UTC",
       },
       end: {
-        dateTime: new Date(booking.end_time).toISOString(),
+        dateTime: new Date(booking.scheduled_end).toISOString(),
         timeZone: "UTC",
       },
       attendees: [
@@ -302,20 +301,20 @@ export const CalendarService = {
           displayName: `${booking.mentor_first} ${booking.mentor_last}`,
         },
         {
-          email: booking.learner_email,
-          displayName: `${booking.learner_first} ${booking.learner_last}`,
+          email: booking.mentee_email,
+          displayName: `${booking.mentee_first} ${booking.mentee_last}`,
         },
       ],
-      conferenceData: booking.meeting_link
+      conferenceData: booking.meeting_url
         ? {
             entryPoints: [
-              { entryPointType: "video", uri: booking.meeting_link },
+              { entryPointType: "video", uri: booking.meeting_url },
             ],
           }
         : undefined,
     };
 
-    for (const participantId of [booking.mentor_id, booking.learner_id]) {
+    for (const participantId of [booking.mentor_id, booking.mentee_id]) {
       try {
         const authClient =
           await CalendarService._buildAuthedClient(participantId);
@@ -356,14 +355,14 @@ export const CalendarService = {
   async updateGoogleCalendarEvent(bookingId: string): Promise<void> {
     const { rows } = await pool.query(
       `SELECT
-         b.start_time, b.end_time, b.meeting_link, b.location,
-         b.mentor_id, b.learner_id,
+         b.scheduled_start, b.scheduled_end, b.meeting_url,
+         b.mentor_id, b.mentee_id,
          b.google_event_id_mentor, b.google_event_id_learner,
          mentor.first_name AS mentor_first, mentor.last_name AS mentor_last,
-         learner.first_name AS learner_first, learner.last_name AS learner_last
+         mentee.first_name AS mentee_first, mentee.last_name AS mentee_last
        FROM bookings b
        JOIN users mentor  ON mentor.id  = b.mentor_id
-       JOIN users learner ON learner.id = b.learner_id
+       JOIN users mentee ON mentee.id = b.mentee_id
        WHERE b.id = $1`,
       [bookingId],
     );
@@ -372,7 +371,7 @@ export const CalendarService = {
 
     const participants: Array<{ id: string; eventId: string | null }> = [
       { id: booking.mentor_id, eventId: booking.google_event_id_mentor },
-      { id: booking.learner_id, eventId: booking.google_event_id_learner },
+      { id: booking.mentee_id, eventId: booking.google_event_id_learner },
     ];
 
     for (const { id: participantId, eventId } of participants) {
@@ -388,14 +387,14 @@ export const CalendarService = {
           eventId,
           requestBody: {
             start: {
-              dateTime: new Date(booking.start_time).toISOString(),
+              dateTime: new Date(booking.scheduled_start).toISOString(),
               timeZone: "UTC",
             },
             end: {
-              dateTime: new Date(booking.end_time).toISOString(),
+              dateTime: new Date(booking.scheduled_end).toISOString(),
               timeZone: "UTC",
             },
-            location: booking.location ?? booking.meeting_link ?? "",
+            location: booking.meeting_url ?? "",
           },
           sendUpdates: "all",
         });
@@ -414,7 +413,7 @@ export const CalendarService = {
    */
   async deleteGoogleCalendarEvent(bookingId: string): Promise<void> {
     const { rows } = await pool.query(
-      `SELECT mentor_id, learner_id, google_event_id_mentor, google_event_id_learner
+      `SELECT mentor_id, mentee_id, google_event_id_mentor, google_event_id_learner
        FROM bookings WHERE id = $1`,
       [bookingId],
     );
@@ -423,7 +422,7 @@ export const CalendarService = {
 
     const participants: Array<{ id: string; eventId: string | null }> = [
       { id: booking.mentor_id, eventId: booking.google_event_id_mentor },
-      { id: booking.learner_id, eventId: booking.google_event_id_learner },
+      { id: booking.mentee_id, eventId: booking.google_event_id_learner },
     ];
 
     for (const { id: participantId, eventId } of participants) {

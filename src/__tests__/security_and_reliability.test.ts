@@ -78,9 +78,10 @@ describe('Security and Reliability Improvements', () => {
           rows: [{
             id: bookingId,
             mentor_id: mentorId,
-            learner_id: 'learner-101',
-            start_time: new Date(),
-            end_time: new Date(),
+            mentee_id: 'mentee-101',
+            scheduled_start: new Date(),
+            scheduled_end: new Date(),
+            meeting_url: 'https://meet.example.com/test',
           }],
         })
         .mockResolvedValue({}); // for _buildAuthedClient queries
@@ -109,6 +110,113 @@ describe('Security and Reliability Improvements', () => {
       expect(updateLearnerQuery).toBeDefined();
       expect(updateMentorQuery).not.toContain('${'); // No string interpolation
       expect(updateLearnerQuery).not.toContain('${');
+    });
+  });
+
+  describe('CalendarService iCal Feed', () => {
+    it('should generate iCal feed for user with confirmed bookings', async () => {
+      const userId = 'user-123';
+      const icalToken = 'test-token-abc';
+      const now = new Date();
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+
+      // Mock user lookup by token
+      (pool.query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [{
+            id: userId,
+            first_name: 'John',
+            last_name: 'Doe',
+          }],
+        })
+        // Mock fetchSessionsForUser query
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: 'booking-1',
+              scheduled_start: now,
+              scheduled_end: oneHourFromNow,
+              meeting_url: 'https://meet.example.com/session1',
+              status: 'confirmed',
+              mentor_first: 'Jane',
+              mentor_last: 'Smith',
+              mentee_first: 'John',
+              mentee_last: 'Doe',
+            },
+            {
+              id: 'booking-2',
+              scheduled_start: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+              scheduled_end: new Date(oneHourFromNow.getTime() + 24 * 60 * 60 * 1000),
+              meeting_url: null,
+              status: 'confirmed',
+              mentor_first: 'Bob',
+              mentor_last: 'Wilson',
+              mentee_first: 'John',
+              mentee_last: 'Doe',
+            },
+          ],
+        });
+
+      const icalFeed = await CalendarService.getICalFeed(icalToken);
+
+      // Verify the feed contains expected components
+      expect(icalFeed).toContain('BEGIN:VCALENDAR');
+      expect(icalFeed).toContain('END:VCALENDAR');
+      expect(icalFeed).toContain('BEGIN:VEVENT');
+      expect(icalFeed).toContain('END:VEVENT');
+      expect(icalFeed).toContain('booking-1');
+      expect(icalFeed).toContain('booking-2');
+      expect(icalFeed).toContain('MentorMinds');
+      expect(icalFeed).toContain('Jane Smith');
+      expect(icalFeed).toContain('Bob Wilson');
+
+      // Verify the SQL query uses correct column names
+      const queries = (pool.query as jest.Mock).mock.calls.map(c => c[0]);
+      const sessionsQuery = queries.find(q => q.includes('FROM bookings b'));
+      expect(sessionsQuery).toContain('b.mentee_id');
+      expect(sessionsQuery).toContain('b.scheduled_start');
+      expect(sessionsQuery).toContain('b.scheduled_end');
+      expect(sessionsQuery).toContain('b.meeting_url');
+      expect(sessionsQuery).not.toContain('b.learner_id');
+      expect(sessionsQuery).not.toContain('b.start_time');
+      expect(sessionsQuery).not.toContain('b.end_time');
+      expect(sessionsQuery).not.toContain('b.meeting_link');
+    });
+
+    it('should return empty iCal feed for user with no bookings', async () => {
+      const icalToken = 'test-token-empty';
+
+      // Mock user lookup by token
+      (pool.query as jest.Mock)
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 'user-empty',
+            first_name: 'Empty',
+            last_name: 'User',
+          }],
+        })
+        // Mock fetchSessionsForUser query - no bookings
+        .mockResolvedValueOnce({
+          rows: [],
+        });
+
+      const icalFeed = await CalendarService.getICalFeed(icalToken);
+
+      // Verify the feed is valid but empty
+      expect(icalFeed).toContain('BEGIN:VCALENDAR');
+      expect(icalFeed).toContain('END:VCALENDAR');
+      expect(icalFeed).not.toContain('BEGIN:VEVENT');
+    });
+
+    it('should throw 404 for invalid iCal token', async () => {
+      const invalidToken = 'invalid-token';
+
+      // Mock user lookup - no user found
+      (pool.query as jest.Mock).mockResolvedValueOnce({
+        rows: [],
+      });
+
+      await expect(CalendarService.getICalFeed(invalidToken)).rejects.toThrow('Invalid or expired iCal token');
     });
   });
 

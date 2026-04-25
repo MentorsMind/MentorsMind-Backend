@@ -138,6 +138,7 @@ Load order (later files override earlier ones):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `BCRYPT_ROUNDS` | No | `10` | bcrypt cost factor for password hashing |
+| `FILE_SIGNING_SECRET` 🔒 | **Yes** | — | HMAC signing key for file access tokens — minimum 32 characters, must be different from JWT_SECRET |
 
 ---
 
@@ -169,6 +170,7 @@ Store a JSON object in Secrets Manager with these keys:
   "JWT_SECRET": "...",
   "JWT_REFRESH_SECRET": "...",
   "JWT_SECRET_PREVIOUS": "...",
+  "FILE_SIGNING_SECRET": "...",
   "DB_PASSWORD": "...",
   "SMTP_PASS": "...",
   "PLATFORM_SECRET_KEY": "..."
@@ -183,6 +185,7 @@ Set `SECRETS_PROVIDER=aws` and `AWS_SECRET_ID=mentorminds/prod/app-secrets`.
 vault kv put secret/mentorminds/prod \
   JWT_SECRET=... \
   JWT_REFRESH_SECRET=... \
+  FILE_SIGNING_SECRET=... \
   DB_PASSWORD=...
 ```
 
