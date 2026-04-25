@@ -3,22 +3,47 @@
  * Business logic for payment processing with Stellar integration.
  */
 
-import pool from '../config/database';
-import { BookingModel } from '../models/booking.model';
-import { stellarService } from './stellar.service';
-import { AssetExchangeService, SUPPORTED_ASSETS, MAX_SLIPPAGE_PCT } from './assetExchange.service';
-import { createError } from '../middleware/errorHandler';
-import { logger } from '../utils/logger.utils';
-import { env } from '../config/env';
-import { SocketService } from './socket.service';
-import { WalletModel } from '../models/wallet.model';
-import { Keypair, TransactionBuilder, Operation, Asset } from '@stellar/stellar-sdk';
-import { server, networkPassphrase, getPlatformKeypair } from '../config/stellar';
-import { EncryptionUtil } from '../utils/encryption.utils';
-import { PaginationUtil } from '../utils/pagination.utils';
+import pool from "../config/database";
+import { BookingModel } from "../models/booking.model";
+import { stellarService } from "./stellar.service";
+import {
+  AssetExchangeService,
+  SUPPORTED_ASSETS,
+  MAX_SLIPPAGE_PCT,
+} from "./assetExchange.service";
+import { createError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger.utils";
+import { env } from "../config/env";
+import { SocketService } from "./socket.service";
+import { WalletModel } from "../models/wallet.model";
+import {
+  Keypair,
+  TransactionBuilder,
+  Operation,
+  Asset,
+} from "@stellar/stellar-sdk";
+import {
+  server,
+  networkPassphrase,
+  getPlatformKeypair,
+} from "../config/stellar";
+import { EncryptionUtil } from "../utils/encryption.utils";
+import { PaginationUtil } from "../utils/pagination.utils";
 
-export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'refunded';
-export type PaymentType = 'payment' | 'refund' | 'platform_fee' | 'mentor_payout' | 'escrow_hold' | 'escrow_release';
+export type PaymentStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "refunded";
+export type PaymentType =
+  | "payment"
+  | "refund"
+  | "platform_fee"
+  | "mentor_payout"
+  | "escrow_hold"
+  | "escrow_release";
 
 export interface PaymentRecord {
   id: string;
@@ -61,13 +86,23 @@ const PLATFORM_FEE_PCT = parseInt(env.PLATFORM_FEE_PERCENTAGE, 10) / 100;
 
 export const PaymentsService = {
   async initiatePayment(data: InitiatePaymentData): Promise<PaymentRecord> {
-    const { userId, bookingId, amount, currency = 'XLM', description, fromAddress, toAddress, quoteId } = data;
+    const {
+      userId,
+      bookingId,
+      amount,
+      currency = "XLM",
+      description,
+      fromAddress,
+      toAddress,
+      quoteId,
+    } = data;
 
     // Validate booking exists and belongs to user
     const booking = await BookingModel.findById(bookingId);
-    if (!booking) throw createError('Booking not found', 404);
-    if (booking.mentee_id !== userId) throw createError('Access denied', 403);
-    if (booking.payment_status === 'paid') throw createError('Booking is already paid', 409);
+    if (!booking) throw createError("Booking not found", 404);
+    if (booking.mentee_id !== userId) throw createError("Access denied", 403);
+    if (booking.payment_status === "paid")
+      throw createError("Booking is already paid", 409);
 
     const platformFee = (parseFloat(amount) * PLATFORM_FEE_PCT).toFixed(7);
 
@@ -75,9 +110,9 @@ export const PaymentsService = {
     const assetDef = SUPPORTED_ASSETS[currency.toUpperCase()];
     if (!assetDef) throw createError(`Unsupported currency: ${currency}`, 400);
 
-    const assetCode = assetDef.code === 'XLM' ? null : assetDef.code;
+    const assetCode = assetDef.code === "XLM" ? null : assetDef.code;
     const assetIssuer = assetDef.issuer ?? null;
-    const assetType = assetDef.code === 'XLM' ? 'native' : 'credit_alphanum4';
+    const assetType = assetDef.code === "XLM" ? "native" : "credit_alphanum4";
 
     // Validate quote if provided (enforces 2% rate-drift guard)
     let quotedRate: string | null = null;
@@ -99,28 +134,55 @@ export const PaymentsService = {
                NOW(), NOW(), NOW())
        RETURNING *`,
       [
-        userId, bookingId, amount, currency.toUpperCase(),
-        assetCode, assetIssuer, assetType,
-        fromAddress ?? null, toAddress ?? null, platformFee, description ?? null,
-        quoteId ?? null, quotedRate, isPathPayment,
+        userId,
+        bookingId,
+        amount,
+        currency.toUpperCase(),
+        assetCode,
+        assetIssuer,
+        assetType,
+        fromAddress ?? null,
+        toAddress ?? null,
+        platformFee,
+        description ?? null,
+        quoteId ?? null,
+        quotedRate,
+        isPathPayment,
       ],
     );
 
-    logger.info('Payment initiated', { paymentId: rows[0].id, userId, bookingId, currency, isPathPayment });
+    logger.info("Payment initiated", {
+      paymentId: rows[0].id,
+      userId,
+      bookingId,
+      currency,
+      isPathPayment,
+    });
     return rows[0];
   },
 
-  async getPaymentById(paymentId: string, userId: string): Promise<PaymentRecord> {
+  async getPaymentById(
+    paymentId: string,
+    userId: string,
+  ): Promise<PaymentRecord> {
     const { rows } = await pool.query<PaymentRecord>(
       `SELECT t.* FROM transactions t
        WHERE t.id = $1 AND t.user_id = $2`,
       [paymentId, userId],
     );
-    if (!rows[0]) throw createError('Payment not found', 404);
+    if (!rows[0]) throw createError("Payment not found", 404);
     return rows[0];
   },
 
-  async getPaymentStatus(paymentId: string, userId: string): Promise<{ id: string; status: PaymentStatus; stellarTxHash: string | null; updatedAt: Date }> {
+  async getPaymentStatus(
+    paymentId: string,
+    userId: string,
+  ): Promise<{
+    id: string;
+    status: PaymentStatus;
+    stellarTxHash: string | null;
+    updatedAt: Date;
+  }> {
     const payment = await this.getPaymentById(paymentId, userId);
     return {
       id: payment.id,
@@ -130,23 +192,51 @@ export const PaymentsService = {
     };
   },
 
-  async confirmPayment(paymentId: string, userId: string, stellarTxHash: string): Promise<PaymentRecord> {
+  async confirmPayment(
+    paymentId: string,
+    userId: string,
+    stellarTxHash: string,
+  ): Promise<PaymentRecord> {
     const payment = await this.getPaymentById(paymentId, userId);
 
-    if (payment.status === 'completed') throw createError('Payment already confirmed', 409);
-    if (!['pending', 'processing'].includes(payment.status)) {
-      throw createError(`Cannot confirm payment in ${payment.status} status`, 400);
+    if (payment.status === "completed")
+      throw createError("Payment already confirmed", 409);
+    if (!["pending", "processing"].includes(payment.status)) {
+      throw createError(
+        `Cannot confirm payment in ${payment.status} status`,
+        400,
+      );
     }
 
     // Verify transaction on Stellar network
-    try {
-      const account = payment.from_address
-        ? await stellarService.getAccount(payment.from_address)
-        : null;
-      logger.info('Stellar account verified for payment', { paymentId, account: account?.id });
-    } catch (err) {
-      logger.warn('Could not verify Stellar account', { paymentId, error: (err as Error).message });
+    const tx = await stellarService.getTransaction(stellarTxHash);
+    if (!tx.successful) {
+      throw createError("Stellar transaction was not successful", 400);
     }
+    if (payment.from_address && tx.source_account !== payment.from_address) {
+      throw createError(
+        "Transaction source account does not match payment sender",
+        400,
+      );
+    }
+
+    // Verify payment amount in transaction operations
+    const operations =
+      await stellarService.getTransactionOperations(stellarTxHash);
+    const matchingPaymentOp = operations.find(
+      (op) => op.type === "payment" && op.amount === payment.amount,
+    );
+    if (!matchingPaymentOp) {
+      throw createError(
+        "Transaction does not contain a matching payment amount",
+        400,
+      );
+    }
+
+    logger.info("Stellar transaction verified for payment", {
+      paymentId,
+      hash: tx.hash,
+    });
 
     const { rows } = await pool.query<PaymentRecord>(
       `UPDATE transactions
@@ -156,7 +246,7 @@ export const PaymentsService = {
       [paymentId, stellarTxHash],
     );
 
-    if (!rows[0]) throw createError('Failed to confirm payment', 500);
+    if (!rows[0]) throw createError("Failed to confirm payment", 500);
 
     // Update booking payment status
     if (payment.booking_id) {
@@ -167,7 +257,7 @@ export const PaymentsService = {
     }
 
     // Emit payment:confirmed event to the user
-    SocketService.emitToUser(payment.user_id, 'payment:confirmed', {
+    SocketService.emitToUser(payment.user_id, "payment:confirmed", {
       paymentId,
       bookingId: payment.booking_id,
       amount: payment.amount,
@@ -176,17 +266,29 @@ export const PaymentsService = {
       completedAt: rows[0].completed_at,
     });
 
-    logger.info('Payment confirmed', { paymentId, stellarTxHash });
+    logger.info("Payment confirmed", { paymentId, stellarTxHash });
     return rows[0];
   },
 
   async listUserPayments(
     userId: string,
-    filters: { cursor?: string; limit?: number; status?: PaymentStatus; type?: PaymentType; from?: string; to?: string },
-  ): Promise<{ payments: PaymentRecord[]; next_cursor: string | null; has_more: boolean; total: number }> {
+    filters: {
+      cursor?: string;
+      limit?: number;
+      status?: PaymentStatus;
+      type?: PaymentType;
+      from?: string;
+      to?: string;
+    },
+  ): Promise<{
+    payments: PaymentRecord[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number;
+  }> {
     const limit = filters.limit ?? 20;
 
-    const conditions: string[] = ['t.user_id = $1'];
+    const conditions: string[] = ["t.user_id = $1"];
     const params: unknown[] = [userId];
     let idx = 2;
 
@@ -199,56 +301,105 @@ export const PaymentsService = {
       }
     }
 
-    if (filters.status) { conditions.push(`t.status = $${idx++}`); params.push(filters.status); }
-    if (filters.type) { conditions.push(`t.type = $${idx++}`); params.push(filters.type); }
-    if (filters.from) { conditions.push(`t.created_at >= $${idx++}`); params.push(filters.from); }
-    if (filters.to) { conditions.push(`t.created_at <= $${idx++}`); params.push(filters.to); }
+    if (filters.status) {
+      conditions.push(`t.status = $${idx++}`);
+      params.push(filters.status);
+    }
+    if (filters.type) {
+      conditions.push(`t.type = $${idx++}`);
+      params.push(filters.type);
+    }
+    if (filters.from) {
+      conditions.push(`t.created_at >= $${idx++}`);
+      params.push(filters.from);
+    }
+    if (filters.to) {
+      conditions.push(`t.created_at <= $${idx++}`);
+      params.push(filters.to);
+    }
 
-    const where = conditions.join(' AND ');
+    const where = conditions.join(" AND ");
+
+    // Count query uses the same filters (without limit)
+    const countParams = [...params];
+
+    // Add limit as a proper parameter
+    params.push(limit + 1);
+    const limitPlaceholder = `$${idx++}`;
 
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query<PaymentRecord>(
-        `SELECT * FROM transactions t WHERE ${where} ORDER BY t.created_at DESC, t.id DESC LIMIT $${idx}`,
-        [...params, limit + 1],
+        `SELECT * FROM transactions t WHERE ${where} ORDER BY t.created_at DESC, t.id DESC LIMIT ${limitPlaceholder}`,
+        params,
       ),
-      pool.query(`SELECT COUNT(*) FROM transactions t WHERE t.user_id = $1 ${filters.status ? `AND status = $2` : ''}`, filters.status ? [userId, filters.status] : [userId]),
+      pool.query(
+        `SELECT COUNT(*) FROM transactions t WHERE ${where}`,
+        countParams,
+      ),
     ]);
 
     const has_more = rows.length > limit;
     const data = has_more ? rows.slice(0, limit) : rows;
-    
-    const lastItem = data[data.length - 1];
-    const next_cursor = has_more && lastItem ? PaginationUtil.encodeCursor(PaginationUtil.getCursorFromItem(lastItem)!) : null;
 
-    return { payments: data, next_cursor, has_more, total: parseInt(countRows[0].count, 10) };
+    const lastItem = data[data.length - 1];
+    const next_cursor =
+      has_more && lastItem
+        ? PaginationUtil.encodeCursor(
+            PaginationUtil.getCursorFromItem(lastItem)!,
+          )
+        : null;
+
+    return {
+      payments: data,
+      next_cursor,
+      has_more,
+      total: parseInt(countRows[0].count, 10),
+    };
   },
 
   async getPaymentHistory(
     userId: string,
     filters: { cursor?: string; limit?: number; from?: string; to?: string },
-  ): Promise<{ payments: PaymentRecord[]; next_cursor: string | null; has_more: boolean; total: number; totalVolume: string }> {
-    const result = await this.listUserPayments(userId, { ...filters, status: 'completed' });
-    
+  ): Promise<{
+    payments: PaymentRecord[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number;
+    totalVolume: string;
+  }> {
+    const result = await this.listUserPayments(userId, {
+      ...filters,
+      status: "completed",
+    });
+
     // For volume we only sum completed ones
     const { rows } = await pool.query<{ total_volume: string }>(
       `SELECT COALESCE(SUM(amount), 0)::text AS total_volume
        FROM transactions
        WHERE user_id = $1 AND status = 'completed'`,
-       [userId],
+      [userId],
     );
 
-    return { ...result, totalVolume: rows[0]?.total_volume ?? '0' };
+    return { ...result, totalVolume: rows[0]?.total_volume ?? "0" };
   },
 
-  async refundPayment(paymentId: string, userId: string, amount?: string, reason?: string, stellarTxHash?: string): Promise<PaymentRecord> {
+  async refundPayment(
+    paymentId: string,
+    userId: string,
+    amount?: string,
+    reason?: string,
+    stellarTxHash?: string,
+  ): Promise<PaymentRecord> {
     const payment = await this.getPaymentById(paymentId, userId);
 
-    if (payment.status === 'refunded') throw createError('Payment already refunded', 409);
-    if (payment.status !== 'completed') throw createError('Only completed payments can be refunded', 400);
+    if (payment.status === "refunded")
+      throw createError("Payment already refunded", 409);
+    if (payment.status !== "completed")
+      throw createError("Only completed payments can be refunded", 400);
 
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
       // Mark original payment as refunded
       const { rows } = await client.query<PaymentRecord>(
@@ -258,8 +409,8 @@ export const PaymentsService = {
 
       // Create refund transaction record
       const refundAmount = amount || payment.amount;
-      const refundStatus = stellarTxHash ? 'completed' : 'pending';
-      const completedAt = stellarTxHash ? 'NOW()' : null;
+      const refundStatus = stellarTxHash ? "completed" : "pending";
+      const completedAt = stellarTxHash ? "NOW()" : null;
       await client.query(
         `INSERT INTO transactions
            (user_id, booking_id, type, status, amount, currency, stellar_tx_hash,
@@ -273,7 +424,7 @@ export const PaymentsService = {
           payment.currency,
           stellarTxHash ?? null,
           paymentId,
-          reason ?? 'Refund requested',
+          reason ?? "Refund requested",
         ],
       );
 
@@ -284,11 +435,11 @@ export const PaymentsService = {
         );
       }
 
-      await client.query('COMMIT');
-      logger.info('Payment refunded', { paymentId, userId });
+      await client.query("COMMIT");
+      logger.info("Payment refunded", { paymentId, userId });
       return rows[0];
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw err;
     } finally {
       client.release();
@@ -304,10 +455,13 @@ export const PaymentsService = {
     asset_code?: string;
     memo?: string;
   }): Promise<{ processed: boolean; message: string }> {
-    logger.info('Stellar webhook received', { type: payload.type, txHash: payload.transaction_hash });
+    logger.info("Stellar webhook received", {
+      type: payload.type,
+      txHash: payload.transaction_hash,
+    });
 
     if (!payload.transaction_hash) {
-      return { processed: false, message: 'No transaction hash provided' };
+      return { processed: false, message: "No transaction hash provided" };
     }
 
     // Find pending payment matching this transaction hash or to_address
@@ -320,8 +474,10 @@ export const PaymentsService = {
     );
 
     if (!rows[0]) {
-      logger.info('No matching pending payment for webhook', { txHash: payload.transaction_hash });
-      return { processed: false, message: 'No matching payment found' };
+      logger.info("No matching pending payment for webhook", {
+        txHash: payload.transaction_hash,
+      });
+      return { processed: false, message: "No matching payment found" };
     }
 
     const payment = rows[0];
@@ -340,7 +496,10 @@ export const PaymentsService = {
       );
     }
 
-    logger.info('Webhook processed payment', { paymentId: payment.id, txHash: payload.transaction_hash });
-    return { processed: true, message: 'Payment confirmed via webhook' };
+    logger.info("Webhook processed payment", {
+      paymentId: payment.id,
+      txHash: payload.transaction_hash,
+    });
+    return { processed: true, message: "Payment confirmed via webhook" };
   },
 };

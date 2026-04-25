@@ -41,7 +41,8 @@ export enum NotificationType {
   SYSTEM_ALERT = 'system_alert',
   MEETING_CONFIRMED = 'meeting_confirmed',
   MESSAGE_RECEIVED = 'message_received',
-  SESSION_CANCELLED = 'session_cancelled'
+  SESSION_CANCELLED = 'session_cancelled',
+  CALENDAR_CONNECTION_EXPIRED = 'calendar_connection_expired',
 }
 
 export enum NotificationChannel {

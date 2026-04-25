@@ -3,16 +3,21 @@ import { BookingModel, BookingRecord } from "../../models/booking.model";
 import { BookingsService } from "../../services/bookings.service";
 import { CacheService } from "../../services/cache.service";
 import { SocketService } from "../../services/socket.service";
+import { NotificationService } from "../../services/notification.service";
 
 jest.mock("../../config/database");
 jest.mock("../../models/booking.model");
 jest.mock("../../services/cache.service");
 jest.mock("../../services/socket.service");
+jest.mock("../../services/notification.service");
 
 const mockPool = pool as unknown as { query: jest.Mock };
 const mockBookingModel = BookingModel as jest.Mocked<typeof BookingModel>;
 const mockCache = CacheService as jest.Mocked<typeof CacheService>;
 const mockSocket = SocketService as jest.Mocked<typeof SocketService>;
+const mockNotification = NotificationService as jest.Mocked<
+  typeof NotificationService
+>;
 
 function baseBooking(overrides: Partial<BookingRecord> = {}): BookingRecord {
   const now = new Date();
@@ -40,6 +45,7 @@ function baseBooking(overrides: Partial<BookingRecord> = {}): BookingRecord {
 describe("BookingsService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNotification.sendNotification.mockResolvedValue(undefined);
   });
 
   describe("initialize", () => {
@@ -294,15 +300,13 @@ describe("BookingsService", () => {
     });
 
     it("exige pago antes de confirmar", async () => {
-      jest
-        .spyOn(BookingsService, "getBookingById")
-        .mockResolvedValue(
-          baseBooking({
-            mentor_id: "mentor-1",
-            status: "pending",
-            payment_status: "pending",
-          }),
-        );
+      jest.spyOn(BookingsService, "getBookingById").mockResolvedValue(
+        baseBooking({
+          mentor_id: "mentor-1",
+          status: "pending",
+          payment_status: "pending",
+        }),
+      );
 
       await expect(
         BookingsService.confirmBooking("booking-1", "mentor-1"),

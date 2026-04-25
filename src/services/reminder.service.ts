@@ -1,9 +1,9 @@
-import { DateTime } from 'luxon';
-import { CronJob } from 'cron';
-import { logger } from '../utils/logger.utils';
-import { formatInTimezone } from '../utils/timezone.utils';
-import { enqueueEmail } from '../queues/email.queue';
-import pool from '../config/database';
+import { DateTime } from "luxon";
+import { CronJob } from "cron";
+import { logger } from "../utils/logger.utils";
+import { formatInTimezone } from "../utils/timezone.utils";
+import { enqueueEmail } from "../queues/email.queue";
+import pool from "../config/database";
 
 /**
  * Session Reminder Service
@@ -33,35 +33,13 @@ export class ReminderService {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      logger.warn('Reminder service already initialized');
+      logger.warn("Reminder service already initialized");
       return;
     }
 
-    await this.ensureReminderColumns();
     this.scheduleReminders();
     this.isInitialized = true;
-    logger.info('Reminder service initialized');
-  }
-
-  /**
-   * Ensure sessions table has reminder tracking columns
-   */
-  private async ensureReminderColumns(): Promise<void> {
-    try {
-      const query = `
-        DO $$ 
-        BEGIN
-          IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'sessions') THEN
-            ALTER TABLE sessions 
-            ADD COLUMN IF NOT EXISTS reminded_24h TIMESTAMP WITH TIME ZONE,
-            ADD COLUMN IF NOT EXISTS reminded_1h TIMESTAMP WITH TIME ZONE;
-          END IF;
-        END $$;
-      `;
-      await pool.query(query);
-    } catch (error) {
-      logger.error('Error ensuring reminder columns:', error);
-    }
+    logger.info("Reminder service initialized");
   }
 
   /**
@@ -74,13 +52,13 @@ export class ReminderService {
     this.cronJobs = [];
 
     // Check every 5 minutes for sessions needing reminders
-    const reminderChecker = new CronJob('*/5 * * * *', async () => {
+    const reminderChecker = new CronJob("*/5 * * * *", async () => {
       await this.checkAndScheduleReminders();
     });
     reminderChecker.start();
     this.cronJobs.push(reminderChecker);
 
-    logger.info('Reminder cron jobs scheduled');
+    logger.info("Reminder cron jobs scheduled");
   }
 
   /**
@@ -93,9 +71,9 @@ export class ReminderService {
       // Sessions needing 24h reminder (scheduled 24h from now, ±15min window)
       const tomorrow24h = now.plus({ hours: 24 });
       const sessions24h = await this.getSessionsNeedingReminder(
-        '24h',
+        "24h",
         tomorrow24h.minus({ minutes: 15 }).toISO()!,
-        tomorrow24h.plus({ minutes: 15 }).toISO()!
+        tomorrow24h.plus({ minutes: 15 }).toISO()!,
       );
 
       for (const session of sessions24h) {
@@ -105,16 +83,16 @@ export class ReminderService {
       // Sessions needing 1h reminder (scheduled 1h from now, ±5min window)
       const oneHourLater = now.plus({ hours: 1 });
       const sessions1h = await this.getSessionsNeedingReminder(
-        '1h',
+        "1h",
         oneHourLater.minus({ minutes: 5 }).toISO()!,
-        oneHourLater.plus({ minutes: 5 }).toISO()!
+        oneHourLater.plus({ minutes: 5 }).toISO()!,
       );
 
       for (const session of sessions1h) {
         await this.send1hReminder(session);
       }
     } catch (error) {
-      logger.error('Error checking reminders:', error);
+      logger.error("Error checking reminders:", error);
     }
   }
 
@@ -123,12 +101,13 @@ export class ReminderService {
    * Mark as reminded in DB after sending
    */
   private async getSessionsNeedingReminder(
-    reminderType: '24h' | '1h',
+    reminderType: "24h" | "1h",
     startWindow: string,
-    endWindow: string
+    endWindow: string,
   ): Promise<SessionRecord[]> {
-    const reminderColumn = reminderType === '24h' ? 'reminded_24h' : 'reminded_1h';
-    
+    const reminderColumn =
+      reminderType === "24h" ? "reminded_24h" : "reminded_1h";
+
     const query = `
       SELECT 
         s.id,
@@ -167,34 +146,37 @@ export class ReminderService {
       const mentorTime = formatInTimezone(
         session.scheduled_at_utc,
         session.mentor_timezone,
-        'EEEE, MMMM d \'at\' h:mm a zzz'
+        "EEEE, MMMM d 'at' h:mm a zzz",
       );
       const menteeTime = formatInTimezone(
         session.scheduled_at_utc,
         session.mentee_timezone,
-        'EEEE, MMMM d \'at\' h:mm a zzz'
+        "EEEE, MMMM d 'at' h:mm a zzz",
       );
 
       // Mentor reminder
       await this.sendNotification(session.mentor_id, {
-        subject: 'Upcoming Session Reminder - 24 Hours',
+        subject: "Upcoming Session Reminder - 24 Hours",
         body: `Your session "${session.topic}" is scheduled for ${mentorTime}. Duration: ${session.duration_minutes} minutes.`,
-        type: 'email',
+        type: "email",
       });
 
       // Mentee reminder
       await this.sendNotification(session.mentee_id, {
-        subject: 'Session Confirmation - 24 Hours',
+        subject: "Session Confirmation - 24 Hours",
         body: `Your mentoring session is scheduled for ${menteeTime}. Topic: ${session.topic}. Duration: ${session.duration_minutes} minutes.`,
-        type: 'email',
+        type: "email",
       });
 
       // Mark as sent
-      await this.markReminderSent(session.id, '24h');
+      await this.markReminderSent(session.id, "24h");
 
       logger.info(`24h reminder sent for session ${session.id}`);
     } catch (error) {
-      logger.error(`Error sending 24h reminder for session ${session.id}:`, error);
+      logger.error(
+        `Error sending 24h reminder for session ${session.id}:`,
+        error,
+      );
     }
   }
 
@@ -206,31 +188,34 @@ export class ReminderService {
       const mentorTime = formatInTimezone(
         session.scheduled_at_utc,
         session.mentor_timezone,
-        'h:mm a zzz'
+        "h:mm a zzz",
       );
       const menteeTime = formatInTimezone(
         session.scheduled_at_utc,
         session.mentee_timezone,
-        'h:mm a zzz'
+        "h:mm a zzz",
       );
 
       await this.sendNotification(session.mentor_id, {
-        subject: 'Session Starting in 1 Hour!',
+        subject: "Session Starting in 1 Hour!",
         body: `Your session "${session.topic}" starts at ${mentorTime}. Please prepare and join on time.`,
-        type: 'email',
+        type: "email",
       });
 
       await this.sendNotification(session.mentee_id, {
-        subject: 'Session in 1 Hour!',
+        subject: "Session in 1 Hour!",
         body: `Your mentoring session starts at ${menteeTime}. Duration: ${session.duration_minutes} minutes. Get ready!`,
-        type: 'email',
+        type: "email",
       });
 
-      await this.markReminderSent(session.id, '1h');
+      await this.markReminderSent(session.id, "1h");
 
       logger.info(`1h reminder sent for session ${session.id}`);
     } catch (error) {
-      logger.error(`Error sending 1h reminder for session ${session.id}:`, error);
+      logger.error(
+        `Error sending 1h reminder for session ${session.id}:`,
+        error,
+      );
     }
   }
 
@@ -240,16 +225,18 @@ export class ReminderService {
    */
   private async sendNotification(
     userId: string,
-    content: { subject: string; body: string; type: 'email' | 'sms' }
+    content: { subject: string; body: string; type: "email" | "sms" },
   ): Promise<void> {
-    if (content.type !== 'email') {
-      logger.info(`[${content.type.toUpperCase()}] To user ${userId}: ${content.subject}`);
+    if (content.type !== "email") {
+      logger.info(
+        `[${content.type.toUpperCase()}] To user ${userId}: ${content.subject}`,
+      );
       return;
     }
 
     try {
       const { rows } = await pool.query<{ email: string }>(
-        'SELECT email FROM users WHERE id = $1',
+        "SELECT email FROM users WHERE id = $1",
         [userId],
       );
 
@@ -261,13 +248,15 @@ export class ReminderService {
       await enqueueEmail({
         to: [rows[0].email],
         subject: content.subject,
-        templateId: 'session_reminder',
+        templateId: "session_reminder",
         templateData: { subject: content.subject, body: content.body },
         textContent: content.body,
-        htmlContent: content.body.replace(/\n/g, '<br>'),
+        htmlContent: content.body.replace(/\n/g, "<br>"),
       });
 
-      logger.info(`Reminder email enqueued for user ${userId}: ${content.subject}`);
+      logger.info(
+        `Reminder email enqueued for user ${userId}: ${content.subject}`,
+      );
     } catch (error) {
       logger.error(`Failed to enqueue reminder for user ${userId}:`, error);
     }
@@ -278,16 +267,18 @@ export class ReminderService {
    */
   private async markReminderSent(
     sessionId: string,
-    type: '24h' | '1h'
+    type: "24h" | "1h",
   ): Promise<void> {
-    const column = type === '24h' ? 'reminded_24h' : 'reminded_1h';
+    const column = type === "24h" ? "reminded_24h" : "reminded_1h";
     try {
-      await pool.query(
-        `UPDATE sessions SET ${column} = NOW() WHERE id = $1`,
-        [sessionId]
-      );
+      await pool.query(`UPDATE sessions SET ${column} = NOW() WHERE id = $1`, [
+        sessionId,
+      ]);
     } catch (error) {
-      logger.error(`Error marking reminder sent for session ${sessionId}:`, error);
+      logger.error(
+        `Error marking reminder sent for session ${sessionId}:`,
+        error,
+      );
     }
   }
 
@@ -307,7 +298,7 @@ export class ReminderService {
   shutdown(): void {
     this.cronJobs.forEach((job) => job.stop());
     this.isInitialized = false;
-    logger.info('Reminder service stopped');
+    logger.info("Reminder service stopped");
   }
 }
 

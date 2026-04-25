@@ -441,6 +441,11 @@ The MentorMinds Team
         push: true,
         in_app: true,
       },
+      [NotificationType.CALENDAR_CONNECTION_EXPIRED]: {
+        email: true,
+        push: true,
+        in_app: true,
+      },
     };
   },
 
@@ -483,6 +488,7 @@ The MentorMinds Team
       [NotificationType.MEETING_CONFIRMED]: "Meeting Confirmed",
       [NotificationType.MESSAGE_RECEIVED]: "New Message",
       [NotificationType.SESSION_CANCELLED]: "Session Cancelled",
+      [NotificationType.CALENDAR_CONNECTION_EXPIRED]: "Calendar Connection Expired",
     };
     return titles[type] || "Notification";
   },
@@ -501,6 +507,7 @@ The MentorMinds Team
       [NotificationType.MEETING_CONFIRMED]: "Your meeting has been confirmed.",
       [NotificationType.MESSAGE_RECEIVED]: "You have received a new message.",
       [NotificationType.SESSION_CANCELLED]: "Your session has been cancelled.",
+      [NotificationType.CALENDAR_CONNECTION_EXPIRED]: "Your Google Calendar connection has expired. Please reconnect.",
     };
     return messages[type] || "You have a new notification.";
   },

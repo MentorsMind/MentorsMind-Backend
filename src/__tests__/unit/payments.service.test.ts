@@ -262,7 +262,14 @@ describe("PaymentsService", () => {
       };
 
       jest.spyOn(PaymentsService, "getPaymentById").mockResolvedValue(payment);
-      mockStellarService.getAccount.mockResolvedValue(mockAccountInfo());
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: "hash123",
+        source_account: "GFROM",
+      });
+      mockStellarService.getTransactionOperations.mockResolvedValue([
+        { type: "payment", amount: payment.amount },
+      ]);
       mockPool.query
         .mockResolvedValueOnce({ rows: [updated] })
         .mockResolvedValueOnce({
@@ -280,6 +287,10 @@ describe("PaymentsService", () => {
       );
 
       expect(result.status).toBe("completed");
+      expect(mockStellarService.getTransaction).toHaveBeenCalledWith("hash123");
+      expect(mockStellarService.getTransactionOperations).toHaveBeenCalledWith(
+        "hash123",
+      );
       expect(mockSocketService.emitToUser).toHaveBeenCalled();
     });
 
@@ -303,46 +314,78 @@ describe("PaymentsService", () => {
       ).rejects.toThrow("Cannot confirm payment in failed status");
     });
 
-    it("continúa si Horizon/Stellar falla al verificar cuenta", async () => {
+    it("falla si la transacción Stellar no fue exitosa", async () => {
       const payment = basePayment({
         status: "pending",
-        booking_id: "b1",
-        from_address: "GX",
+        from_address: "GFROM",
       });
-      const updated = {
-        ...payment,
-        status: "completed" as const,
-        stellar_tx_hash: "h",
-        completed_at: new Date(),
-      };
 
       jest.spyOn(PaymentsService, "getPaymentById").mockResolvedValue(payment);
-      mockStellarService.getAccount.mockRejectedValue(
-        new Error("horizon unavailable"),
-      );
-      mockPool.query
-        .mockResolvedValueOnce({ rows: [updated] })
-        .mockResolvedValueOnce({
-          rows: [],
-          rowCount: 1,
-          command: "UPDATE",
-          oid: 0,
-          fields: [],
-        });
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: false,
+        hash: "hash123",
+        source_account: "GFROM",
+      });
 
-      const result = await PaymentsService.confirmPayment(
-        "payment-123",
-        "user-123",
-        "h",
-      );
+      await expect(
+        PaymentsService.confirmPayment("payment-123", "user-123", "hash123"),
+      ).rejects.toThrow("Stellar transaction was not successful");
+    });
 
-      expect(result.status).toBe("completed");
+    it("falla si la cuenta fuente no coincide con el remitente del pago", async () => {
+      const payment = basePayment({
+        status: "pending",
+        from_address: "GFROM",
+      });
+
+      jest.spyOn(PaymentsService, "getPaymentById").mockResolvedValue(payment);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: "hash123",
+        source_account: "GOTHER",
+      });
+
+      await expect(
+        PaymentsService.confirmPayment("payment-123", "user-123", "hash123"),
+      ).rejects.toThrow(
+        "Transaction source account does not match payment sender",
+      );
+    });
+
+    it("falla si la transacción no contiene el monto de pago correcto", async () => {
+      const payment = basePayment({
+        status: "pending",
+        from_address: "GFROM",
+      });
+
+      jest.spyOn(PaymentsService, "getPaymentById").mockResolvedValue(payment);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: "hash123",
+        source_account: "GFROM",
+      });
+      mockStellarService.getTransactionOperations.mockResolvedValue([
+        { type: "payment", amount: "1.0000000" },
+      ]);
+
+      await expect(
+        PaymentsService.confirmPayment("payment-123", "user-123", "hash123"),
+      ).rejects.toThrow(
+        "Transaction does not contain a matching payment amount",
+      );
     });
 
     it("falla si la actualización no devuelve fila", async () => {
       const payment = basePayment({ status: "pending", booking_id: null });
       jest.spyOn(PaymentsService, "getPaymentById").mockResolvedValue(payment);
-      mockStellarService.getAccount.mockResolvedValue(null);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: "hash123",
+        source_account: payment.from_address,
+      });
+      mockStellarService.getTransactionOperations.mockResolvedValue([
+        { type: "payment", amount: payment.amount },
+      ]);
       mockPool.query.mockResolvedValueOnce({ rows: [] });
 
       await expect(
@@ -352,20 +395,114 @@ describe("PaymentsService", () => {
   });
 
   describe("listUserPayments", () => {
-    it("lista paginada y total", async () => {
+    it("lista paginada y total con filtro de estado", async () => {
       const rows = [basePayment({ id: "p1" }), basePayment({ id: "p2" })];
       mockPool.query
         .mockResolvedValueOnce({ rows })
         .mockResolvedValueOnce({ rows: [{ count: "2" }] });
 
       const result = await PaymentsService.listUserPayments("user-123", {
-        page: 1,
         limit: 10,
         status: "completed",
       });
 
       expect(result.payments).toHaveLength(2);
       expect(result.total).toBe(2);
+
+      // Verify LIMIT is a proper $N parameter, not string-interpolated number
+      const mainQuery = mockPool.query.mock.calls[0][0] as string;
+      expect(mainQuery).toMatch(/LIMIT\s+\$\d+/);
+      const mainParams = mockPool.query.mock.calls[0][1] as unknown[];
+      expect(mainParams[mainParams.length - 1]).toBe(11); // limit + 1
+
+      // Verify count query uses the same WHERE filters
+      const countQuery = mockPool.query.mock.calls[1][0] as string;
+      expect(countQuery).toContain("status = $2");
+      const countParams = mockPool.query.mock.calls[1][1] as unknown[];
+      expect(countParams).toEqual(["user-123", "completed"]);
+    });
+
+    it("aplica todos los filtros en la consulta principal y el conteo", async () => {
+      mockPool.query
+        .mockResolvedValueOnce({ rows: [basePayment({ id: "p1" })] })
+        .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+
+      const result = await PaymentsService.listUserPayments("user-123", {
+        limit: 5,
+        status: "completed",
+        type: "payment",
+        from: "2024-01-01",
+        to: "2024-12-31",
+      });
+
+      expect(result.payments).toHaveLength(1);
+      expect(result.total).toBe(1);
+
+      // Both queries should have the same WHERE clause with all filters
+      const mainQuery = mockPool.query.mock.calls[0][0] as string;
+      const countQuery = mockPool.query.mock.calls[1][0] as string;
+
+      expect(mainQuery).toContain("status = $");
+      expect(mainQuery).toContain("type = $");
+      expect(mainQuery).toContain("created_at >= $");
+      expect(mainQuery).toContain("created_at <= $");
+      expect(mainQuery).toMatch(/LIMIT\s+\$\d+/);
+
+      expect(countQuery).toContain("status = $");
+      expect(countQuery).toContain("type = $");
+      expect(countQuery).toContain("created_at >= $");
+      expect(countQuery).toContain("created_at <= $");
+      expect(countQuery).not.toContain("LIMIT");
+
+      // Count params should match filter params (without limit)
+      const countParams = mockPool.query.mock.calls[1][1] as unknown[];
+      expect(countParams).toEqual([
+        "user-123",
+        "completed",
+        "payment",
+        "2024-01-01",
+        "2024-12-31",
+      ]);
+    });
+
+    it("devuelve has_more cuando hay más resultados", async () => {
+      const rows = [
+        basePayment({ id: "p1" }),
+        basePayment({ id: "p2" }),
+        basePayment({ id: "p3" }),
+      ];
+      mockPool.query
+        .mockResolvedValueOnce({ rows })
+        .mockResolvedValueOnce({ rows: [{ count: "3" }] });
+
+      const result = await PaymentsService.listUserPayments("user-123", {
+        limit: 2,
+      });
+
+      expect(result.payments).toHaveLength(2);
+      expect(result.has_more).toBe(true);
+      expect(result.next_cursor).not.toBeNull();
+    });
+
+    it("sin filtros adicionales solo aplica user_id", async () => {
+      mockPool.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ count: "0" }] });
+
+      const result = await PaymentsService.listUserPayments("user-123", {});
+
+      expect(result.payments).toHaveLength(0);
+      expect(result.total).toBe(0);
+
+      const mainQuery = mockPool.query.mock.calls[0][0] as string;
+      const countQuery = mockPool.query.mock.calls[1][0] as string;
+
+      // Should only have user_id filter
+      expect(mainQuery).not.toContain("status =");
+      expect(countQuery).not.toContain("status =");
+
+      const countParams = mockPool.query.mock.calls[1][1] as unknown[];
+      expect(countParams).toEqual(["user-123"]);
     });
   });
 

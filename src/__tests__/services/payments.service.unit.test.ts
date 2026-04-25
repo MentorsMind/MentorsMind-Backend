@@ -182,6 +182,7 @@ describe("PaymentsService", () => {
         status: "pending",
         booking_id: "booking-123",
         from_address: "GABC...",
+        amount: "50.0000000",
       };
 
       const mockUpdatedPayment = {
@@ -193,7 +194,14 @@ describe("PaymentsService", () => {
       jest
         .spyOn(PaymentsService, "getPaymentById")
         .mockResolvedValue(mockPayment as any);
-      mockStellarService.getAccount.mockResolvedValue({ id: "GABC..." } as any);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: stellarTxHash,
+        source_account: "GABC...",
+      } as any);
+      mockStellarService.getTransactionOperations.mockResolvedValue([
+        { type: "payment", amount: "50.0000000" },
+      ] as any);
       mockPool.query
         .mockResolvedValueOnce({ rows: [mockUpdatedPayment] })
         .mockResolvedValueOnce({}) // booking update
@@ -207,6 +215,12 @@ describe("PaymentsService", () => {
       );
 
       expect(result).toEqual(mockUpdatedPayment);
+      expect(mockStellarService.getTransaction).toHaveBeenCalledWith(
+        stellarTxHash,
+      );
+      expect(mockStellarService.getTransactionOperations).toHaveBeenCalledWith(
+        stellarTxHash,
+      );
       expect(mockSocketService.emitToUser).toHaveBeenCalled();
     });
 
@@ -228,6 +242,94 @@ describe("PaymentsService", () => {
       await expect(
         PaymentsService.confirmPayment(paymentId, userId, stellarTxHash),
       ).rejects.toThrow("Payment already confirmed");
+    });
+
+    it("should throw error if Stellar transaction was not successful", async () => {
+      const paymentId = "payment-123";
+      const userId = "user-123";
+      const stellarTxHash = "hash123";
+
+      const mockPayment = {
+        id: paymentId,
+        user_id: userId,
+        status: "pending",
+        from_address: "GABC...",
+        amount: "50.0000000",
+      };
+
+      jest
+        .spyOn(PaymentsService, "getPaymentById")
+        .mockResolvedValue(mockPayment as any);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: false,
+        hash: stellarTxHash,
+        source_account: "GABC...",
+      } as any);
+
+      await expect(
+        PaymentsService.confirmPayment(paymentId, userId, stellarTxHash),
+      ).rejects.toThrow("Stellar transaction was not successful");
+    });
+
+    it("should throw error if transaction source account does not match sender", async () => {
+      const paymentId = "payment-123";
+      const userId = "user-123";
+      const stellarTxHash = "hash123";
+
+      const mockPayment = {
+        id: paymentId,
+        user_id: userId,
+        status: "pending",
+        from_address: "GABC...",
+        amount: "50.0000000",
+      };
+
+      jest
+        .spyOn(PaymentsService, "getPaymentById")
+        .mockResolvedValue(mockPayment as any);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: stellarTxHash,
+        source_account: "GOTHER...",
+      } as any);
+
+      await expect(
+        PaymentsService.confirmPayment(paymentId, userId, stellarTxHash),
+      ).rejects.toThrow(
+        "Transaction source account does not match payment sender",
+      );
+    });
+
+    it("should throw error if transaction does not contain matching payment amount", async () => {
+      const paymentId = "payment-123";
+      const userId = "user-123";
+      const stellarTxHash = "hash123";
+
+      const mockPayment = {
+        id: paymentId,
+        user_id: userId,
+        status: "pending",
+        from_address: "GABC...",
+        amount: "50.0000000",
+      };
+
+      jest
+        .spyOn(PaymentsService, "getPaymentById")
+        .mockResolvedValue(mockPayment as any);
+      mockStellarService.getTransaction.mockResolvedValue({
+        successful: true,
+        hash: stellarTxHash,
+        source_account: "GABC...",
+      } as any);
+      mockStellarService.getTransactionOperations.mockResolvedValue([
+        { type: "payment", amount: "1.0000000" },
+      ] as any);
+
+      await expect(
+        PaymentsService.confirmPayment(paymentId, userId, stellarTxHash),
+      ).rejects.toThrow(
+        "Transaction does not contain a matching payment amount",
+      );
     });
   });
 

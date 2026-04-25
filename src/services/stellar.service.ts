@@ -72,16 +72,43 @@ class StellarService {
   /**
    * Fetch a transaction by its hash from the Stellar network.
    * @param txHash - Transaction hash (hex string)
-   * @returns The Horizon transaction record
+   * @returns The Horizon transaction record with success, hash, and source account
    * @throws On network failure or transaction not found
    */
   async getTransaction(
     txHash: string,
-  ): Promise<{ successful: boolean; hash: string }> {
+  ): Promise<{ successful: boolean; hash: string; source_account: string }> {
     const result = await this.callWithFailover("getTransaction", (srv) =>
       srv.transactions().transaction(txHash).call(),
     );
-    return { successful: result.successful, hash: result.hash };
+    return {
+      successful: result.successful,
+      hash: result.hash,
+      source_account: result.source_account,
+    };
+  }
+
+  /**
+   * Fetch operations for a specific transaction by its hash.
+   * @param txHash - Transaction hash (hex string)
+   * @returns Array of operation records for the transaction
+   * @throws On network failure
+   */
+  async getTransactionOperations(
+    txHash: string,
+  ): Promise<StellarOperationRecord[]> {
+    const result = await this.callWithFailover(
+      "getTransactionOperations",
+      (srv) => srv.operations().forTransaction(txHash).call(),
+    );
+    return result.records.map((op: any) => ({
+      id: op.id,
+      type: op.type,
+      createdAt: op.created_at,
+      transactionHash: op.transaction_hash,
+      sourceAccount: op.source_account,
+      ...op,
+    }));
   }
 
   /**

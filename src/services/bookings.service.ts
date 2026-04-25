@@ -12,6 +12,12 @@ import pool from "../config/database";
 import { CalendarService } from "./calendar.service";
 import { SorobanEscrowService } from "./sorobanEscrow.service";
 import { QueueService } from "./queue.service";
+import { NotificationService } from "./notification.service";
+import {
+  NotificationType,
+  NotificationChannel,
+  NotificationPriority,
+} from "../models/notifications.model";
 
 export interface CreateBookingData {
   menteeId: string;
@@ -292,6 +298,54 @@ export const BookingsService = {
       updatedAt: updated.updated_at,
     });
 
+    // Send multi-channel notifications to both mentor and mentee
+    try {
+      const notificationPayload = {
+        type: NotificationType.BOOKING_CONFIRMED,
+        channels: [
+          NotificationChannel.EMAIL,
+          NotificationChannel.IN_APP,
+          NotificationChannel.PUSH,
+        ],
+        priority: NotificationPriority.HIGH,
+        data: {
+          bookingId,
+          scheduledAt: booking.scheduled_at,
+          durationMinutes: booking.duration_minutes,
+          topic: booking.topic,
+          amount: booking.amount,
+          currency: booking.currency,
+          mentorId: booking.mentor_id,
+          menteeId: booking.mentee_id,
+        },
+      };
+
+      await Promise.all([
+        NotificationService.sendNotification({
+          userId: booking.mentor_id,
+          ...notificationPayload,
+        }),
+        NotificationService.sendNotification({
+          userId: booking.mentee_id,
+          ...notificationPayload,
+        }),
+      ]);
+
+      logger.info("Booking confirmation notifications sent", {
+        bookingId,
+        mentorId: booking.mentor_id,
+        menteeId: booking.mentee_id,
+      });
+    } catch (notificationError) {
+      logger.error("Failed to send booking confirmation notifications", {
+        bookingId,
+        error:
+          notificationError instanceof Error
+            ? notificationError.message
+            : notificationError,
+      });
+    }
+
     CalendarService.createGoogleCalendarEvent(bookingId).catch((err) =>
       logger.error("Calendar create failed", { bookingId, error: err }),
     );
@@ -470,6 +524,55 @@ export const BookingsService = {
       cancellationReason: reason || "No reason provided",
       updatedAt: updated.updated_at,
     });
+
+    // Send multi-channel cancellation notifications to both mentor and mentee
+    try {
+      const notificationPayload = {
+        type: NotificationType.SESSION_CANCELLED,
+        channels: [
+          NotificationChannel.EMAIL,
+          NotificationChannel.IN_APP,
+          NotificationChannel.PUSH,
+        ],
+        priority: NotificationPriority.HIGH,
+        data: {
+          bookingId,
+          scheduledAt: booking.scheduled_at,
+          durationMinutes: booking.duration_minutes,
+          topic: booking.topic,
+          cancellationReason: reason || "No reason provided",
+          amount: booking.amount,
+          currency: booking.currency,
+          mentorId: booking.mentor_id,
+          menteeId: booking.mentee_id,
+        },
+      };
+
+      await Promise.all([
+        NotificationService.sendNotification({
+          userId: booking.mentor_id,
+          ...notificationPayload,
+        }),
+        NotificationService.sendNotification({
+          userId: booking.mentee_id,
+          ...notificationPayload,
+        }),
+      ]);
+
+      logger.info("Booking cancellation notifications sent", {
+        bookingId,
+        mentorId: booking.mentor_id,
+        menteeId: booking.mentee_id,
+      });
+    } catch (notificationError) {
+      logger.error("Failed to send booking cancellation notifications", {
+        bookingId,
+        error:
+          notificationError instanceof Error
+            ? notificationError.message
+            : notificationError,
+      });
+    }
 
     CalendarService.deleteGoogleCalendarEvent(bookingId).catch((err) =>
       logger.error("Calendar delete failed", { bookingId, error: err }),
