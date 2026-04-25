@@ -67,7 +67,7 @@ export const CalendarController = {
    */
   async googleConnect(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const url = CalendarService.getGoogleAuthUrl(userId);
+    const url = await CalendarService.getGoogleAuthUrl(userId);
     res.redirect(url);
   },
 
@@ -79,13 +79,33 @@ export const CalendarController = {
     req: AuthenticatedRequest,
     res: Response,
   ): Promise<void> {
-    const { code, state: userId, error } = req.query as Record<string, string>;
+    const { code, state, error } = req.query as Record<string, string>;
 
     if (error) {
       throw createError(`Google OAuth error: ${error}`, 400);
     }
-    if (!code || !userId) {
+    if (!code || !state) {
       throw createError("Missing OAuth code or state", 400);
+    }
+
+    let userId: string;
+    let csrf: string;
+
+    try {
+      const parsedState = JSON.parse(state);
+      userId = parsedState.userId;
+      csrf = parsedState.csrf;
+    } catch (e) {
+      throw createError("Invalid OAuth state format", 400);
+    }
+
+    if (!userId || !csrf) {
+      throw createError("Incomplete OAuth state", 400);
+    }
+
+    const isValid = await CalendarService.verifyAndClearCsrfToken(userId, csrf);
+    if (!isValid) {
+      throw createError("Invalid or expired CSRF token", 403);
     }
 
     await CalendarService.connectGoogleCalendar(userId, code);

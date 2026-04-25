@@ -1,4 +1,6 @@
+import crypto from "crypto";
 import { google } from "googleapis";
+import { redis } from "../config/redis";
 import { pool } from "../config/database";
 import { createError } from "../middleware/errorHandler";
 import {
@@ -122,13 +124,32 @@ export const CalendarService = {
   /**
    * Generate a Google OAuth2 authorisation URL for the given user
    */
-  getGoogleAuthUrl(userId: string): string {
+  async getGoogleAuthUrl(userId: string): Promise<string> {
+    const csrf = crypto.randomBytes(16).toString("hex");
+    // Store CSRF in Redis with 10-minute TTL
+    await redis.set(`google_oauth_csrf:${userId}`, csrf, "EX", 600);
+
     return oauth2Client.generateAuthUrl({
       access_type: "offline",
       scope: GOOGLE_SCOPES,
-      state: userId,
+      state: JSON.stringify({ userId, csrf }),
       prompt: "consent",
     });
+  },
+
+  /**
+   * Verify and clear the CSRF token from Redis
+   */
+  async verifyAndClearCsrfToken(userId: string, csrf: string): Promise<boolean> {
+    const key = `google_oauth_csrf:${userId}`;
+    const storedCsrf = await redis.get(key);
+
+    if (!storedCsrf || storedCsrf !== csrf) {
+      return false;
+    }
+
+    await redis.del(key);
+    return true;
   },
 
   /**
