@@ -72,7 +72,9 @@ export const AdminService = {
     offset = 0,
     role?: string,
   ): Promise<{ data: UserRecord[]; total: number }> {
-    let query = "SELECT * FROM users WHERE deleted_at IS NULL";
+    let query = `SELECT id, email, first_name, last_name, role, is_active, is_verified,
+                 average_rating, total_sessions_completed, created_at, updated_at
+                 FROM users WHERE deleted_at IS NULL`;
     const params: any[] = [];
     if (role) {
       query += " AND role = $1";

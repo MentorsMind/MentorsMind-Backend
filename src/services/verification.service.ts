@@ -265,8 +265,8 @@ export const VerificationService = {
     ): Promise<VerificationRecord> {
         const verification = await this.getById(verificationId);
         if (!verification) throw new Error('Verification not found');
-        if (verification.status !== 'pending') {
-            throw new Error('Verification is not pending');
+        if (!['pending', 'more_info_requested'].includes(verification.status)) {
+            throw new Error('Verification is not in a reviewable state');
         }
 
         const { rows } = await pool.query<VerificationRecord>(

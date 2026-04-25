@@ -16,11 +16,19 @@ if (!fs.existsSync(EXPORT_DIR)) {
   fs.mkdirSync(EXPORT_DIR, { recursive: true });
 }
 
+function toExportSafeRecord(user: any): any {
+  const safeUser = { ...user };
+  delete safeUser.password_hash;
+  delete safeUser.refresh_token;
+  delete safeUser.reset_token;
+  return safeUser;
+}
+
 export const ExportService = {
   async requestExport(userId: string): Promise<string> {
     const job = await ExportJobModel.create(userId);
     await exportQueue.add('process-export', { userId, jobId: job.id });
-    
+
     await AuditLoggerService.logEvent({
       level: LogLevel.INFO,
       action: 'DATA_EXPORT_REQUESTED',
@@ -50,8 +58,9 @@ export const ExportService = {
 
       archive.pipe(output);
 
-      // Add profile
-      archive.append(JSON.stringify(user, null, 2), { name: 'profile.json' });
+      // Add profile with sensitive fields stripped
+      const safeUser = toExportSafeRecord(user);
+      archive.append(JSON.stringify(safeUser, null, 2), { name: 'profile.json' });
       
       // Add sessions
       archive.append(JSON.stringify(sessions, null, 2), { name: 'sessions.json' });

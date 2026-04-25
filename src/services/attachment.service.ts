@@ -6,6 +6,7 @@ import { MessagingService } from './messaging.service';
 import { logger } from '../utils/logger.utils';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { virusScanQueue } from '../queues/virus-scan.queue';
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -121,20 +122,6 @@ export const AttachmentService = {
     return { storageKey, bucket };
   },
 
-  /**
-   * Virus scan stub — replace with ClamAV or cloud equivalent.
-   * Detects the EICAR test string as a placeholder.
-   */
-  async scanFile(fileBuffer: Buffer): Promise<'clean' | 'infected' | 'error'> {
-    try {
-      const eicar =
-        'X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*';
-      if (fileBuffer.toString('ascii').includes(eicar)) return 'infected';
-      return 'clean';
-    } catch {
-      return 'error';
-    }
-  },
 
   /**
    * Generate a signed URL valid for 1 hour using AWS SDK.
@@ -149,7 +136,7 @@ export const AttachmentService = {
 
   /**
    * Upload a file attachment to a conversation.
-   * Validates → checks quota → scans → stores → creates message → saves metadata.
+   * Validates → checks quota → stores → creates message → saves metadata with pending status → queues async scan.
    */
   async uploadAttachment(
     conversationId: string,
@@ -163,9 +150,6 @@ export const AttachmentService = {
 
     const withinQuota = await this.checkAndUpdateQuota(uploaderId, fileBuffer.length);
     if (!withinQuota) throw new Error('Daily upload quota exceeded (50 MB/day)');
-
-    const scanResult = await this.scanFile(fileBuffer);
-    if (scanResult === 'infected') throw new Error('File rejected: virus detected');
 
     const { storageKey, bucket } = await this.storeFile(fileBuffer, originalName);
 
@@ -186,11 +170,12 @@ export const AttachmentService = {
       return null;
     }
 
+    // Store attachment with pending scan status
     const { rows } = await pool.query<AttachmentRecord>(
       `INSERT INTO message_attachments
          (message_id, conversation_id, uploader_id, file_name, file_size,
           mime_type, storage_key, storage_bucket, scan_status, scanned_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', NULL)
        RETURNING *`,
       [
         message.id,
@@ -201,14 +186,24 @@ export const AttachmentService = {
         mimeType,
         storageKey,
         bucket,
-        scanResult,
       ],
     );
 
     const attachment = rows[0];
-    attachment.signed_url = await this.generateSignedUrl(storageKey, bucket);
 
-    // Emit attachment notification to recipient
+    // Queue async virus scan job
+    await virusScanQueue.add('scan-file', {
+      attachmentId: attachment.id,
+      storageKey,
+      bucket,
+    });
+
+    logger.info('[AttachmentService] File uploaded, virus scan queued', {
+      attachmentId: attachment.id,
+      uploaderId,
+    });
+
+    // Emit attachment notification to recipient (without signed URL until scan completes)
     const conv = await MessagingService.getConversation(conversationId, uploaderId);
     if (conv) {
       const recipientId =
@@ -224,7 +219,7 @@ export const AttachmentService = {
           file_name: attachment.file_name,
           file_size: attachment.file_size,
           mime_type: attachment.mime_type,
-          signed_url: attachment.signed_url,
+          scan_status: attachment.scan_status,
         },
       });
     }
@@ -258,5 +253,56 @@ export const AttachmentService = {
     }
 
     await pool.query(`DELETE FROM message_attachments WHERE message_id = $1`, [messageId]);
+  },
+
+  /**
+   * Get attachment with signed URL only if scan status is clean.
+   */
+  async getAttachmentWithUrl(attachmentId: string): Promise<AttachmentRecord | null> {
+    const { rows } = await pool.query<AttachmentRecord>(
+      `SELECT * FROM message_attachments WHERE id = $1`,
+      [attachmentId],
+    );
+
+    const attachment = rows[0] || null;
+    if (!attachment) return null;
+
+    // Only generate signed URL if scan is clean
+    if (attachment.scan_status === 'clean') {
+      attachment.signed_url = await this.generateSignedUrl(attachment.storage_key, attachment.storage_bucket);
+    }
+
+    return attachment;
+  },
+
+  /**
+   * Notify uploader when scan completes via WebSocket.
+   */
+  async notifyScanComplete(attachmentId: string, scanStatus: 'clean' | 'infected' | 'error'): Promise<void> {
+    const { rows } = await pool.query<AttachmentRecord>(
+      `SELECT * FROM message_attachments WHERE id = $1`,
+      [attachmentId],
+    );
+
+    const attachment = rows[0];
+    if (!attachment) return;
+
+    let signedUrl: string | undefined;
+    if (scanStatus === 'clean') {
+      signedUrl = await this.generateSignedUrl(attachment.storage_key, attachment.storage_bucket);
+    }
+
+    SocketService.emitToUser(attachment.uploader_id, 'attachment:scan_complete', {
+      attachmentId: attachment.id,
+      scanStatus,
+      signedUrl,
+      file_name: attachment.file_name,
+    });
+
+    logger.info('[AttachmentService] Scan complete notification sent', {
+      attachmentId,
+      scanStatus,
+      uploaderId: attachment.uploader_id,
+    });
   },
 };
