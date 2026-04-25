@@ -114,8 +114,17 @@ export function buildICalFeed(
 }
 
 /**
- * Generate a cryptographically secure iCal token
+ * Generate a cryptographically secure iCal token.
+ * Uses 32 random bytes (256 bits) encoded as 64 lowercase hex characters,
+ * making brute-force attacks against the public feed URL computationally infeasible.
  */
 export function generateICalToken(): string {
-  return crypto.randomBytes(32).toString("hex");
+  const token = crypto.randomBytes(32).toString("hex");
+  // Invariant: token must be exactly 64 hex characters (256-bit entropy)
+  if (token.length !== 64) {
+    throw new Error(
+      `generateICalToken: expected 64 hex chars, got ${token.length}`,
+    );
+  }
+  return token;
 }

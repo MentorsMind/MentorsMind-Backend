@@ -2,6 +2,7 @@ import { Response } from "express";
 import { AuthenticatedRequest } from "../types/api.types";
 import { CalendarService } from "../services/calendar.service";
 import { createError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger";
 
 export const CalendarController = {
   // ---- iCal ----------------------------------------------------------------
@@ -12,6 +13,13 @@ export const CalendarController = {
    */
   async getICalFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { token } = req.params;
+
+    // Audit log: record every access to the public iCal feed with the requesting IP
+    logger.info("iCal feed accessed", {
+      ip: req.ip,
+      tokenPrefix: (token as string).slice(0, 8),
+    });
+
     const feed = await CalendarService.getICalFeed(token as string);
 
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
@@ -19,7 +27,9 @@ export const CalendarController = {
       "Content-Disposition",
       'attachment; filename="mentorminds.ics"',
     );
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    // private: disallow CDN/proxy caching of personal schedule data
+    // no-store: do not persist the response body in any cache
+    res.setHeader("Cache-Control", "private, no-store");
     res.send(feed);
   },
 
