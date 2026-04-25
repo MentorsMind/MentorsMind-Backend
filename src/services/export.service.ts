@@ -9,12 +9,7 @@ import { UsersService } from "./users.service";
 import { exportQueue } from "../queues/export.queue";
 import { AuditLoggerService } from "./audit-logger.service";
 import { LogLevel } from "../utils/log-formatter.utils";
-
-const EXPORT_DIR = path.join(process.cwd(), "exports");
-
-if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-}
+import { StorageService } from "./storage.service";
 
 function toExportSafeRecord(user: any): any {
   const safeUser = { ...user };
@@ -43,6 +38,7 @@ export const ExportService = {
   },
 
   async processExport(userId: string, jobId: string): Promise<void> {
+    let tempFilePath: string | null = null;
     try {
       await ExportJobModel.updateStatus(jobId, "processing");
 
@@ -52,8 +48,16 @@ export const ExportService = {
       const reviews = await ReviewModel.findByUserId(userId);
 
       const fileName = `export_${userId}_${Date.now()}.zip`;
-      const filePath = path.join(EXPORT_DIR, fileName);
-      const output = fs.createWriteStream(filePath);
+      const timestamp = Date.now();
+      tempFilePath = path.join(process.cwd(), "temp", fileName);
+
+      // Ensure temp directory exists
+      const tempDir = path.dirname(tempFilePath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const output = fs.createWriteStream(tempFilePath);
       const archive = archiver("zip", { zlib: { level: 9 } });
 
       archive.pipe(output);
@@ -84,16 +88,40 @@ export const ExportService = {
 
       await archive.finalize();
 
+      // Wait for the write stream to finish
+      await new Promise<void>((resolve, reject) => {
+        output.on("finish", resolve);
+        output.on("error", reject);
+      });
+
+      // Read the file buffer
+      const fileBuffer = fs.readFileSync(tempFilePath);
+
+      // Upload to S3
+      const s3Key = StorageService.buildExportKey(userId, jobId, timestamp);
+      const result = await StorageService.uploadFile(
+        s3Key,
+        fileBuffer,
+        "application/zip",
+        { userId, fileName },
+      );
+
+      // Store the S3 key (not local path) in the database
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 24);
 
       await ExportJobModel.updateStatus(
         jobId,
         "completed",
-        filePath,
+        result.key,
         undefined,
         expiresAt,
       );
+
+      // Delete the local temp file after successful S3 upload
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
 
       await AuditLoggerService.logEvent({
         level: LogLevel.INFO,
@@ -102,15 +130,32 @@ export const ExportService = {
         userId: userId,
         entityType: "export_job",
         entityId: jobId,
-        metadata: { fileName, expiresAt },
+        metadata: { fileName, s3Key: result.key, expiresAt, s3Url: result.url },
       });
     } catch (error: any) {
+      // Cleanup: delete the local temp file on failure
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+
+      // Mark the job as failed
       await ExportJobModel.updateStatus(
         jobId,
         "failed",
         undefined,
         error.message,
       );
+
+      await AuditLoggerService.logEvent({
+        level: LogLevel.ERROR,
+        action: "DATA_EXPORT_FAILED",
+        message: `Data export failed for user ${userId}: ${error.message}`,
+        userId: userId,
+        entityType: "export_job",
+        entityId: jobId,
+        metadata: { error: error.message },
+      });
+
       throw error;
     }
   },

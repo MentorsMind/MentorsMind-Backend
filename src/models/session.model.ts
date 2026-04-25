@@ -111,10 +111,18 @@ export const SessionModel = {
   /**
    * Find sessions by user ID (either as mentor or mentee) with cursor pagination
    */
-  async findByUserIdPaginated(userId: string, filters: { cursor?: string; limit?: number }): Promise<{ sessions: SessionRecord[]; next_cursor: string | null; has_more: boolean; total: number }> {
+  async findByUserIdPaginated(
+    userId: string,
+    filters: { cursor?: string; limit?: number },
+  ): Promise<{
+    sessions: SessionRecord[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number;
+  }> {
     const limit = filters.limit ?? 20;
 
-    const conditions: string[] = ['(mentor_id = $1 OR mentee_id = $1)'];
+    const conditions: string[] = ["(mentor_id = $1 OR mentee_id = $1)"];
     const params: unknown[] = [userId];
     let idx = 2;
 
@@ -130,19 +138,28 @@ export const SessionModel = {
     const [{ rows }, { rows: countRows }] = await Promise.all([
       pool.query<SessionRecord>(
         `SELECT * FROM sessions
-         WHERE ${conditions.join(' AND ')}
+         WHERE ${conditions.join(" AND ")}
          ORDER BY scheduled_at DESC, id DESC
          LIMIT $${idx}`,
         [...params, limit + 1],
       ),
-      pool.query(`SELECT COUNT(*) FROM sessions WHERE mentor_id = $1 OR mentee_id = $1`, [userId]),
+      pool.query(
+        `SELECT COUNT(*) FROM sessions WHERE mentor_id = $1 OR mentee_id = $1`,
+        [userId],
+      ),
     ]);
 
     const has_more = rows.length > limit;
     const data = has_more ? rows.slice(0, limit) : rows;
 
     const lastItem = data[data.length - 1];
-    const next_cursor = has_more && lastItem ? PaginationUtil.encodeCursor({ id: lastItem.id, created_at: lastItem.scheduled_at.toISOString() }) : null;
+    const next_cursor =
+      has_more && lastItem
+        ? PaginationUtil.encodeCursor({
+            id: lastItem.id,
+            created_at: lastItem.scheduled_at.toISOString(),
+          })
+        : null;
 
     return {
       sessions: data,
@@ -150,6 +167,19 @@ export const SessionModel = {
       has_more,
       total: parseInt(countRows[0].count, 10),
     };
+  },
+
+  /**
+   * Find all sessions for a user (both as mentor and mentee)
+   */
+  async findByUserId(userId: string): Promise<SessionRecord[]> {
+    const query = `
+      SELECT * FROM sessions
+      WHERE mentor_id = $1 OR mentee_id = $1
+      ORDER BY scheduled_at DESC, id DESC
+    `;
+    const { rows } = await pool.query<SessionRecord>(query, [userId]);
+    return rows;
   },
 
   /**
@@ -163,7 +193,6 @@ export const SessionModel = {
         AND status IN ('pending', 'confirmed')
       ORDER BY scheduled_at ASC
     `;
-
     const { rows } = await pool.query<SessionRecord>(query, [userId]);
     return rows;
   },
