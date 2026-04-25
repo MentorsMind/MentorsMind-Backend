@@ -3,7 +3,7 @@ import config from '../config';
 import { logger } from '../utils/logger';
 import pool from '../config/database';
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { AttachmentService } from '../services/attachment.service';
+import { SocketService } from '../services/socket.service';
 
 const s3 = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
@@ -67,7 +67,22 @@ export const virusScanWorker = new Worker(
       });
       
       // Notify uploader via WebSocket
-      await AttachmentService.notifyScanComplete(attachmentId, scanResult);
+      let signedUrl: string | undefined;
+      if (scanResult === 'clean') {
+        const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+        const command = new GetObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+        });
+        signedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      }
+      
+      SocketService.emitToUser(attachment.uploader_id, 'attachment:scan_complete', {
+        attachmentId: attachment.id,
+        scanStatus: scanResult,
+        signedUrl,
+        file_name: attachment.file_name,
+      });
       
       // If infected, delete the file from S3
       if (scanResult === 'infected') {
