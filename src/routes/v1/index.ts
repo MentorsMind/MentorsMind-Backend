@@ -26,7 +26,6 @@ import walletRoutes from "../wallets.routes";
 import consentRoutes from "../consent.routes";
 import integrationsRoutes from "../integrations.routes";
 import notesRoutes from "../notes.routes";
-import { AdminService } from "../../services/admin.service";
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
 import { VerificationService } from "../../services/verification.service";
@@ -35,10 +34,7 @@ import { RecommendationService } from "../../services/recommendation.service";
 
 const router = Router();
 
-// Lazy service initialization (non-blocking)
-AdminService.initialize().catch((err) => {
-  logger.error("Failed to initialize admin tables:", err);
-});
+// Service initialization (async, non-blocking)
 BookingsService.initialize().catch((err) => {
   logger.error("Failed to initialize bookings tables:", err);
 });

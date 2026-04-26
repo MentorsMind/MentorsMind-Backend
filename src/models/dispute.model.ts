@@ -23,36 +23,6 @@ export interface DisputeEvidenceRecord {
 }
 
 export const DisputeModel = {
-  async initializeTable(): Promise<void> {
-    const query = `
-      CREATE TABLE IF NOT EXISTS disputes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        transaction_id UUID NOT NULL REFERENCES transactions(id),
-        reporter_id UUID NOT NULL REFERENCES users(id),
-        reason TEXT NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'open',
-        resolution_notes TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
-      CREATE INDEX IF NOT EXISTS idx_disputes_transaction_id ON disputes(transaction_id);
-
-      CREATE TABLE IF NOT EXISTS dispute_evidence (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        dispute_id UUID NOT NULL REFERENCES disputes(id) ON DELETE CASCADE,
-        submitter_id UUID NOT NULL REFERENCES users(id),
-        text_content TEXT,
-        file_url VARCHAR(255),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_dispute_evidence_dispute_id ON dispute_evidence(dispute_id);
-    `;
-    await pool.query(query);
-  },
-
   async create(data: { transaction_id: string, reporter_id: string, reason: string }): Promise<DisputeRecord> {
     const { rows } = await pool.query<DisputeRecord>(
       `INSERT INTO disputes (transaction_id, reporter_id, reason)

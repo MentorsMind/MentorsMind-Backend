@@ -13,7 +13,6 @@ import reviewsRoutes from "./reviews.routes";
 import conversationsRoutes from "./conversations.routes";
 import messageSearchRoutes from "./messageSearch.routes";
 import integrationsRoutes from "./integrations.routes";
-import { AdminService } from "../services/admin.service";
 import { BookingsService } from "../services/bookings.service";
 import { VerificationService } from "../services/verification.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
@@ -29,11 +28,6 @@ import { metricsRegistry } from "../config/metrics";
 import { monitoringConfig } from "../config/monitoring.config";
 
 const router = Router();
-
-// Initialize admin tables (async, don't block)
-AdminService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize admin tables:", err);
-});
 
 // Initialize bookings tables (async, don't block)
 BookingsService.initialize().catch((err: unknown) => {

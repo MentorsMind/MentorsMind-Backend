@@ -30,17 +30,6 @@ export interface AdminStats {
 }
 
 export const AdminService = {
-  /**
-   * Initialize all admin-related tables.
-   */
-  async initialize(): Promise<void> {
-    await Promise.all([
-      TransactionModel.initializeTable(),
-      DisputeModel.initializeTable(),
-      SystemConfigModel.initializeTable(),
-    ]);
-  },
-
   async getStats(): Promise<AdminStats> {
     const [userCountResult, activeUserCountResult, txStats, openDisputes] =
       await Promise.all([

@@ -41,12 +41,30 @@ import {
 } from "./workers";
 import { initializeEmailTemplates } from "./services/template-initializer.service";
 import { logger } from "./utils/logger.utils";
+import { validateRequiredTables } from "./utils/table-validator.utils";
 
 // Initialize database tables, then seed email templates
 initializeModels()
   .then(() => initializeEmailTemplates())
+  .then(() => {
+    // Validate that all required tables exist (from migrations)
+    return validateRequiredTables();
+  })
+  .then((validation) => {
+    if (!validation.allTablesExist) {
+      logger.error(
+        `Database validation failed: ${validation.missingTables.length} table(s) missing. ` +
+          "Please run migrations before starting the server.",
+        { missingTables: validation.missingTables },
+      );
+      // Don't exit here - allow health check to report the issue
+      // This gives ops teams time to fix via migrations
+    } else {
+      logger.info("Database validation successful: all required tables exist");
+    }
+  })
   .catch((err) => {
-    logger.error({ err }, "Failed to initialize models");
+    logger.error({ err }, "Failed to initialize models or validate tables");
     console.error("Failed to initialize models:", err);
   });
 

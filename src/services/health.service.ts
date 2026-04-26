@@ -4,6 +4,7 @@ import config from '../config';
 import { redisConfig } from '../config/redis.config';
 import { logger } from '../utils/logger.utils';
 import { CURRENT_VERSION } from '../config/api-versions.config';
+import { validateRequiredTables } from '../utils/table-validator.utils';
 import * as os from 'node:os';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export interface DetailedHealthStatus {
     redis: HealthComponent;
     horizon: HealthComponent;
     queues: HealthComponent;
+    tables?: HealthComponent;
     system?: HealthComponent;
   };
   uptime: number;
@@ -73,11 +75,12 @@ export class HealthService {
    * Internal full health check
    */
   private static async performFullCheck(): Promise<DetailedHealthStatus> {
-    const [dbCheck, redisCheck, horizonCheck, queueCheck] = await Promise.all([
+    const [dbCheck, redisCheck, horizonCheck, queueCheck, tablesCheck] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
       this.checkHorizon(),
       this.checkBullMQ(),
+      this.checkDatabaseTables(),
     ]);
 
     // Critical components for readiness: all must not be 'unhealthy'
@@ -103,6 +106,7 @@ export class HealthService {
         redis: redisCheck,
         horizon: horizonCheck,
         queues: queueCheck,
+        tables: tablesCheck,
         system: this.getSystemInfo(),
       },
       uptime: process.uptime(),
@@ -121,6 +125,38 @@ export class HealthService {
         status: 'unhealthy', 
         responseTimeMs: Date.now() - start, 
         error: err.message 
+      };
+    }
+  }
+
+  private static async checkDatabaseTables(): Promise<HealthComponent> {
+    const start = Date.now();
+    try {
+      const validation = await validateRequiredTables();
+      const responseTimeMs = Date.now() - start;
+      
+      if (validation.allTablesExist) {
+        return { 
+          status: 'healthy', 
+          responseTimeMs,
+          details: { totalTables: validation.totalTables },
+        };
+      }
+      
+      return {
+        status: 'unhealthy',
+        responseTimeMs,
+        error: `Missing ${validation.missingTables.length} required table(s)`,
+        details: {
+          missingTables: validation.missingTables,
+          totalTables: validation.totalTables,
+        },
+      };
+    } catch (err: any) {
+      return {
+        status: 'unhealthy',
+        responseTimeMs: Date.now() - start,
+        error: err.message,
       };
     }
   }

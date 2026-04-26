@@ -13,28 +13,6 @@ export interface TransactionRecord {
 }
 
 export const TransactionModel = {
-  async initializeTable(): Promise<void> {
-    const query = `
-      CREATE TABLE IF NOT EXISTS transactions (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL REFERENCES users(id),
-        amount DECIMAL(20, 7) NOT NULL,
-        currency VARCHAR(10) NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        stellar_tx_hash VARCHAR(64),
-        type VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        completed_at TIMESTAMP WITH TIME ZONE
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
-      CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
-    `;
-    await pool.query(query);
-  },
-
   async findAll(limit = 50, offset = 0): Promise<TransactionRecord[]> {
     const { rows } = await pool.query<TransactionRecord>(
       `SELECT * FROM transactions ORDER BY created_at DESC LIMIT $1 OFFSET $2`,

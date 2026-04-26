@@ -7,17 +7,6 @@ export interface SystemConfigRecord {
 }
 
 export const SystemConfigModel = {
-  async initializeTable(): Promise<void> {
-    const query = `
-      CREATE TABLE IF NOT EXISTS system_configs (
-        key VARCHAR(100) PRIMARY KEY,
-        value JSONB NOT NULL,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-    `;
-    await pool.query(query);
-  },
-
   async getValue<T>(key: string): Promise<T | null> {
     const { rows } = await pool.query<SystemConfigRecord>(
       'SELECT value FROM system_configs WHERE key = $1',
