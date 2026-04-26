@@ -1,6 +1,150 @@
 import { ExportService } from "../export.service";
+import { ExportJobModel } from "../../models/export-job.model";
+import { createError } from "../../middleware/errorHandler";
+
+// Mock dependencies
+jest.mock("../../models/export-job.model");
+jest.mock("../../queues/export.queue", () => ({
+  exportQueue: {
+    add: jest.fn().mockResolvedValue({ id: "job-123" }),
+  },
+}));
+jest.mock("../../services/audit-logger.service", () => ({
+  AuditLoggerService: {
+    logEvent: jest.fn().mockResolvedValue(undefined),
+  },
+}));
 
 describe("ExportService", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe("requestExport", () => {
+    it("should throw 409 error if user has pending export job", async () => {
+      const userId = "user-123";
+      const mockPendingJob = {
+        id: "job-456",
+        user_id: userId,
+        status: "pending",
+        created_at: new Date(),
+      };
+
+      (ExportJobModel.findPendingByUserId as jest.Mock).mockResolvedValue(
+        mockPendingJob
+      );
+
+      await expect(ExportService.requestExport(userId)).rejects.toEqual(
+        createError(
+          "An export is already in progress. Please wait for it to complete or check the status.",
+          409
+        )
+      );
+
+      expect(ExportJobModel.findPendingByUserId).toHaveBeenCalledWith(userId);
+      expect(ExportJobModel.create).not.toHaveBeenCalled();
+    });
+
+    it("should throw 409 error if user has processing export job", async () => {
+      const userId = "user-123";
+      const mockProcessingJob = {
+        id: "job-789",
+        user_id: userId,
+        status: "processing",
+        created_at: new Date(),
+      };
+
+      (ExportJobModel.findPendingByUserId as jest.Mock).mockResolvedValue(
+        mockProcessingJob
+      );
+
+      await expect(ExportService.requestExport(userId)).rejects.toEqual(
+        createError(
+          "An export is already in progress. Please wait for it to complete or check the status.",
+          409
+        )
+      );
+    });
+
+    it("should throw 429 error if within 24-hour cooldown period", async () => {
+      const userId = "user-123";
+      const twentyHoursAgo = new Date(Date.now() - 20 * 60 * 60 * 1000);
+      const mockCompletedJob = {
+        id: "job-completed",
+        user_id: userId,
+        status: "completed",
+        created_at: twentyHoursAgo,
+      };
+
+      (ExportJobModel.findPendingByUserId as jest.Mock).mockResolvedValue(null);
+      (ExportJobModel.findLastCompletedByUserId as jest.Mock).mockResolvedValue(
+        mockCompletedJob
+      );
+
+      await expect(ExportService.requestExport(userId)).rejects.toEqual(
+        createError(
+          "You can request a new export in 4 hour(s). Please wait before requesting another export.",
+          429
+        )
+      );
+
+      expect(ExportJobModel.create).not.toHaveBeenCalled();
+    });
+
+    it("should allow export if no pending job and cooldown period has passed", async () => {
+      const userId = "user-123";
+      const thirtyHoursAgo = new Date(Date.now() - 30 * 60 * 60 * 1000);
+      const mockCompletedJob = {
+        id: "job-old",
+        user_id: userId,
+        status: "completed",
+        created_at: thirtyHoursAgo,
+      };
+      const mockNewJob = {
+        id: "job-new-123",
+        user_id: userId,
+        status: "pending",
+        created_at: new Date(),
+      };
+
+      (ExportJobModel.findPendingByUserId as jest.Mock).mockResolvedValue(null);
+      (ExportJobModel.findLastCompletedByUserId as jest.Mock).mockResolvedValue(
+        mockCompletedJob
+      );
+      (ExportJobModel.create as jest.Mock).mockResolvedValue(mockNewJob);
+
+      const jobId = await ExportService.requestExport(userId);
+
+      expect(jobId).toBe("job-new-123");
+      expect(ExportJobModel.findPendingByUserId).toHaveBeenCalledWith(userId);
+      expect(ExportJobModel.findLastCompletedByUserId).toHaveBeenCalledWith(
+        userId
+      );
+      expect(ExportJobModel.create).toHaveBeenCalledWith(userId);
+    });
+
+    it("should allow export if no previous exports exist", async () => {
+      const userId = "user-456";
+      const mockNewJob = {
+        id: "job-first",
+        user_id: userId,
+        status: "pending",
+        created_at: new Date(),
+      };
+
+      (ExportJobModel.findPendingByUserId as jest.Mock).mockResolvedValue(null);
+      (ExportJobModel.findLastCompletedByUserId as jest.Mock).mockResolvedValue(
+        null
+      );
+      (ExportJobModel.create as jest.Mock).mockResolvedValue(mockNewJob);
+
+      const jobId = await ExportService.requestExport(userId);
+
+      expect(jobId).toBe("job-first");
+      expect(ExportJobModel.create).toHaveBeenCalledWith(userId);
+    });
+  });
+
   describe("jsonToCsv", () => {
     it("should handle fields with newlines correctly", () => {
       const items = [

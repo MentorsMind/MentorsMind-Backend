@@ -110,6 +110,12 @@ export const publicLimiter = createLimiter({
   keyStrategy: 'ip',
 });
 
+/** Data export endpoints — very strict to prevent abuse */
+export const exportLimiter = createLimiter({
+  profile: rateLimitsConfig.export,
+  keyStrategy: 'user',
+});
+
 /** Factory for custom per-route limiters */
 export { createLimiter };
 

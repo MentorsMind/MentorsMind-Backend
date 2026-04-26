@@ -79,4 +79,28 @@ export const ExportJobModel = {
     `;
     await pool.query(query, [id, status, storageKey, errorMessage, expiresAt]);
   },
+
+  async findPendingByUserId(userId: string): Promise<ExportJob | null> {
+    const query = `
+      SELECT * FROM export_jobs
+      WHERE user_id = $1
+        AND status IN ('pending', 'processing')
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const { rows } = await pool.query<ExportJob>(query, [userId]);
+    return rows[0] || null;
+  },
+
+  async findLastCompletedByUserId(userId: string): Promise<ExportJob | null> {
+    const query = `
+      SELECT * FROM export_jobs
+      WHERE user_id = $1
+        AND status = 'completed'
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const { rows } = await pool.query<ExportJob>(query, [userId]);
+    return rows[0] || null;
+  },
 };

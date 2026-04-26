@@ -10,6 +10,7 @@ import { exportQueue } from "../queues/export.queue";
 import { AuditLoggerService } from "./audit-logger.service";
 import { LogLevel } from "../utils/log-formatter.utils";
 import { StorageService } from "./storage.service";
+import { createError } from "../middleware/errorHandler";
 
 function toExportSafeRecord(user: any): any {
   const safeUser = { ...user };
@@ -21,6 +22,30 @@ function toExportSafeRecord(user: any): any {
 
 export const ExportService = {
   async requestExport(userId: string): Promise<string> {
+    // Check if user already has a pending or processing export job
+    const existing = await ExportJobModel.findPendingByUserId(userId);
+    if (existing) {
+      throw createError(
+        "An export is already in progress. Please wait for it to complete or check the status.",
+        409,
+      );
+    }
+
+    // Check cooldown: prevent new requests within 24 hours of last completed export
+    const lastCompleted = await ExportJobModel.findLastCompletedByUserId(userId);
+    if (lastCompleted && lastCompleted.created_at) {
+      const hoursSinceLastExport =
+        (Date.now() - new Date(lastCompleted.created_at).getTime()) /
+        (1000 * 60 * 60);
+      if (hoursSinceLastExport < 24) {
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastExport);
+        throw createError(
+          `You can request a new export in ${hoursRemaining} hour(s). Please wait before requesting another export.`,
+          429,
+        );
+      }
+    }
+
     const job = await ExportJobModel.create(userId);
     await exportQueue.add("process-export", { userId, jobId: job.id });
 
