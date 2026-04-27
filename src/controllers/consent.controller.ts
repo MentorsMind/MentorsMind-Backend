@@ -76,11 +76,10 @@ export const ConsentController = {
 
     try {
       const { rows } = await pool.query<ConsentRecord>(query, values);
-      ResponseUtil.success(
+      ResponseUtil.created(
         res,
         rows[0],
         "Consent choices recorded successfully",
-        201,
       );
     } catch (error) {
       ResponseUtil.error(
