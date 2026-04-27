@@ -8,6 +8,8 @@ export interface ProgressSummary {
   completed_goals: number;
   current_streak: number;
   longest_streak: number;
+  goal_completion_timeline: TimelineEntry[];
+  session_timeline: TimelineEntry[];
 }
 
 export interface TimelineEntry {
@@ -34,7 +36,7 @@ export class LearnerService {
 
       // 2. Completed goals
       const goalsResult = await db.query(
-        `SELECT COUNT(*) as completed_goals FROM learner_goals 
+        `SELECT COUNT(*) as completed_goals FROM goals 
          WHERE learner_id = $1 AND status = 'completed'`,
         [learnerId]
       );
@@ -51,24 +53,46 @@ export class LearnerService {
       const dates = sessionsResult.rows.map(r => new Date(r.session_date));
       const { current, longest } = this.calculateStreaks(dates);
 
+      const [goalTimeline, sessionTimeline] = await Promise.all([
+        this.getGoalCompletionTimeline(learnerId),
+        this.getSessionTimeline(learnerId)
+      ]);
+
       return {
         total_sessions: parseInt(statsResult.rows[0].total_sessions || '0', 10),
         total_hours: parseFloat(statsResult.rows[0].total_hours || '0'),
         completed_goals: parseInt(goalsResult.rows[0].completed_goals || '0', 10),
         current_streak: current,
-        longest_streak: longest
+        longest_streak: longest,
+        goal_completion_timeline: goalTimeline,
+        session_timeline: sessionTimeline
       };
     });
   }
 
-  static async getTimeline(learnerId: string): Promise<TimelineEntry[]> {
+  static async getGoalCompletionTimeline(learnerId: string): Promise<TimelineEntry[]> {
     const result = await db.query(
       `SELECT 
         TO_CHAR(completed_at, 'YYYY-MM') as month,
         COUNT(*) as count
-       FROM learner_goals
+       FROM goals
        WHERE learner_id = $1 AND status = 'completed'
          AND completed_at >= NOW() - INTERVAL '12 months'
+       GROUP BY month
+       ORDER BY month ASC`,
+      [learnerId]
+    );
+    return result.rows;
+  }
+
+  static async getSessionTimeline(learnerId: string): Promise<TimelineEntry[]> {
+    const result = await db.query(
+      `SELECT 
+        TO_CHAR(scheduled_start, 'YYYY-MM') as month,
+        COUNT(*) as count
+       FROM bookings
+       WHERE mentee_id = $1 AND status = 'completed'
+         AND scheduled_start >= NOW() - INTERVAL '12 months'
        GROUP BY month
        ORDER BY month ASC`,
       [learnerId]

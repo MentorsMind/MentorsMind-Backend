@@ -16,7 +16,7 @@ export class GoalModel {
   static async create(data: Partial<Goal>): Promise<Goal> {
     const { learner_id, title, description, target_date } = data;
     const result = await db.query(
-      `INSERT INTO learner_goals (learner_id, title, description, target_date)
+      `INSERT INTO goals (learner_id, title, description, target_date)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [learner_id, title, description, target_date],
@@ -26,7 +26,7 @@ export class GoalModel {
 
   static async findByLearnerId(learnerId: string): Promise<Goal[]> {
     const result = await db.query(
-      `SELECT * FROM learner_goals 
+      `SELECT * FROM goals 
        WHERE learner_id = $1 
        ORDER BY target_date ASC NULLS LAST, created_at DESC`,
       [learnerId],
@@ -36,7 +36,7 @@ export class GoalModel {
 
   static async findById(id: string): Promise<Goal | null> {
     const result = await db.query(
-      'SELECT * FROM learner_goals WHERE id = $1',
+      'SELECT * FROM goals WHERE id = $1',
       [id],
     );
     return result.rows[0] || null;
@@ -60,7 +60,7 @@ export class GoalModel {
 
     values.push(id);
     const result = await db.query(
-      `UPDATE learner_goals SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
+      `UPDATE goals SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
       values,
     );
     return result.rows[0] || null;
@@ -68,7 +68,7 @@ export class GoalModel {
 
   static async delete(id: string): Promise<boolean> {
     const result = await db.query(
-      'DELETE FROM learner_goals WHERE id = $1',
+      'DELETE FROM goals WHERE id = $1',
       [id],
     );
     return (result.rowCount ?? 0) > 0;
