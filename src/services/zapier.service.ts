@@ -40,7 +40,9 @@ export const ZapierService = {
     return ACTIONS;
   },
 
-  async authenticateApiKey(rawApiKey: string | undefined): Promise<ZapierContext | null> {
+  async authenticateApiKey(
+    rawApiKey: string | undefined,
+  ): Promise<ZapierContext | null> {
     if (!rawApiKey) {
       return null;
     }
@@ -87,7 +89,13 @@ export const ZapierService = {
          (api_key_id, trigger_name, target_url, secret, metadata)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [context.apiKeyId, trigger, targetUrl, secret ?? null, JSON.stringify(metadata)],
+      [
+        context.apiKeyId,
+        trigger,
+        targetUrl,
+        secret ?? null,
+        JSON.stringify(metadata),
+      ],
     );
 
     return {
@@ -163,11 +171,24 @@ export const ZapierService = {
   async executeAction(
     action: ActionName,
     payload: Record<string, any>,
+    context: ZapierContext,
   ): Promise<Record<string, unknown>> {
     if (action === "send_message") {
+      const { rows: keyRows } = await pool.query<{ scopes: string[] }>(
+        `SELECT scopes FROM integration_api_keys WHERE id = $1`,
+        [context.apiKeyId],
+      );
+      if (!keyRows[0]?.scopes?.includes("messaging:write")) {
+        throw new Error("API key missing required scope: messaging:write");
+      }
+
+      if (!context.ownerUserId) {
+        throw new Error("API key has no associated owner user");
+      }
+
       const message = await MessagingService.sendMessage(
         payload.conversationId,
-        payload.senderId,
+        context.ownerUserId,
         String(payload.body ?? ""),
       );
       if (!message) {
@@ -181,7 +202,12 @@ export const ZapierService = {
         `INSERT INTO booking_notes (booking_id, author_id, content, is_private)
          VALUES ($1, $2, $3, COALESCE($4, FALSE))
          RETURNING id`,
-        [payload.bookingId, payload.authorId, payload.content, payload.isPrivate],
+        [
+          payload.bookingId,
+          payload.authorId,
+          payload.content,
+          payload.isPrivate,
+        ],
       );
       return { noteId: rows[0].id };
     }
