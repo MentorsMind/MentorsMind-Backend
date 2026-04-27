@@ -19,9 +19,12 @@ export interface TimelineEntry {
 
 export class LearnerService {
   private static CACHE_TTL = 300; // 5 minutes
+  private static PROGRESS_CACHE_PREFIX = 'learner:progress';
+  private static TIMELINE_CACHE_PREFIX = 'learner:timeline';
+  private static GOAL_TIMELINE_CACHE_PREFIX = 'learner:goal-timeline';
 
   static async getProgressSummary(learnerId: string): Promise<ProgressSummary> {
-    const cacheKey = `learner:progress:${learnerId}`;
+    const cacheKey = `${this.PROGRESS_CACHE_PREFIX}:${learnerId}`;
     
     return await CacheService.wrap(cacheKey, this.CACHE_TTL, async () => {
       // 1. Basic stats from bookings
@@ -71,37 +74,49 @@ export class LearnerService {
   }
 
   static async getGoalCompletionTimeline(learnerId: string): Promise<TimelineEntry[]> {
-    const result = await db.query(
-      `SELECT 
-        TO_CHAR(completed_at, 'YYYY-MM') as month,
-        COUNT(*) as count
-       FROM goals
-       WHERE learner_id = $1 AND status = 'completed'
-         AND completed_at >= NOW() - INTERVAL '12 months'
-       GROUP BY month
-       ORDER BY month ASC`,
-      [learnerId]
-    );
-    return result.rows;
+    const cacheKey = `${this.GOAL_TIMELINE_CACHE_PREFIX}:${learnerId}`;
+
+    return await CacheService.wrap(cacheKey, this.CACHE_TTL, async () => {
+      const result = await db.query(
+        `SELECT 
+          TO_CHAR(completed_at, 'YYYY-MM') as month,
+          COUNT(*) as count
+         FROM goals
+         WHERE learner_id = $1 AND status = 'completed'
+           AND completed_at >= NOW() - INTERVAL '12 months'
+         GROUP BY month
+         ORDER BY month ASC`,
+        [learnerId]
+      );
+      return result.rows;
+    });
   }
 
   static async getSessionTimeline(learnerId: string): Promise<TimelineEntry[]> {
-    const result = await db.query(
-      `SELECT 
-        TO_CHAR(scheduled_start, 'YYYY-MM') as month,
-        COUNT(*) as count
-       FROM bookings
-       WHERE mentee_id = $1 AND status = 'completed'
-         AND scheduled_start >= NOW() - INTERVAL '12 months'
-       GROUP BY month
-       ORDER BY month ASC`,
-      [learnerId]
-    );
-    return result.rows;
+    const cacheKey = `${this.TIMELINE_CACHE_PREFIX}:${learnerId}`;
+
+    return await CacheService.wrap(cacheKey, this.CACHE_TTL, async () => {
+      const result = await db.query(
+        `SELECT 
+          TO_CHAR(scheduled_start, 'YYYY-MM') as month,
+          COUNT(*) as count
+         FROM bookings
+         WHERE mentee_id = $1 AND status = 'completed'
+           AND scheduled_start >= NOW() - INTERVAL '12 months'
+         GROUP BY month
+         ORDER BY month ASC`,
+        [learnerId]
+      );
+      return result.rows;
+    });
   }
 
   static async invalidateCache(learnerId: string): Promise<void> {
-    await CacheService.del(`learner:progress:${learnerId}`);
+    await Promise.all([
+      CacheService.del(`${this.PROGRESS_CACHE_PREFIX}:${learnerId}`),
+      CacheService.del(`${this.TIMELINE_CACHE_PREFIX}:${learnerId}`),
+      CacheService.del(`${this.GOAL_TIMELINE_CACHE_PREFIX}:${learnerId}`),
+    ]);
   }
 
   private static calculateStreaks(dates: Date[]): { current: number; longest: number } {

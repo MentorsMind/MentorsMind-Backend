@@ -17,6 +17,12 @@ interface MemEntry {
   value: string;
   expiresAt: number;
 }
+/**
+ * Fallback cache store used when Redis is unavailable.
+ * Limitation: if the process writes to memory during a Redis outage and Redis
+ * later reconnects, old in-memory entries can remain until TTL expiry because
+ * delete/invalidate operations route to the currently active backend.
+ */
 const memStore = new Map<string, MemEntry>();
 
 // Evict expired entries every minute

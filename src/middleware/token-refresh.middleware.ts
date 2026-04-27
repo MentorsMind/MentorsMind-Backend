@@ -21,7 +21,7 @@ export const handleTokenRefresh = async (
       return;
     }
 
-    const fingerprint = JwtUtils.getDeviceFingerprint(req);
+    const fingerprint = JwtUtils.getDeviceFingerprint(req) ?? undefined;
 
     try {
       const tokens = await TokenService.rotateRefreshToken(
