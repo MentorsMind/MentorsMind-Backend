@@ -17,11 +17,18 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { entropyToMnemonic, validateMnemonic } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
 import {
+  clearMnemonicBackup,
   loadSecuritySettings,
+  loadMnemonicBackup,
   saveSecuritySettings,
+  saveMnemonicBackup,
   clearSecuritySettings,
   DEFAULT_SECURITY_SETTINGS,
+  type MnemonicWordCount,
+  type MnemonicBackupRecord,
   type WalletSecuritySettings,
 } from './walletSecurityStorage';
 
@@ -129,6 +136,29 @@ export interface WalletState {
 
   // Whether the wallet is currently locked due to inactivity timeout
   isLocked: boolean;
+  mnemonicSetup: WalletMnemonicSetupState;
+}
+
+export interface MnemonicBackupChecklist {
+  writtenDown: boolean;
+  storedOffline: boolean;
+  understandRecoveryRisk: boolean;
+}
+
+export interface MnemonicBackupChallenge {
+  index: number;
+  position: number;
+}
+
+export interface WalletMnemonicSetupState {
+  words: string[];
+  wordCount: MnemonicWordCount | null;
+  generatedAt: string | null;
+  isBackedUp: boolean;
+  hasEncryptedBackup: boolean;
+  encryptedBackupSavedAt: string | null;
+  checklist: MnemonicBackupChecklist;
+  challenges: MnemonicBackupChallenge[];
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +191,58 @@ const INITIAL_STATE: WalletState = {
   isSecuritySettingsLoading: true, // true until first load completes
   error: null,
   isLocked: false,
+  mnemonicSetup: {
+    words: [],
+    wordCount: null,
+    generatedAt: null,
+    isBackedUp: false,
+    hasEncryptedBackup: false,
+    encryptedBackupSavedAt: null,
+    checklist: {
+      writtenDown: false,
+      storedOffline: false,
+      understandRecoveryRisk: false,
+    },
+    challenges: [],
+  },
 };
+
+const DEFAULT_MNEMONIC_CHECKLIST: MnemonicBackupChecklist = {
+  writtenDown: false,
+  storedOffline: false,
+  understandRecoveryRisk: false,
+};
+
+function secureRandomInt(maxExclusive: number): number {
+  if (!Number.isInteger(maxExclusive) || maxExclusive <= 0) {
+    throw new Error('maxExclusive must be a positive integer.');
+  }
+
+  const maxUint32 = 0xffffffff;
+  const threshold = maxUint32 - (maxUint32 % maxExclusive);
+  const randomBytes = new Uint32Array(1);
+
+  do {
+    crypto.getRandomValues(randomBytes);
+  } while (randomBytes[0] >= threshold);
+
+  return randomBytes[0] % maxExclusive;
+}
+
+function createBackupChallenges(wordCount: MnemonicWordCount): MnemonicBackupChallenge[] {
+  const first = secureRandomInt(wordCount);
+  let second = secureRandomInt(wordCount);
+  while (second === first) {
+    second = secureRandomInt(wordCount);
+  }
+
+  return [first, second]
+    .sort((a, b) => a - b)
+    .map((index) => ({
+      index,
+      position: index + 1,
+    }));
+}
 
 // ---------------------------------------------------------------------------
 // Internal fetch helper
@@ -582,6 +663,7 @@ export function useWallet(options: UseWalletOptions) {
 
   const resetWallet = useCallback(() => {
     clearSecuritySettings();
+    clearMnemonicBackup();
     if (lockTimerRef.current) {
       clearTimeout(lockTimerRef.current);
     }
@@ -592,6 +674,186 @@ export function useWallet(options: UseWalletOptions) {
     });
   }, []);
 
+  const generateMnemonic = useCallback(
+    (wordCount: MnemonicWordCount = 12): string[] => {
+      if (wordCount !== 12 && wordCount !== 24) {
+        throw new Error('Mnemonic word count must be either 12 or 24.');
+      }
+
+      const entropySize = wordCount === 24 ? 32 : 16;
+      const entropy = crypto.getRandomValues(new Uint8Array(entropySize));
+      const mnemonic = entropyToMnemonic(entropy, wordlist);
+      const words = mnemonic.trim().toLowerCase().split(/\s+/);
+
+      if (words.length !== wordCount || !validateMnemonic(mnemonic, wordlist)) {
+        throw new Error('Failed to generate a valid BIP39 mnemonic.');
+      }
+
+      setState((prev) => ({
+        ...prev,
+        mnemonicSetup: {
+          words,
+          wordCount,
+          generatedAt: new Date().toISOString(),
+          isBackedUp: false,
+          hasEncryptedBackup: false,
+          encryptedBackupSavedAt: null,
+          checklist: { ...DEFAULT_MNEMONIC_CHECKLIST },
+          challenges: createBackupChallenges(wordCount),
+        },
+      }));
+
+      return words;
+    },
+    [],
+  );
+
+  const updateMnemonicBackupChecklist = useCallback(
+    (updates: Partial<MnemonicBackupChecklist>): void => {
+      setState((prev) => ({
+        ...prev,
+        mnemonicSetup: (() => {
+          const checklist = {
+            ...prev.mnemonicSetup.checklist,
+            ...updates,
+          };
+          return {
+            ...prev.mnemonicSetup,
+            checklist,
+            isBackedUp:
+              prev.mnemonicSetup.isBackedUp &&
+              checklist.writtenDown &&
+              checklist.storedOffline &&
+              checklist.understandRecoveryRisk,
+          };
+        })(),
+      }));
+    },
+    [],
+  );
+
+  const clearEncryptedMnemonicBackup = useCallback(() => {
+    clearMnemonicBackup();
+    setState((prev) => ({
+      ...prev,
+      mnemonicSetup: {
+        ...prev.mnemonicSetup,
+        hasEncryptedBackup: false,
+        encryptedBackupSavedAt: null,
+      },
+    }));
+  }, []);
+
+  const verifyMnemonicBackup = useCallback(
+    (answers: Record<number, string>): boolean => {
+      const { words, challenges, checklist } = state.mnemonicSetup;
+      if (!words.length || !challenges.length) {
+        throw new Error('Generate a mnemonic before backup verification.');
+      }
+      if (
+        !checklist.writtenDown ||
+        !checklist.storedOffline ||
+        !checklist.understandRecoveryRisk
+      ) {
+        throw new Error(
+          'Confirm backup checklist (written down, stored offline, recovery risk) first.',
+        );
+      }
+
+      const isValid = challenges.every(({ index }) => {
+        const answer = (answers[index] ?? '').trim().toLowerCase();
+        return answer.length > 0 && answer === words[index];
+      });
+
+      if (!isValid) return false;
+
+      setState((prev) => ({
+        ...prev,
+        mnemonicSetup: {
+          ...prev.mnemonicSetup,
+          isBackedUp: true,
+        },
+      }));
+
+      return true;
+    },
+    [state.mnemonicSetup],
+  );
+
+  const saveEncryptedMnemonic = useCallback(
+    async (passphrase: string): Promise<void> => {
+      const { words, wordCount, isBackedUp } = state.mnemonicSetup;
+      if (!words.length || !wordCount) {
+        throw new Error('No mnemonic available to back up.');
+      }
+      if (!isBackedUp) {
+        throw new Error(
+          'Mnemonic must be manually verified before encrypted backup is allowed.',
+        );
+      }
+
+      const { savedAt } = await saveMnemonicBackup(
+        words.join(' '),
+        passphrase,
+        wordCount,
+      );
+
+      setState((prev) => ({
+        ...prev,
+        mnemonicSetup: {
+          ...prev.mnemonicSetup,
+          hasEncryptedBackup: true,
+          encryptedBackupSavedAt: savedAt,
+        },
+      }));
+    },
+    [state.mnemonicSetup],
+  );
+
+  const loadEncryptedMnemonic = useCallback(
+    async (passphrase: string): Promise<MnemonicBackupRecord | null> => {
+      const backup = await loadMnemonicBackup(passphrase);
+      if (!backup) return null;
+
+      setState((prev) => ({
+        ...prev,
+        mnemonicSetup: {
+          words: backup.words,
+          wordCount: backup.wordCount,
+          generatedAt: backup.savedAt,
+          isBackedUp: true,
+          hasEncryptedBackup: true,
+          encryptedBackupSavedAt: backup.savedAt,
+          checklist: {
+            writtenDown: true,
+            storedOffline: true,
+            understandRecoveryRisk: true,
+          },
+          challenges: createBackupChallenges(backup.wordCount),
+        },
+      }));
+
+      return backup;
+    },
+    [],
+  );
+
+  const clearMnemonicSetup = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      mnemonicSetup: {
+        words: [],
+        wordCount: null,
+        generatedAt: null,
+        isBackedUp: false,
+        hasEncryptedBackup: false,
+        encryptedBackupSavedAt: null,
+        checklist: { ...DEFAULT_MNEMONIC_CHECKLIST },
+        challenges: [],
+      },
+    }));
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Exposed API
   // ---------------------------------------------------------------------------
@@ -599,6 +861,8 @@ export function useWallet(options: UseWalletOptions) {
   return {
     // State
     ...state,
+    isMnemonicBackupRequired:
+      state.mnemonicSetup.words.length > 0 && !state.mnemonicSetup.isBackedUp,
 
     // Security settings actions
     updateSecuritySettings,
@@ -614,6 +878,15 @@ export function useWallet(options: UseWalletOptions) {
     fetchEarnings,
     fetchPayoutRequests,
     createPayoutRequest,
+
+    // Mnemonic generation and backup actions
+    generateMnemonic,
+    updateMnemonicBackupChecklist,
+    verifyMnemonicBackup,
+    saveEncryptedMnemonic,
+    loadEncryptedMnemonic,
+    clearEncryptedMnemonicBackup,
+    clearMnemonicSetup,
 
     // Cleanup
     resetWallet,
