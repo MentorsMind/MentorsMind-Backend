@@ -13,6 +13,7 @@ import reviewsRoutes from "./reviews.routes";
 import conversationsRoutes from "./conversations.routes";
 import messageSearchRoutes from "./messageSearch.routes";
 import integrationsRoutes from "./integrations.routes";
+import consentRoutes from "./consent.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -54,6 +55,7 @@ router.use("/reviews", reviewsRoutes);
 router.use("/conversations", conversationsRoutes);
 router.use("/messages", messageSearchRoutes);
 router.use("/integrations", integrationsRoutes);
+router.use("/consent", consentRoutes);
 
 // JWKS public endpoint — no auth required
 router.get("/.well-known/jwks.json", asyncHandler(JwksController.getJwks));
