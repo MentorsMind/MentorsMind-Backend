@@ -238,63 +238,81 @@ export const ReviewsService = {
     reviewerId: string,
     payload: UpdateReviewPayload,
   ): Promise<ReviewRecord> {
-    // Fetch review by ID
-    const reviewResult = await pool.query<ReviewRecord>(
-      `SELECT id, booking_id, reviewer_id, reviewee_id, rating, comment,
-              is_published, is_flagged, helpful_count, created_at, updated_at
-       FROM reviews WHERE id = $1`,
-      [reviewId],
-    );
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    if (reviewResult.rows.length === 0) {
-      throw createError("Review not found", 404);
-    }
-
-    const review = reviewResult.rows[0];
-
-    // Verify ownership
-    if (review.reviewer_id !== reviewerId) {
-      throw createError("You are not authorized to edit this review", 403);
-    }
-
-    // Check 48-hour edit window
-    const createdAt = new Date(review.created_at);
-    const now = new Date();
-    const diffMs = now.getTime() - createdAt.getTime();
-    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
-    if (diffMs > fortyEightHoursMs) {
-      throw createError(
-        "The edit window for this review has expired (48 hours)",
-        403,
+      // Fetch review by ID
+      const reviewResult = await client.query<ReviewRecord>(
+        `SELECT id, booking_id, reviewer_id, reviewee_id, rating, comment,
+                is_published, is_flagged, helpful_count, created_at, updated_at
+         FROM reviews WHERE id = $1`,
+        [reviewId],
       );
+
+      if (reviewResult.rows.length === 0) {
+        throw createError("Review not found", 404);
+      }
+
+      const review = reviewResult.rows[0];
+
+      // Verify ownership
+      if (review.reviewer_id !== reviewerId) {
+        throw createError("You are not authorized to edit this review", 403);
+      }
+
+      // Check 48-hour edit window
+      const createdAt = new Date(review.created_at);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+
+      if (diffMs > fortyEightHoursMs) {
+        throw createError(
+          "The edit window for this review has expired (48 hours)",
+          403,
+        );
+      }
+
+      // Build update fields
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      if (payload.rating !== undefined) {
+        fields.push(`rating = $${idx++}`);
+        values.push(payload.rating);
+      }
+      if (payload.comment !== undefined) {
+        fields.push(`comment = $${idx++}`);
+        values.push(payload.comment);
+      }
+
+      fields.push(`updated_at = NOW()`);
+      values.push(reviewId);
+
+      const updateResult = await client.query<ReviewRecord>(
+        `UPDATE reviews SET ${fields.join(", ")} WHERE id = $${idx}
+         RETURNING id, booking_id, reviewer_id, reviewee_id, rating, comment,
+                   is_published, is_flagged, helpful_count, created_at, updated_at`,
+        values,
+      );
+
+      const updatedReview = updateResult.rows[0];
+
+      // Recalculate mentor rating if rating was updated
+      if (payload.rating !== undefined) {
+        await recalculateMentorRating(review.reviewee_id, client);
+      }
+
+      await client.query("COMMIT");
+      return updatedReview;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // Build update fields
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let idx = 1;
-
-    if (payload.rating !== undefined) {
-      fields.push(`rating = $${idx++}`);
-      values.push(payload.rating);
-    }
-    if (payload.comment !== undefined) {
-      fields.push(`comment = $${idx++}`);
-      values.push(payload.comment);
-    }
-
-    fields.push(`updated_at = NOW()`);
-    values.push(reviewId);
-
-    const updateResult = await pool.query<ReviewRecord>(
-      `UPDATE reviews SET ${fields.join(", ")} WHERE id = $${idx}
-       RETURNING id, booking_id, reviewer_id, reviewee_id, rating, comment,
-                 is_published, is_flagged, helpful_count, created_at, updated_at`,
-      values,
-    );
-
-    return updateResult.rows[0];
   },
 
   // -------------------------------------------------------------------------
