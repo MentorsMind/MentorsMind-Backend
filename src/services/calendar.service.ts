@@ -10,12 +10,12 @@ import {
 } from "../utils/ical.utils";
 import { logger } from "../utils/logger";
 import { EncryptionUtil } from "../utils/encryption.utils";
-import { NotificationService } from "./notification.service";
 import {
-  NotificationType,
+  NotificationService,
   NotificationChannel,
   NotificationPriority,
-} from "../models/notifications.model";
+} from "./notification.service";
+import { NotificationType } from "../models/notifications.model";
 
 const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
 
@@ -92,8 +92,7 @@ async function disconnectExpiredCalendar(userId: string): Promise<void> {
       channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
       priority: NotificationPriority.HIGH,
       title: "Calendar Connection Expired",
-      message:
-        "Your Google Calendar connection has expired. Please reconnect.",
+      message: "Your Google Calendar connection has expired. Please reconnect.",
     });
   } catch (notifyErr) {
     logger.error("Failed to send calendar expiry notification", {
@@ -224,7 +223,10 @@ export const CalendarService = {
   /**
    * Verify and clear the CSRF token from Redis
    */
-  async verifyAndClearCsrfToken(userId: string, csrf: string): Promise<boolean> {
+  async verifyAndClearCsrfToken(
+    userId: string,
+    csrf: string,
+  ): Promise<boolean> {
     const key = `google_oauth_csrf:${userId}`;
     const storedCsrf = await redis.get(key);
 

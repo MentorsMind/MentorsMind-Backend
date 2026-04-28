@@ -3,10 +3,13 @@ import { DisputeStateMachine } from "./dispute-state-machine.service";
 import { AuditLogModel } from "../models/audit-log.model";
 import { SorobanEscrowService } from "./sorobanEscrow.service";
 import { DatabaseService } from "./database.service";
-import { NotificationService } from "./notification.service";
-import { NotificationType, NotificationChannel, NotificationPriority } from "../models/notifications.model";
+import {
+  NotificationService,
+  NotificationChannel,
+  NotificationPriority,
+} from "./notification.service";
+import { NotificationType } from "../models/notifications.model";
 import pool from "../config/database";
-import { logger } from "../utils/logger";
 
 export class DisputeService {
   /**
@@ -39,14 +42,15 @@ export class DisputeService {
     const { rows: bookingRows } = await pool.query<{
       mentor_id: string;
       mentee_id: string;
-    }>(
-      `SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`,
-      [transactionId],
-    );
+    }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
+      transactionId,
+    ]);
     const booking = bookingRows[0];
     const otherPartyId =
       booking &&
-      (booking.mentor_id === reporterId ? booking.mentee_id : booking.mentor_id);
+      (booking.mentor_id === reporterId
+        ? booking.mentee_id
+        : booking.mentor_id);
 
     const openedNotifications = [
       NotificationService.sendNotification({
@@ -136,10 +140,9 @@ export class DisputeService {
         const { rows: escalateBookingRows } = await pool.query<{
           mentor_id: string;
           mentee_id: string;
-        }>(
-          `SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`,
-          [dispute.transaction_id],
-        );
+        }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
+          dispute.transaction_id,
+        ]);
         const escalateBooking = escalateBookingRows[0];
         const escalateOtherPartyId =
           escalateBooking &&
