@@ -4,6 +4,48 @@ import { escrowCheckQueue } from "../queues/escrow-check.queue";
 import { notificationCleanupQueue } from "../queues/notificationCleanup.queue";
 import { VerificationService } from "../services/verification.service";
 import { logger } from "../utils/logger.utils";
+import { Queue, JobsOptions } from "bullmq";
+
+/**
+ * Add a repeatable job only if it doesn't already exist.
+ * Prevents duplicate repeatable jobs on server restarts.
+ */
+async function addRepeatableJobIfNotExists(
+  queue: Queue,
+  jobName: string,
+  data: any,
+  options: JobsOptions,
+): Promise<void> {
+  const existingJobs = await queue.getRepeatableJobs();
+  const jobId = options.jobId;
+  
+  // Check if job already exists by jobId
+  const exists = existingJobs.find(job => job.id === jobId);
+  
+  if (!exists) {
+    await queue.add(jobName, data, options);
+    logger.info(`Added repeatable job: ${jobName} (${jobId})`);
+  } else {
+    logger.info(`Repeatable job already exists: ${jobName} (${jobId})`);
+  }
+}
+
+/**
+ * Log the count of repeatable jobs for each queue
+ */
+async function logRepeatableJobCounts(): Promise<void> {
+  const queues = [
+    { name: "report", queue: reportQueue },
+    { name: "sessionReminder", queue: sessionReminderQueue },
+    { name: "escrowCheck", queue: escrowCheckQueue },
+    { name: "notificationCleanup", queue: notificationCleanupQueue },
+  ];
+
+  for (const { name, queue } of queues) {
+    const repeatableJobs = await queue.getRepeatableJobs();
+    logger.info(`Queue ${name}: ${repeatableJobs.length} repeatable jobs`);
+  }
+}
 
 /**
  * Register repeatable jobs.
@@ -12,7 +54,8 @@ import { logger } from "../utils/logger.utils";
  */
 export async function startScheduler(): Promise<void> {
   // Weekly earnings report — every Monday at 08:00 UTC
-  await reportQueue.add(
+  await addRepeatableJobIfNotExists(
+    reportQueue,
     "weekly-earnings-scheduled",
     {
       reportType: "weekly-earnings",
@@ -26,7 +69,8 @@ export async function startScheduler(): Promise<void> {
   );
 
   // Session reminders — every 5 minutes
-  await sessionReminderQueue.add(
+  await addRepeatableJobIfNotExists(
+    sessionReminderQueue,
     "session-reminder-scheduled",
     { jobType: "session-reminder" },
     {
@@ -36,7 +80,8 @@ export async function startScheduler(): Promise<void> {
   );
 
   // Hourly escrow eligibility check — releases escrows past the 48h window
-  await escrowCheckQueue.add(
+  await addRepeatableJobIfNotExists(
+    escrowCheckQueue,
     "escrow-check-scheduled",
     { jobType: "escrow-check-cron", triggeredAt: new Date().toISOString() },
     {
@@ -46,7 +91,8 @@ export async function startScheduler(): Promise<void> {
   );
 
   // Notification cleanup — daily at 02:00 UTC (delete expired notifications)
-  await notificationCleanupQueue.add(
+  await addRepeatableJobIfNotExists(
+    notificationCleanupQueue,
     "notification-cleanup-scheduled",
     { jobType: "notification-cleanup" },
     {
@@ -54,6 +100,9 @@ export async function startScheduler(): Promise<void> {
       jobId: "notification-cleanup-recurring",
     },
   );
+
+  // Log repeatable job counts per queue
+  await logRepeatableJobCounts();
 
   logger.info(
     "Job scheduler started — weekly earnings, session reminders, escrow check, and notification cleanup registered",
