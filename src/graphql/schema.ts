@@ -1,4 +1,4 @@
-import { gql } from '@apollo/server';
+import { gql } from "@apollo/server";
 
 const typeDefs = gql`
   enum BookingStatus {
@@ -45,7 +45,7 @@ const typeDefs = gql`
   }
 
   input PaginationInput {
-    page: Int = 1
+    cursor: String
     limit: Int = 10
   }
 
@@ -55,20 +55,24 @@ const typeDefs = gql`
     mentor(id: ID!): Mentor
     mentors(
       filter: MentorFilterInput
-      page: Int = 1
+      cursor: String
       limit: Int = 10
       sortBy: MentorSortBy = CREATED_AT
       sortOrder: SortOrder = DESC
-    ): MentorListResult
+    ): MentorConnection
 
     booking(id: ID!): Booking
-    bookings(status: BookingStatus, page: Int = 1, limit: Int = 10): BookingListResult
+    bookings(
+      status: BookingStatus
+      cursor: String
+      limit: Int = 10
+    ): BookingListResult
 
     payment(id: ID!): Payment
     payments(
       status: PaymentStatus
       type: PaymentType
-      page: Int = 1
+      cursor: String
       limit: Int = 10
     ): PaymentListResult
   }
@@ -81,7 +85,11 @@ const typeDefs = gql`
     bio: String
     avatarUrl: String
     wallet: Wallet
-    bookings(status: BookingStatus, page: Int = 1, limit: Int = 10): BookingListResult
+    bookings(
+      status: BookingStatus
+      cursor: String
+      limit: Int = 10
+    ): BookingListResult
     payments: [Payment!]!
     reviews: [Review!]!
   }
@@ -104,7 +112,11 @@ const typeDefs = gql`
     totalReviews: Int
     kycVerified: Boolean
     wallet: Wallet
-    bookings(status: BookingStatus, page: Int = 1, limit: Int = 10): BookingListResult
+    bookings(
+      status: BookingStatus
+      cursor: String
+      limit: Int = 10
+    ): BookingListResult
     payments: [Payment!]!
     reviews: [Review!]!
   }
@@ -140,6 +152,8 @@ const typeDefs = gql`
   type BookingListResult {
     bookings: [Booking!]!
     total: Int!
+    nextCursor: String
+    hasMore: Boolean!
   }
 
   type Payment {
@@ -155,6 +169,31 @@ const typeDefs = gql`
   type PaymentListResult {
     payments: [Payment!]!
     total: Int!
+    nextCursor: String
+    hasMore: Boolean!
+  }
+
+  type MentorEdge {
+    node: Mentor!
+    cursor: String!
+  }
+
+  type PageInfo {
+    hasNextPage: Boolean!
+    endCursor: String
+  }
+
+  type MentorConnection {
+    edges: [MentorEdge!]!
+    pageInfo: PageInfo!
+    total: Int!
+  }
+
+  type MentorListResult {
+    mentors: [Mentor!]!
+    total: Int!
+    nextCursor: String
+    hasMore: Boolean!
   }
 
   type Review {
@@ -165,14 +204,6 @@ const typeDefs = gql`
     rating: Int!
     comment: String
     createdAt: String!
-  }
-
-  type MentorListResult {
-    mentors: [Mentor!]!
-    total: Int!
-    page: Int!
-    limit: Int!
-    totalPages: Int!
   }
 `;
 

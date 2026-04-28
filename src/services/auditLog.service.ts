@@ -3,8 +3,9 @@
  * Provides tamper-evident logging for all sensitive actions
  */
 
-import pool from '../config/database';
-import { Request } from 'express';
+import pool from "../config/database";
+import { Request } from "express";
+import { anonymizeIp } from "../utils/sanitization.utils";
 
 export interface AuditLogEntry {
   id: string;
@@ -56,11 +57,12 @@ export interface PaginatedAuditLogs {
  * Extract client IP from request
  */
 export const extractIpAddress = (req: Request): string => {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (typeof forwardedFor === 'string') {
-    return forwardedFor.split(',')[0].trim();
-  }
-  return req.ip || req.socket.remoteAddress || 'unknown';
+  const forwardedFor = req.headers["x-forwarded-for"];
+  const raw =
+    typeof forwardedFor === "string"
+      ? forwardedFor.split(",")[0].trim()
+      : req.ip || req.socket.remoteAddress || "unknown";
+  return anonymizeIp(raw);
 };
 
 export const AuditLogService = {
@@ -102,12 +104,15 @@ export const AuditLogService = {
     action: string,
     resourceType: string,
     resourceId?: string | null,
-    changes?: { oldValue?: Record<string, any>; newValue?: Record<string, any> },
-    metadata?: Record<string, any>
+    changes?: {
+      oldValue?: Record<string, any>;
+      newValue?: Record<string, any>;
+    },
+    metadata?: Record<string, any>,
   ): Promise<AuditLogEntry> {
     const userId = (req as any).user?.id || null;
     const ipAddress = extractIpAddress(req);
-    const userAgent = req.headers['user-agent'] || null;
+    const userAgent = req.headers["user-agent"] || null;
 
     return this.log({
       userId,
@@ -155,7 +160,8 @@ export const AuditLogService = {
       values.push(filters.endDate);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     // Get total count
     const countQuery = `SELECT COUNT(*) FROM audit_logs ${whereClause}`;
@@ -191,53 +197,55 @@ export const AuditLogService = {
    */
   async exportToCSV(filters: AuditLogFilters): Promise<string> {
     const result = await this.query({ ...filters, limit: 10000, page: 1 });
-    
+
     // CSV header
     const headers = [
-      'ID',
-      'User ID',
-      'Action',
-      'Resource Type',
-      'Resource ID',
-      'Old Value',
-      'New Value',
-      'IP Address',
-      'User Agent',
-      'Metadata',
-      'Created At',
-      'Record Hash'
+      "ID",
+      "User ID",
+      "Action",
+      "Resource Type",
+      "Resource ID",
+      "Old Value",
+      "New Value",
+      "IP Address",
+      "User Agent",
+      "Metadata",
+      "Created At",
+      "Record Hash",
     ];
 
-    const csvRows = [headers.join(',')];
+    const csvRows = [headers.join(",")];
 
     // CSV data rows
     for (const log of result.logs) {
       const row = [
         log.id,
-        log.user_id || '',
+        log.user_id || "",
         log.action,
         log.resource_type,
-        log.resource_id || '',
-        log.old_value ? JSON.stringify(log.old_value).replace(/"/g, '""') : '',
-        log.new_value ? JSON.stringify(log.new_value).replace(/"/g, '""') : '',
-        log.ip_address || '',
-        log.user_agent ? log.user_agent.replace(/"/g, '""') : '',
+        log.resource_id || "",
+        log.old_value ? JSON.stringify(log.old_value).replace(/"/g, '""') : "",
+        log.new_value ? JSON.stringify(log.new_value).replace(/"/g, '""') : "",
+        log.ip_address || "",
+        log.user_agent ? log.user_agent.replace(/"/g, '""') : "",
         JSON.stringify(log.metadata).replace(/"/g, '""'),
         log.created_at.toISOString(),
-        log.record_hash || ''
+        log.record_hash || "",
       ];
-      
+
       // Wrap fields in quotes and escape internal quotes
-      csvRows.push(row.map(field => `"${field}"`).join(','));
+      csvRows.push(row.map((field) => `"${field}"`).join(","));
     }
 
-    return csvRows.join('\n');
+    return csvRows.join("\n");
   },
 
   /**
    * Verify audit log chain integrity
    */
-  async verifyChainIntegrity(limit = 1000): Promise<{ valid: boolean; errors: string[] }> {
+  async verifyChainIntegrity(
+    limit = 1000,
+  ): Promise<{ valid: boolean; errors: string[] }> {
     const query = `
       SELECT id, user_id, action, resource_type, resource_id,
              old_value, new_value, created_at, previous_hash, record_hash
@@ -245,17 +253,19 @@ export const AuditLogService = {
       ORDER BY created_at ASC, id ASC
       LIMIT $1
     `;
-    
+
     const { rows } = await pool.query<AuditLogEntry>(query, [limit]);
     const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
       const current = rows[i];
-      
+
       if (i > 0) {
         const previous = rows[i - 1];
         if (current.previous_hash !== previous.record_hash) {
-          errors.push(`Chain break at record ${current.id}: previous_hash mismatch`);
+          errors.push(
+            `Chain break at record ${current.id}: previous_hash mismatch`,
+          );
         }
       }
     }
@@ -270,9 +280,9 @@ export const AuditLogService = {
    * Get audit log statistics
    */
   async getStats(startDate?: string, endDate?: string): Promise<any> {
-    let whereClause = '';
+    let whereClause = "";
     const values: any[] = [];
-    
+
     if (startDate || endDate) {
       const conditions: string[] = [];
       if (startDate) {
@@ -283,7 +293,7 @@ export const AuditLogService = {
         conditions.push(`created_at <= $${values.length + 1}`);
         values.push(endDate);
       }
-      whereClause = `WHERE ${conditions.join(' AND ')}`;
+      whereClause = `WHERE ${conditions.join(" AND ")}`;
     }
 
     const query = `

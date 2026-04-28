@@ -2,6 +2,7 @@ import { Response } from "express";
 import pool from "../config/database";
 import { AuthenticatedRequest } from "../types/api.types";
 import { ResponseUtil } from "../utils/response.utils";
+import { anonymizeIp } from "../utils/sanitization.utils";
 
 export interface ConsentRecord {
   id: string;
@@ -47,10 +48,11 @@ export const ConsentController = {
       return;
     }
 
-    const ipAddress =
-      (req.headers["x-forwarded-for"] as string) ||
-      req.socket.remoteAddress ||
-      "";
+    const ipAddress = anonymizeIp(
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+        req.socket.remoteAddress ||
+        "",
+    );
     const userAgent = req.headers["user-agent"] || "";
 
     const query = `
