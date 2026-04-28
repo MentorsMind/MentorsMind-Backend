@@ -137,7 +137,9 @@ export async function runMaintenanceTasks(): Promise<void> {
     const deletions = await accountDeletionJob.run();
     if (deletions.processed > 0) {
       logger.info("Maintenance: processed account deletions", {
-        count: deletions.processed,
+        total: deletions.processed,
+        successful: deletions.successful,
+        failed: deletions.failed,
       });
     }
   } catch (error) {

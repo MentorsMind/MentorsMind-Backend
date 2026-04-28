@@ -79,6 +79,48 @@ const MENTOR_COLUMNS = `
 
 export const MentorsService = {
   /**
+   * Build filter conditions for mentor queries
+   * Returns conditions array and values array for parameterized queries
+   */
+  buildMentorFilters(
+    query: Omit<ListMentorsQuery, 'cursor' | 'limit' | 'sortBy' | 'sortOrder'>,
+    startIdx: number = 1,
+  ): { conditions: string[]; values: unknown[]; nextIdx: number } {
+    const { search, expertise, minRate, maxRate, isAvailable } = query;
+    const conditions: string[] = ["role = 'mentor'", 'is_active = true'];
+    const values: unknown[] = [];
+    let idx = startIdx;
+
+    if (search) {
+      conditions.push(`(first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR bio ILIKE $${idx})`);
+      values.push(`%${search}%`);
+      idx++;
+    }
+    if (expertise) {
+      conditions.push(`$${idx} = ANY(expertise)`);
+      values.push(expertise);
+      idx++;
+    }
+    if (minRate !== undefined) {
+      conditions.push(`hourly_rate >= $${idx}`);
+      values.push(minRate);
+      idx++;
+    }
+    if (maxRate !== undefined) {
+      conditions.push(`hourly_rate <= $${idx}`);
+      values.push(maxRate);
+      idx++;
+    }
+    if (isAvailable !== undefined) {
+      conditions.push(`is_available = $${idx}`);
+      values.push(isAvailable);
+      idx++;
+    }
+
+    return { conditions, values, nextIdx: idx };
+  },
+
+  /**
    * Create a mentor profile (promotes user to mentor role)
    */
   async createProfile(userId: string, payload: CreateMentorProfileInput): Promise<MentorRecord | null> {
@@ -170,76 +212,51 @@ export const MentorsService = {
    */
   async list(query: ListMentorsQuery): Promise<MentorListResult> {
     const cacheKey = CacheKeys.mentorSearch(query);
-    
+
     return CacheService.wrap(
       cacheKey,
       CacheTTL.short,
       async () => {
-        const { cursor, limit, search, expertise, minRate, maxRate, isAvailable, sortBy, sortOrder } = query;
-        
-        const conditions: string[] = ["role = 'mentor'", 'is_active = true'];
-        const values: unknown[] = [];
-        let idx = 1;
+        const { cursor, limit } = query;
+
+        // Build base filters (without cursor)
+        const baseFilters = this.buildMentorFilters(query);
+
+        // Add cursor condition for data query
+        const dataConditions = [...baseFilters.conditions];
+        const dataValues = [...baseFilters.values];
+        let idx = baseFilters.nextIdx;
 
         if (cursor) {
           const decoded = PaginationUtil.decodeCursor(cursor);
           if (decoded) {
-            conditions.push(`(created_at, id) < ($${idx}, $${idx + 1})`);
-            values.push(decoded.created_at, decoded.id);
+            dataConditions.push(`(created_at, id) < ($${idx}, $${idx + 1})`);
+            dataValues.push(decoded.created_at, decoded.id);
             idx += 2;
           }
         }
 
-        if (search) {
-          conditions.push(`(first_name ILIKE $${idx} OR last_name ILIKE $${idx} OR bio ILIKE $${idx})`);
-          values.push(`%${search}%`);
-          idx++;
-        }
-        if (expertise) {
-          conditions.push(`$${idx} = ANY(expertise)`);
-          values.push(expertise);
-          idx++;
-        }
-        if (minRate !== undefined) {
-          conditions.push(`hourly_rate >= $${idx++}`);
-          values.push(minRate);
-        }
-        if (maxRate !== undefined) {
-          conditions.push(`hourly_rate <= $${idx++}`);
-          values.push(maxRate);
-        }
-        if (isAvailable !== undefined) {
-          conditions.push(`is_available = $${idx++}`);
-          values.push(isAvailable);
-        }
+        const dataWhereClause = `WHERE ${dataConditions.join(' AND ')}`;
+        const countWhereClause = `WHERE ${baseFilters.conditions.join(' AND ')}`;
 
-        const whereClause = `WHERE ${conditions.join(' AND ')}`;
-        
         // Use a fixed sort order for cursor-based pagination consistency
-        // To support arbitrary sortBy with cursors is more complex.
-        // Given the requirement "Cursor = base64-encoded { id, created_at }", 
-        // we assume created_at DESC as the primary sort.
         const orderClause = `ORDER BY created_at DESC, id DESC`;
 
         const [dataResult, countResult] = await Promise.all([
           pool.query<MentorRecord>(
-            `SELECT ${MENTOR_COLUMNS} FROM users ${whereClause} ${orderClause} LIMIT $${idx}`,
-            [...values, limit + 1],
+            `SELECT ${MENTOR_COLUMNS} FROM users ${dataWhereClause} ${orderClause} LIMIT $${idx}`,
+            [...dataValues, limit + 1],
           ),
           pool.query<{ count: string }>(
-            `SELECT COUNT(*) FROM users WHERE role = 'mentor' AND is_active = true ${search ? `AND (first_name ILIKE $1 OR last_name ILIKE $1 OR bio ILIKE $1)` : ''} ${expertise ? `AND $${search ? 2 : 1} = ANY(expertise)` : ''}`,
-            search ? (expertise ? [`%${search}%`, expertise] : [`%${search}%`]) : (expertise ? [expertise] : []),
+            `SELECT COUNT(*) FROM users ${countWhereClause}`,
+            baseFilters.values,
           ),
         ]);
 
-        // Note: The countResult query above is simplified and might not match all filters perfectly if they are complex.
-        // For standard cursor-based pagination, sometimes we omit the total count if it's too expensive.
-        // However, the requirement says "total?: number" in response.
-        
         const rows = dataResult.rows;
         const has_more = rows.length > limit;
         const data = has_more ? rows.slice(0, limit) : rows;
-        
+
         const lastItem = data[data.length - 1];
         const next_cursor = has_more && lastItem ? PaginationUtil.encodeCursor(PaginationUtil.getCursorFromItem(lastItem)!) : null;
 
@@ -463,4 +480,4 @@ export const MentorsService = {
     );
     return { submitted: true, message: 'Verification request submitted successfully' };
   },
-};
+}

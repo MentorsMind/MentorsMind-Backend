@@ -145,6 +145,277 @@ describe("MentorsService", () => {
       expect(result.total).toBe(2);
       expect(mockCacheService.wrap).toHaveBeenCalled();
     });
+
+    it("should apply all filters including minRate, maxRate, and isAvailable to count query", async () => {
+      const query = {
+        limit: 10,
+        search: "JavaScript",
+        expertise: "React",
+        minRate: 30,
+        maxRate: 100,
+        isAvailable: true,
+      };
+
+      const mockMentors = [
+        { 
+          id: "mentor-1", 
+          first_name: "John", 
+          role: "mentor",
+          hourly_rate: 50,
+          is_available: true,
+          expertise: ["React", "JavaScript"],
+        },
+        { 
+          id: "mentor-2", 
+          first_name: "Jane", 
+          role: "mentor",
+          hourly_rate: 75,
+          is_available: true,
+          expertise: ["React", "Node.js"],
+        },
+      ];
+
+      // Mock the cache.wrap to execute the callback
+      mockCacheService.wrap.mockImplementation(async (_key, _ttl, callback) => {
+        return callback();
+      });
+
+      // Mock both queries: data query and count query
+      mockPool.query
+        .mockResolvedValueOnce({ rows: mockMentors }) // data query
+        .mockResolvedValueOnce({ rows: [{ count: "2" }] }); // count query
+
+      const result = await MentorsService.list(query);
+
+      expect(result.mentors).toHaveLength(2);
+      expect(result.total).toBe(2);
+      
+      // Verify that pool.query was called twice (data + count)
+      expect(mockPool.query).toHaveBeenCalledTimes(2);
+      
+      // Verify the count query includes all filters
+      const countQueryCall = mockPool.query.mock.calls[1];
+      const countQuery = countQueryCall[0] as string;
+      const countValues = countQueryCall[1] as unknown[];
+      
+      // Count query should include all filter conditions
+      expect(countQuery).toContain("role = 'mentor'");
+      expect(countQuery).toContain("is_active = true");
+      expect(countQuery).toContain("ILIKE"); // search filter
+      expect(countQuery).toContain("ANY(expertise)"); // expertise filter
+      expect(countQuery).toContain("hourly_rate >="); // minRate filter
+      expect(countQuery).toContain("hourly_rate <="); // maxRate filter
+      expect(countQuery).toContain("is_available ="); // isAvailable filter
+      
+      // Verify all filter values are passed to count query
+      expect(countValues).toContain(`%${query.search}%`);
+      expect(countValues).toContain(query.expertise);
+      expect(countValues).toContain(query.minRate);
+      expect(countValues).toContain(query.maxRate);
+      expect(countValues).toContain(query.isAvailable);
+    });
+
+    it("should return correct total count when only minRate and maxRate filters are applied", async () => {
+      const query = {
+        limit: 10,
+        minRate: 50,
+        maxRate: 150,
+      };
+
+      const mockMentors = [
+        { id: "mentor-1", hourly_rate: 75 },
+        { id: "mentor-2", hourly_rate: 100 },
+        { id: "mentor-3", hourly_rate: 125 },
+      ];
+
+      mockCacheService.wrap.mockImplementation(async (_key, _ttl, callback) => {
+        return callback();
+      });
+
+      mockPool.query
+        .mockResolvedValueOnce({ rows: mockMentors })
+        .mockResolvedValueOnce({ rows: [{ count: "3" }] });
+
+      const result = await MentorsService.list(query);
+
+      expect(result.total).toBe(3);
+      expect(result.mentors).toHaveLength(3);
+      
+      const countQueryCall = mockPool.query.mock.calls[1];
+      const countQuery = countQueryCall[0] as string;
+      const countValues = countQueryCall[1] as unknown[];
+      
+      expect(countQuery).toContain("hourly_rate >=");
+      expect(countQuery).toContain("hourly_rate <=");
+      expect(countValues).toContain(query.minRate);
+      expect(countValues).toContain(query.maxRate);
+    });
+
+    it("should return correct total count when only isAvailable filter is applied", async () => {
+      const query = {
+        limit: 10,
+        isAvailable: true,
+      };
+
+      const mockMentors = [
+        { id: "mentor-1", is_available: true },
+        { id: "mentor-2", is_available: true },
+      ];
+
+      mockCacheService.wrap.mockImplementation(async (_key, _ttl, callback) => {
+        return callback();
+      });
+
+      mockPool.query
+        .mockResolvedValueOnce({ rows: mockMentors })
+        .mockResolvedValueOnce({ rows: [{ count: "2" }] });
+
+      const result = await MentorsService.list(query);
+
+      expect(result.total).toBe(2);
+      expect(result.mentors).toHaveLength(2);
+      
+      const countQueryCall = mockPool.query.mock.calls[1];
+      const countQuery = countQueryCall[0] as string;
+      const countValues = countQueryCall[1] as unknown[];
+      
+      expect(countQuery).toContain("is_available =");
+      expect(countValues).toContain(query.isAvailable);
+    });
+
+    it("should verify total count matches actual filtered results for all filter combinations", async () => {
+      const query = {
+        limit: 10,
+        search: "mentor",
+        expertise: "TypeScript",
+        minRate: 40,
+        maxRate: 80,
+        isAvailable: false,
+      };
+
+      const mockMentors = [
+        { 
+          id: "mentor-1",
+          first_name: "Mentor One",
+          hourly_rate: 60,
+          is_available: false,
+          expertise: ["TypeScript"],
+        },
+      ];
+
+      mockCacheService.wrap.mockImplementation(async (_key, _ttl, callback) => {
+        return callback();
+      });
+
+      mockPool.query
+        .mockResolvedValueOnce({ rows: mockMentors })
+        .mockResolvedValueOnce({ rows: [{ count: "1" }] });
+
+      const result = await MentorsService.list(query);
+
+      // The total should match the actual number of mentors returned
+      expect(result.total).toBe(1);
+      expect(result.mentors).toHaveLength(1);
+      
+      // Verify both queries use the same base filters
+      const dataQueryCall = mockPool.query.mock.calls[0];
+      const countQueryCall = mockPool.query.mock.calls[1];
+      
+      const dataValues = dataQueryCall[1] as unknown[];
+      const countValues = countQueryCall[1] as unknown[];
+      
+      // Both queries should have the same filter values (excluding cursor and limit)
+      expect(countValues).toContain(`%${query.search}%`);
+      expect(countValues).toContain(query.expertise);
+      expect(countValues).toContain(query.minRate);
+      expect(countValues).toContain(query.maxRate);
+      expect(countValues).toContain(query.isAvailable);
+    });
+  });
+
+  describe("buildMentorFilters", () => {
+    it("should build filters with all parameters", () => {
+      const query = {
+        search: "test",
+        expertise: "React",
+        minRate: 30,
+        maxRate: 100,
+        isAvailable: true,
+      };
+
+      const result = MentorsService.buildMentorFilters(query, 1);
+
+      expect(result.conditions).toHaveLength(7); // 2 base + 5 filters
+      expect(result.conditions).toContain("role = 'mentor'");
+      expect(result.conditions).toContain("is_active = true");
+      expect(result.conditions.some(c => c.includes("ILIKE"))).toBe(true);
+      expect(result.conditions.some(c => c.includes("ANY(expertise)"))).toBe(true);
+      expect(result.conditions.some(c => c.includes("hourly_rate >="))).toBe(true);
+      expect(result.conditions.some(c => c.includes("hourly_rate <="))).toBe(true);
+      expect(result.conditions.some(c => c.includes("is_available ="))).toBe(true);
+      
+      expect(result.values).toHaveLength(5);
+      expect(result.values).toContain("%test%");
+      expect(result.values).toContain("React");
+      expect(result.values).toContain(30);
+      expect(result.values).toContain(100);
+      expect(result.values).toContain(true);
+      
+      expect(result.nextIdx).toBe(6); // started at 1, added 5 values
+    });
+
+    it("should build filters with only search parameter", () => {
+      const query = {
+        search: "mentor",
+      };
+
+      const result = MentorsService.buildMentorFilters(query, 1);
+
+      expect(result.conditions).toHaveLength(3); // 2 base + 1 filter
+      expect(result.values).toHaveLength(1);
+      expect(result.values[0]).toBe("%mentor%");
+      expect(result.nextIdx).toBe(2);
+    });
+
+    it("should build filters with only rate range", () => {
+      const query = {
+        minRate: 50,
+        maxRate: 150,
+      };
+
+      const result = MentorsService.buildMentorFilters(query, 1);
+
+      expect(result.conditions).toHaveLength(4); // 2 base + 2 filters
+      expect(result.values).toHaveLength(2);
+      expect(result.values).toContain(50);
+      expect(result.values).toContain(150);
+      expect(result.nextIdx).toBe(3);
+    });
+
+    it("should build filters with custom start index", () => {
+      const query = {
+        search: "test",
+        isAvailable: true,
+      };
+
+      const result = MentorsService.buildMentorFilters(query, 5);
+
+      expect(result.conditions.some(c => c.includes("$5"))).toBe(true);
+      expect(result.conditions.some(c => c.includes("$6"))).toBe(true);
+      expect(result.nextIdx).toBe(7);
+    });
+
+    it("should build base filters when no optional parameters provided", () => {
+      const query = {};
+
+      const result = MentorsService.buildMentorFilters(query, 1);
+
+      expect(result.conditions).toHaveLength(2); // only base conditions
+      expect(result.conditions).toContain("role = 'mentor'");
+      expect(result.conditions).toContain("is_active = true");
+      expect(result.values).toHaveLength(0);
+      expect(result.nextIdx).toBe(1);
+    });
   });
 
   describe("setAvailability", () => {
