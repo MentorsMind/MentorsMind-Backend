@@ -2,6 +2,8 @@ import { reportQueue } from "../queues/report.queue";
 import { sessionReminderQueue } from "../queues/sessionReminder.queue";
 import { escrowCheckQueue } from "../queues/escrow-check.queue";
 import { notificationCleanupQueue } from "../queues/notificationCleanup.queue";
+import { accountDeletionQueue } from "../queues/accountDeletion.queue";
+import { analyticsRefreshQueue } from "../queues/analyticsRefresh.queue";
 import { VerificationService } from "../services/verification.service";
 import { logger } from "../utils/logger.utils";
 
@@ -55,8 +57,28 @@ export async function startScheduler(): Promise<void> {
     },
   );
 
+  // Account deletion — daily at 03:00 UTC (GDPR Article 17: erase users past 30-day grace period)
+  await accountDeletionQueue.add(
+    "process-deletions",
+    { jobType: "account-deletion" },
+    {
+      repeat: { pattern: "0 3 * * *" },
+      jobId: "account-deletion-recurring",
+    },
+  );
+
+  // Analytics refresh — every hour (BullMQ distributed lock prevents duplicate runs across instances)
+  await analyticsRefreshQueue.add(
+    "refresh-analytics",
+    { jobType: "analytics-refresh" },
+    {
+      repeat: { pattern: "0 * * * *" },
+      jobId: "analytics-refresh-recurring",
+    },
+  );
+
   logger.info(
-    "Job scheduler started — weekly earnings, session reminders, escrow check, and notification cleanup registered",
+    "Job scheduler started — weekly earnings, session reminders, escrow check, notification cleanup, account deletion, and analytics refresh registered",
   );
 }
 

@@ -8,7 +8,6 @@ import { authenticate } from "../middleware/auth.middleware";
 import { requireAdmin } from "../middleware/admin-auth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { logger } from "../utils/logger.utils";
 import { adminAllowlistMiddleware } from "../middleware/ipFilter.middleware";
 import {
   rejectVerificationSchema,
@@ -16,17 +15,12 @@ import {
   listVerificationsSchema,
 } from "../validators/schemas/verification.schemas";
 import { ConsentController } from "../controllers/consent.controller";
-import { refreshAnalyticsJob } from "../jobs/refreshAnalytics.job";
-import { JwksController } from "../controllers/jwks.controller";
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireAdmin);
 router.use(asyncHandler(adminAllowlistMiddleware));
-refreshAnalyticsJob.initialize().catch((error: unknown) => {
-  logger.error({ error }, "Failed to initialize hourly analytics refresh job");
-});
 
 /**
  * @swagger

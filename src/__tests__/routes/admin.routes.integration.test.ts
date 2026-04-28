@@ -16,12 +16,6 @@ jest.mock("../../middleware/ipFilter.middleware", () => ({
   adminAllowlistMiddleware: (_req: any, _res: any, next: any) => next(),
 }));
 
-jest.mock("../../jobs/refreshAnalytics.job", () => ({
-  refreshAnalyticsJob: {
-    initialize: jest.fn().mockResolvedValue(undefined),
-  },
-}));
-
 jest.mock("../../services/admin.service", () => ({
   AdminService: {
     getStats: jest.fn(),
@@ -59,10 +53,18 @@ describe("Admin list endpoints integration", () => {
       const response = await request(app).get(`${API_BASE}/users`);
 
       expect(response.status).toBe(200);
-      expect(mockedAdminService.listUsers).toHaveBeenCalledWith(50, 0, undefined);
+      expect(mockedAdminService.listUsers).toHaveBeenCalledWith(
+        50,
+        0,
+        undefined,
+      );
       expect(response.body.status).toBe("success");
       expect(response.body.data).toEqual([{ id: "u-1", role: "mentor" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 50, offset: 0 });
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
     });
 
     it("returns users with role filter params", async () => {
@@ -79,7 +81,11 @@ describe("Admin list endpoints integration", () => {
       expect(mockedAdminService.listUsers).toHaveBeenCalledWith(10, 5, "admin");
       expect(response.body.status).toBe("success");
       expect(response.body.data).toEqual([{ id: "u-2", role: "admin" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 10, offset: 5 });
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 10,
+        offset: 5,
+      });
     });
   });
 
@@ -100,7 +106,11 @@ describe("Admin list endpoints integration", () => {
       );
       expect(response.body.status).toBe("success");
       expect(response.body.data).toEqual([{ id: "s-1", status: "scheduled" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 50, offset: 0 });
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
     });
 
     it("returns sessions with status filter params", async () => {
@@ -121,7 +131,11 @@ describe("Admin list endpoints integration", () => {
       );
       expect(response.body.status).toBe("success");
       expect(response.body.data).toEqual([{ id: "s-2", status: "completed" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 25, offset: 10 });
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 25,
+        offset: 10,
+      });
     });
   });
 
@@ -143,7 +157,11 @@ describe("Admin list endpoints integration", () => {
       );
       expect(response.body.status).toBe("success");
       expect(response.body.data).toEqual([{ id: "p-1", type: "payment" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 50, offset: 0 });
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 50,
+        offset: 0,
+      });
     });
 
     it("returns payments with date range filter params", async () => {
@@ -152,14 +170,12 @@ describe("Admin list endpoints integration", () => {
         total: 1,
       });
 
-      const response = await request(app)
-        .get(`${API_BASE}/payments`)
-        .query({
-          limit: 20,
-          offset: 2,
-          startDate: "2026-01-01",
-          endDate: "2026-01-31",
-        });
+      const response = await request(app).get(`${API_BASE}/payments`).query({
+        limit: 20,
+        offset: 2,
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+      });
 
       expect(response.status).toBe(200);
       expect(mockedAdminService.listPayments).toHaveBeenCalledWith(
@@ -169,8 +185,14 @@ describe("Admin list endpoints integration", () => {
         "2026-01-31",
       );
       expect(response.body.status).toBe("success");
-      expect(response.body.data).toEqual([{ id: "p-2", type: "mentor_payout" }]);
-      expect(response.body.meta).toMatchObject({ total: 1, limit: 20, offset: 2 });
+      expect(response.body.data).toEqual([
+        { id: "p-2", type: "mentor_payout" },
+      ]);
+      expect(response.body.meta).toMatchObject({
+        total: 1,
+        limit: 20,
+        offset: 2,
+      });
     });
   });
 });

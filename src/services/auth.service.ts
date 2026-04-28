@@ -62,195 +62,189 @@ export const AuthService = {
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING id, role
     `;
-        const { rows } = await pool.query(insertQuery, [
-            email,
-            passwordHash,
-            firstName,
-            lastName,
-            role,
-            JSON.stringify(defaultPreferences),
-        ]);
-        const user = rows[0];
+    const { rows } = await pool.query(insertQuery, [
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      role,
+      JSON.stringify(defaultPreferences),
+    ]);
+    const user = rows[0];
 
-        const tokens = await this.generateTokens(user.id, user.role);
-        return { ...tokens, userId: user.id };
-    },
+    const tokens = await this.generateTokens(user.id, user.role);
+    return { ...tokens, userId: user.id };
+  },
 
-    /**
-     * Login an existing user
-     */
-    /**
-     * Login an existing user
-     */
-    async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null): Promise<any> {
-        const { email, password } = input;
+  /**
+   * Login an existing user
+   */
+  /**
+   * Login an existing user
+   */
+  async login(
+    input: LoginInput,
+    ipAddress?: string | null,
+    userAgent?: string | null,
+  ): Promise<any> {
+    const { email, password } = input;
 
-        const query = `
+    const query = `
       SELECT id, role, password_hash, mfa_enabled 
       FROM users 
       WHERE email = $1 AND is_active = true
     `;
-        const { rows } = await pool.query(query, [email]);
+    const { rows } = await pool.query(query, [email]);
 
-        if (rows.length === 0) {
-            throw new Error('Invalid email or password.');
-        }
+    if (rows.length === 0) {
+      throw new Error("Invalid email or password.");
+    }
 
-        const user = rows[0];
-        const isMatch = await bcrypt.compare(password, user.password_hash);
+    const user = rows[0];
+    const isMatch = await bcrypt.compare(password, user.password_hash);
 
-        if (!isMatch) {
-            throw new Error('Invalid email or password.');
-        }
+    if (!isMatch) {
+      throw new Error("Invalid email or password.");
+    }
 
-        // If MFA is enabled, return MFA required status and a short-lived token
-        if (user.mfa_enabled) {
-            const mfaToken = jwt.sign(
-                { sub: user.id, mfaPending: true },
-                JWT_SECRET,
-                { expiresIn: '5m' }
-            );
-            return { mfaRequired: true, mfaToken, userId: user.id };
-        }
+    // If MFA is enabled, return MFA required status and a short-lived token
+    if (user.mfa_enabled) {
+      const mfaToken = jwt.sign(
+        { sub: user.id, mfaPending: true },
+        JWT_SECRET,
+        { expiresIn: "5m" },
+      );
+      return { mfaRequired: true, mfaToken, userId: user.id };
+    }
 
-        const tokens = await this.generateTokens(user.id, user.role);
+    const tokens = await this.generateTokens(user.id, user.role);
 
-        // Create a tracked session for device management
-        const { SessionManagerService } = await import('./sessionManager.service');
-        await SessionManagerService.createSession({
-            userId: user.id,
-            refreshToken: tokens.refreshToken,
-            ipAddress: ipAddress ?? null,
-            userAgent: userAgent ?? null,
-            userEmail: email,
-        }).catch(() => { /* non-fatal */ });
+    // Create a tracked session for device management
+    const { SessionManagerService } = await import("./sessionManager.service");
+    await SessionManagerService.createSession({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      ipAddress: ipAddress ?? null,
+      userAgent: userAgent ?? null,
+      userEmail: email,
+    }).catch(() => {
+      /* non-fatal */
+    });
 
-        return { tokens, userId: user.id, role: user.role };
-    },
+    return { tokens, userId: user.id, role: user.role };
+  },
 
-    /**
-     * Refresh the access and refresh tokens
-     */
-    async refresh(refreshToken: string): Promise<AuthTokens> {
-        try {
-            const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { sub: string; role: string };
-            const userId = decoded.sub;
+  /**
+   * Logout user by clearing their refresh token
+   */
+  async logout(userId: string, refreshToken?: string): Promise<void> {
+    const query = `UPDATE users SET refresh_token = NULL WHERE id = $1`;
+    await pool.query(query, [userId]);
 
-            // Ensure the token matches what is in DB (token rotation logic)
-            const query = `SELECT refresh_token, role FROM users WHERE id = $1 AND is_active = true`;
-            const { rows } = await pool.query(query, [userId]);
+    // Revoke the session associated with this refresh token
+    if (refreshToken) {
+      const { SessionManagerService } =
+        await import("./sessionManager.service");
+      await SessionManagerService.revokeSessionByToken(refreshToken).catch(
+        () => {
+          /* non-fatal */
+        },
+      );
+    }
+  },
 
-            if (rows.length === 0 || rows[0].refresh_token !== refreshToken) {
-                // Token reuse detected or invalid user
-                throw new Error('Invalid refresh token.');
-            }
+  /**
+   * Handle forgot password
+   */
+  async forgotPassword(email: string): Promise<string> {
+    const query = `SELECT id FROM users WHERE email = $1 AND is_active = true`;
+    const { rows } = await pool.query(query, [email]);
 
-            return this.generateTokens(userId, rows[0].role);
-        } catch {
-            throw new Error('Invalid or expired refresh token.');
-        }
-    },
+    if (rows.length === 0) {
+      // Don't reveal if user exists or not, just return early
+      return "";
+    }
 
-    /**
-     * Logout user by clearing their refresh token
-     */
-    async logout(userId: string, refreshToken?: string): Promise<void> {
-        const query = `UPDATE users SET refresh_token = NULL WHERE id = $1`;
-        await pool.query(query, [userId]);
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
 
-        // Revoke the session associated with this refresh token
-        if (refreshToken) {
-            const { SessionManagerService } = await import('./sessionManager.service');
-            await SessionManagerService.revokeSessionByToken(refreshToken).catch(() => { /* non-fatal */ });
-        }
-    },
+    await pool.query(
+      `UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3`,
+      [resetTokenHash, expires, rows[0].id],
+    );
 
-    /**
-     * Handle forgot password
-     */
-    async forgotPassword(email: string): Promise<string> {
-        const query = `SELECT id FROM users WHERE email = $1 AND is_active = true`;
-        const { rows } = await pool.query(query, [email]);
+    // Normally we would send an email here
+    return resetToken;
+  },
 
-        if (rows.length === 0) {
-            // Don't reveal if user exists or not, just return early
-            return '';
-        }
+  /**
+   * Reset password via token
+   */
+  async resetPassword(input: ResetPasswordInput): Promise<string> {
+    const resetTokenHash = crypto
+      .createHash("sha256")
+      .update(input.token)
+      .digest("hex");
 
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
-        const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
-
-        await pool.query(
-            `UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE id = $3`,
-            [resetTokenHash, expires, rows[0].id]
-        );
-
-        // Normally we would send an email here
-        return resetToken;
-    },
-
-    /**
-     * Reset password via token
-     */
-    async resetPassword(input: ResetPasswordInput): Promise<string> {
-        const resetTokenHash = crypto.createHash('sha256').update(input.token).digest('hex');
-
-        const query = `
+    const query = `
       SELECT id FROM users 
       WHERE reset_token = $1 AND reset_token_expires > NOW() AND is_active = true
     `;
-        const { rows } = await pool.query(query, [resetTokenHash]);
+    const { rows } = await pool.query(query, [resetTokenHash]);
 
-        if (rows.length === 0) {
-            throw new Error('Invalid or expired reset token.');
-        }
-
-        const userId = rows[0].id;
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(input.newPassword, salt);
-
-        await pool.query(
-            `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
-            [passwordHash, userId]
-        );
-        
-        return userId;
-    },
-
-    /**
-     * Generate access and refresh tokens, and save refresh token to DB.
-     * Access tokens are signed with RSA-256 (asymmetric) via JwksService.
-     * Refresh tokens remain HMAC-256 (opaque rotation tokens, not third-party verified).
-     */
-    async generateTokens(userId: string, role: string): Promise<AuthTokens> {
-        const { JwksService } = await import('./jwks.service');
-        const currentKey = await JwksService.getCurrentKey();
-
-        let accessToken: string;
-        if (currentKey) {
-            accessToken = jwt.sign({ sub: userId, role }, currentKey.privateKeyPem, {
-                algorithm: 'RS256',
-                expiresIn: ACCESS_TOKEN_EXPIRED_IN,
-                keyid: currentKey.kid,
-            });
-        } else {
-            // Fallback to HMAC during startup before keys are initialised
-            accessToken = jwt.sign({ sub: userId, role }, JWT_SECRET, {
-                expiresIn: ACCESS_TOKEN_EXPIRED_IN,
-            });
-        }
-
-        const refreshToken = jwt.sign({ sub: userId, role }, JWT_REFRESH_SECRET, {
-            expiresIn: REFRESH_TOKEN_EXPIRED_IN,
-        });
-
-        // Save refresh token to DB (basic token rotation implementation)
-        await pool.query(
-            `UPDATE users SET refresh_token = $1 WHERE id = $2`,
-            [refreshToken, userId]
-        );
-
-        return { accessToken, refreshToken };
+    if (rows.length === 0) {
+      throw new Error("Invalid or expired reset token.");
     }
+
+    const userId = rows[0].id;
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(input.newPassword, salt);
+
+    await pool.query(
+      `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
+      [passwordHash, userId],
+    );
+
+    return userId;
+  },
+
+  /**
+   * Generate access and refresh tokens, and save refresh token to DB.
+   * Access tokens are signed with RSA-256 (asymmetric) via JwksService.
+   * Refresh tokens remain HMAC-256 (opaque rotation tokens, not third-party verified).
+   */
+  async generateTokens(userId: string, role: string): Promise<AuthTokens> {
+    const { JwksService } = await import("./jwks.service");
+    const currentKey = await JwksService.getCurrentKey();
+
+    let accessToken: string;
+    if (currentKey) {
+      accessToken = jwt.sign({ sub: userId, role }, currentKey.privateKeyPem, {
+        algorithm: "RS256",
+        expiresIn: ACCESS_TOKEN_EXPIRED_IN,
+        keyid: currentKey.kid,
+      });
+    } else {
+      // Fallback to HMAC during startup before keys are initialised
+      accessToken = jwt.sign({ sub: userId, role }, JWT_SECRET, {
+        expiresIn: ACCESS_TOKEN_EXPIRED_IN,
+      });
+    }
+
+    const refreshToken = jwt.sign({ sub: userId, role }, JWT_REFRESH_SECRET, {
+      expiresIn: REFRESH_TOKEN_EXPIRED_IN,
+    });
+
+    // Save refresh token to DB (basic token rotation implementation)
+    await pool.query(`UPDATE users SET refresh_token = $1 WHERE id = $2`, [
+      refreshToken,
+      userId,
+    ]);
+
+    return { accessToken, refreshToken };
+  },
 };
