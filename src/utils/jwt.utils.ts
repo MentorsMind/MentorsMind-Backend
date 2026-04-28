@@ -17,6 +17,10 @@ export interface DecodedToken extends TokenPayload {
 }
 
 export const JwtUtils = {
+  isSha256Hash(value: string): boolean {
+    return /^[a-f0-9]{64}$/i.test(value);
+  },
+
   /**
    * Generate access token with short TTL (15 min)
    */
@@ -78,16 +82,39 @@ export const JwtUtils = {
   /**
    * Generate device fingerprint from request
    */
-  getDeviceFingerprint(req: Request): string {
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    return `${userAgent}-${ip}`;
+  getDeviceFingerprint(req: Request): string | null {
+    const userAgentHeader = req.headers['user-agent'];
+    const acceptLanguageHeader = req.headers['accept-language'];
+    const forwardedFor = req.headers['x-forwarded-for'];
+
+    const userAgent =
+      typeof userAgentHeader === 'string' ? userAgentHeader.trim() : '';
+    const acceptLanguage =
+      typeof acceptLanguageHeader === 'string'
+        ? acceptLanguageHeader.trim()
+        : '';
+    const forwardedIp =
+      typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0]?.trim() || ''
+        : Array.isArray(forwardedFor)
+          ? forwardedFor[0] || ''
+          : '';
+    const ip = req.ip || forwardedIp || req.socket?.remoteAddress || '';
+
+    if (!userAgent && !acceptLanguage && !ip) {
+      return null;
+    }
+
+    return this.hashFingerprint(`${userAgent}|${acceptLanguage}|${ip}`);
   },
 
   /**
    * Hash fingerprint for privacy in token
    */
   hashFingerprint(fingerprint: string): string {
+    if (this.isSha256Hash(fingerprint)) {
+      return fingerprint;
+    }
     return crypto.createHash('sha256').update(fingerprint).digest('hex');
   },
 

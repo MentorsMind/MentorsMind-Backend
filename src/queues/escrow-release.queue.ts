@@ -37,10 +37,27 @@ export async function scheduleEscrowRelease(
 
 /**
  * Cancel a pending escrow auto-release (e.g. dispute raised).
+ * If the job is already active, marks the escrow as disputed in the DB
+ * so the worker will skip the release.
  */
 export async function cancelEscrowRelease(escrowId: string): Promise<void> {
   const job = await escrowReleaseQueue.getJob(`escrow-release:${escrowId}`);
-  if (job) {
+  if (!job) {
+    return;
+  }
+
+  const state = await job.getState();
+  
+  // If job is waiting, delayed, or paused, we can safely remove it
+  if (['waiting', 'delayed', 'paused'].includes(state)) {
     await job.remove();
+  } else if (state === 'active') {
+    // Job is already being processed - mark escrow as disputed in DB
+    // The worker will check this status before releasing
+    const pool = (await import('../config/database')).default;
+    await pool.query(
+      'UPDATE escrows SET status = $1, updated_at = NOW() WHERE id = $2',
+      ['disputed', escrowId]
+    );
   }
 }

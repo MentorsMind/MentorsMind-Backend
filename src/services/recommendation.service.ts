@@ -115,7 +115,7 @@ class RecommendationServiceImpl {
 
     private async buildLearnerContext(learnerId: string): Promise<RecommendationContext> {
         const { rows: goalsRows } = await pool.query<{ goal_title: string }>(
-            `SELECT goal_title FROM learner_goals WHERE learner_id = $1 AND status = 'active'`,
+            `SELECT goal_title FROM goals WHERE learner_id = $1 AND status = 'active'`,
             [learnerId],
         );
 

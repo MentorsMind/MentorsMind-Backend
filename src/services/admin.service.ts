@@ -1,5 +1,5 @@
-// @ts-nocheck
 import pool from "../config/database";
+import { env } from "../config/env";
 import {
   AuditLoggerService,
   AuditLogSearchParams,
@@ -206,7 +206,7 @@ export const AdminService = {
       .catch(() => "DOWN");
     let stellarCheck = "UP";
     try {
-      await stellarService.getAccount(process.env.PLATFORM_PUBLIC_KEY || "");
+      await stellarService.getAccount(env.PLATFORM_PUBLIC_KEY || "");
     } catch {
       stellarCheck = "DEGRADED";
     }

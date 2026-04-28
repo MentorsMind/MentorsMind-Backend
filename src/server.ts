@@ -23,6 +23,7 @@ import app from "./app";
 import { initializeModels } from "./models";
 import { createSocketServer } from "./config/socket";
 import { initializeSocketService } from "./services/socket.service";
+import { initializeGraphQL } from "./graphql/server";
 import {
   stellarMonitorJob,
 } from "./jobs/stellarMonitor.job";
@@ -83,6 +84,11 @@ startScheduler().catch((err) => {
 const { port: PORT, apiVersion: API_VERSION } = config.server;
 const NODE_ENV = config.env;
 
+// Initialize GraphQL server
+initializeGraphQL(app).catch((err) => {
+  logger.error("Failed to initialize GraphQL server", { error: err });
+});
+
 // Start server
 const server = app.listen(PORT, () => {
   logger.info("Server started", {
@@ -91,6 +97,7 @@ const server = app.listen(PORT, () => {
     apiUrl: `http://localhost:${PORT}/api/${API_VERSION}`,
     healthCheck: `http://localhost:${PORT}/health`,
     apiDocs: `http://localhost:${PORT}/api/${API_VERSION}/docs`,
+    graphql: `http://localhost:${PORT}/api/graphql`,
     webSocket: `ws://localhost:${PORT}/ws`,
   });
 });

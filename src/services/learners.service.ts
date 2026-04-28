@@ -1,6 +1,5 @@
-import db from '../config/db';
-import { CacheService } from './cache.service';
-import { logger } from '../utils/logger';
+import pool from "../config/database";
+import { CacheService } from "./cache.service";
 
 export interface ProgressSummary {
   total_sessions: number;
@@ -8,6 +7,8 @@ export interface ProgressSummary {
   completed_goals: number;
   current_streak: number;
   longest_streak: number;
+  goal_completion_timeline: TimelineEntry[];
+  session_timeline: TimelineEntry[];
 }
 
 export interface TimelineEntry {
@@ -17,70 +18,107 @@ export interface TimelineEntry {
 
 export class LearnerService {
   private static CACHE_TTL = 300; // 5 minutes
+  private static PROGRESS_CACHE_PREFIX = 'learner:progress';
+  private static TIMELINE_CACHE_PREFIX = 'learner:timeline';
+  private static GOAL_TIMELINE_CACHE_PREFIX = 'learner:goal-timeline';
 
   static async getProgressSummary(learnerId: string): Promise<ProgressSummary> {
     const cacheKey = `learner:progress:${learnerId}`;
-    
+
     return await CacheService.wrap(cacheKey, this.CACHE_TTL, async () => {
       // 1. Basic stats from bookings
-      const statsResult = await db.query(
+      const statsResult = await pool.query(
         `SELECT 
           COUNT(*) as total_sessions,
-          SUM(EXTRACT(EPOCH FROM (actual_end - actual_start)) / 3600) as total_hours
+          COALESCE(SUM(duration_minutes) / 60.0, 0) as total_hours
          FROM bookings 
          WHERE mentee_id = $1 AND status = 'completed'`,
-        [learnerId]
+        [learnerId],
       );
 
       // 2. Completed goals
-      const goalsResult = await db.query(
+      const goalsResult = await pool.query(
         `SELECT COUNT(*) as completed_goals FROM learner_goals 
          WHERE learner_id = $1 AND status = 'completed'`,
-        [learnerId]
+        [learnerId],
       );
 
       // 3. Streak calculation
-      const sessionsResult = await db.query(
-        `SELECT DISTINCT DATE(scheduled_start AT TIME ZONE 'UTC') as session_date 
+      const sessionsResult = await pool.query(
+        `SELECT DISTINCT DATE(scheduled_at AT TIME ZONE 'UTC') as session_date 
          FROM bookings 
          WHERE mentee_id = $1 AND status = 'completed'
          ORDER BY session_date DESC`,
-        [learnerId]
+        [learnerId],
       );
 
-      const dates = sessionsResult.rows.map(r => new Date(r.session_date));
+      const dates = sessionsResult.rows.map((r) => new Date(r.session_date));
       const { current, longest } = this.calculateStreaks(dates);
 
+      const [goalTimeline, sessionTimeline] = await Promise.all([
+        this.getGoalCompletionTimeline(learnerId),
+        this.getSessionTimeline(learnerId),
+      ]);
+
       return {
-        total_sessions: parseInt(statsResult.rows[0].total_sessions || '0', 10),
-        total_hours: parseFloat(statsResult.rows[0].total_hours || '0'),
-        completed_goals: parseInt(goalsResult.rows[0].completed_goals || '0', 10),
+        total_sessions: parseInt(statsResult.rows[0].total_sessions || "0", 10),
+        total_hours: parseFloat(statsResult.rows[0].total_hours || "0"),
+        completed_goals: parseInt(
+          goalsResult.rows[0].completed_goals || "0",
+          10,
+        ),
         current_streak: current,
-        longest_streak: longest
+        longest_streak: longest,
+        goal_completion_timeline: goalTimeline,
+        session_timeline: sessionTimeline,
       };
     });
   }
 
-  static async getTimeline(learnerId: string): Promise<TimelineEntry[]> {
-    const result = await db.query(
+  static async getGoalCompletionTimeline(
+    learnerId: string,
+  ): Promise<TimelineEntry[]> {
+    const result = await pool.query(
       `SELECT 
-        TO_CHAR(completed_at, 'YYYY-MM') as month,
+        TO_CHAR(updated_at, 'YYYY-MM') as month,
         COUNT(*) as count
        FROM learner_goals
        WHERE learner_id = $1 AND status = 'completed'
-         AND completed_at >= NOW() - INTERVAL '12 months'
+         AND updated_at >= NOW() - INTERVAL '12 months'
        GROUP BY month
        ORDER BY month ASC`,
-      [learnerId]
+      [learnerId],
+    );
+    return result.rows;
+  }
+
+  static async getSessionTimeline(learnerId: string): Promise<TimelineEntry[]> {
+    const result = await pool.query(
+      `SELECT 
+        TO_CHAR(scheduled_at, 'YYYY-MM') as month,
+        COUNT(*) as count
+       FROM bookings
+       WHERE mentee_id = $1 AND status = 'completed'
+         AND scheduled_at >= NOW() - INTERVAL '12 months'
+       GROUP BY month
+       ORDER BY month ASC`,
+      [learnerId],
     );
     return result.rows;
   }
 
   static async invalidateCache(learnerId: string): Promise<void> {
-    await CacheService.del(`learner:progress:${learnerId}`);
+    await Promise.all([
+      CacheService.del(`${this.PROGRESS_CACHE_PREFIX}:${learnerId}`),
+      CacheService.del(`${this.TIMELINE_CACHE_PREFIX}:${learnerId}`),
+      CacheService.del(`${this.GOAL_TIMELINE_CACHE_PREFIX}:${learnerId}`),
+    ]);
   }
 
-  private static calculateStreaks(dates: Date[]): { current: number; longest: number } {
+  private static calculateStreaks(dates: Date[]): {
+    current: number;
+    longest: number;
+  } {
     if (dates.length === 0) return { current: 0, longest: 0 };
 
     let current = 0;
@@ -89,7 +127,7 @@ export class LearnerService {
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    
+
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
@@ -97,7 +135,10 @@ export class LearnerService {
     const latestSession = new Date(dates[0]);
     latestSession.setHours(0, 0, 0, 0);
 
-    if (latestSession.getTime() === today.getTime() || latestSession.getTime() === yesterday.getTime()) {
+    if (
+      latestSession.getTime() === today.getTime() ||
+      latestSession.getTime() === yesterday.getTime()
+    ) {
       current = 1;
       for (let i = 0; i < dates.length - 1; i++) {
         const d1 = new Date(dates[i]);

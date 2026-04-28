@@ -1,5 +1,6 @@
 import pino from 'pino';
 import os from 'os';
+import { env } from '../config/env';
 
 // ---------------------------------------------------------------------------
 // Sensitive-field redaction paths (pino built-in redaction)
@@ -26,9 +27,9 @@ const REDACT_PATHS = [
   'req.body.token',
 ];
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const IS_TEST = process.env.NODE_ENV === 'test';
-const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+const IS_PRODUCTION = env.NODE_ENV === 'production';
+const IS_TEST = env.NODE_ENV === 'test';
+const LOG_LEVEL = env.LOG_LEVEL;
 
 import { traceStore } from '../middleware/tracing.middleware';
 
@@ -36,7 +37,7 @@ import { traceStore } from '../middleware/tracing.middleware';
  * Stable identifier for this process/pod.
  */
 export const INSTANCE_ID: string =
-  process.env.INSTANCE_ID || os.hostname() || `instance-${Math.random().toString(36).slice(2, 8)}`;
+  env.INSTANCE_ID || os.hostname() || `instance-${Math.random().toString(36).slice(2, 8)}`;
 
 // ---------------------------------------------------------------------------
 // Logger instance

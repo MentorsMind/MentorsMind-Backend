@@ -1,5 +1,5 @@
-// @ts-nocheck
 import bcrypt from "bcryptjs";
+import { env } from "../config/env";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import pool from "../config/database";
@@ -10,9 +10,8 @@ import {
 } from "../validators/auth.validator";
 import { UserRecord } from "./users.service";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback_secret";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET || "fallback_refresh_secret";
+const JWT_SECRET = env.JWT_SECRET;
+const JWT_REFRESH_SECRET = env.JWT_REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRED_IN = "15m";
 const REFRESH_TOKEN_EXPIRED_IN = "7d";
 

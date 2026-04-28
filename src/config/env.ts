@@ -133,6 +133,10 @@ const envSchema = z.object({
 
   // Sentry
   SENTRY_DSN: z.string().optional(),
+  DAILY_API_KEY: z.string().optional(),
+  APP_BASE_URL: z.string().url().default("http://localhost:5000"),
+  APP_CLIENT_URL: z.string().url().default("http://localhost:3000"),
+  FRONTEND_URL: z.string().url().default("http://localhost:3000"),
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +157,7 @@ const SENSITIVE_KEYS = new Set([
   "AWS_SECRET_ID",
   "AWS_SECRET_ACCESS_KEY",
   "ENCRYPTION_KEY",
+  "DAILY_API_KEY",
 ]);
 
 function validateEnv() {

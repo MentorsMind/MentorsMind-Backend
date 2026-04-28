@@ -1,9 +1,9 @@
-import * as admin from 'firebase-admin';
-import { PushTokensModel } from '../models/push-tokens.model';
-import { UsersService } from './users.service';
-import { NotificationChannel } from '../models/notifications.model';
-import { logger } from '../utils/logger';
-import { env } from '../config/env';
+import * as admin from "firebase-admin";
+import { PushTokensModel } from "../models/push-tokens.model";
+import { UsersService } from "./users.service";
+import { NotificationChannel } from "../models/notifications.model";
+import { logger } from "../utils/logger";
+import { env } from "../config/env";
 
 export interface PushNotificationPayload {
   title: string;
@@ -37,8 +37,14 @@ export const PushService = {
 
     try {
       // Check if Firebase credentials are configured
-      if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
-        logger.warn('Firebase credentials not configured. Push notifications will be disabled.');
+      if (
+        !env.FIREBASE_PROJECT_ID ||
+        !env.FIREBASE_PRIVATE_KEY ||
+        !env.FIREBASE_CLIENT_EMAIL
+      ) {
+        logger.warn(
+          "Firebase credentials not configured. Push notifications will be disabled.",
+        );
         return;
       }
 
@@ -46,15 +52,15 @@ export const PushService = {
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId: env.FIREBASE_PROJECT_ID,
-          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
           clientEmail: env.FIREBASE_CLIENT_EMAIL,
         }),
       });
 
       this.initialized = true;
-      logger.info('Firebase Admin SDK initialized successfully');
+      logger.info("Firebase Admin SDK initialized successfully");
     } catch (error) {
-      logger.error('Failed to initialize Firebase Admin SDK:', error);
+      logger.error("Failed to initialize Firebase Admin SDK:", error);
     }
   },
 
@@ -65,7 +71,7 @@ export const PushService = {
     userId: string,
     title: string,
     body: string,
-    data?: Record<string, string>
+    data?: Record<string, string>,
   ): Promise<PushSendResult> {
     const result: PushSendResult = {
       success: false,
@@ -78,18 +84,24 @@ export const PushService = {
     try {
       // Check if Firebase is initialized
       if (!this.initialized) {
-        result.errors.push('Firebase not initialized');
+        result.errors.push("Firebase not initialized");
         return result;
       }
 
       // Check user notification preferences
       const user = await UsersService.findById(userId);
       const preferences = user?.notification_preferences;
-      
+
       if (preferences) {
         const type = data?.type;
-        if (type && preferences[type] && preferences[type][NotificationChannel.PUSH] === false) {
-          result.errors.push(`User has disabled push notifications for type: ${type}`);
+        if (
+          type &&
+          preferences[type] &&
+          preferences[type][NotificationChannel.PUSH] === false
+        ) {
+          result.errors.push(
+            `User has disabled push notifications for type: ${type}`,
+          );
           return result;
         }
       }
@@ -98,7 +110,7 @@ export const PushService = {
       const tokens = await PushTokensModel.getActiveTokensByUserId(userId);
 
       if (tokens.length === 0) {
-        result.errors.push('No active push tokens found for user');
+        result.errors.push("No active push tokens found for user");
         return result;
       }
 
@@ -110,7 +122,10 @@ export const PushService = {
       };
 
       // Send to all user devices
-      const sendResult = await this.sendToTokens(tokens.map(t => t.token), payload);
+      const sendResult = await this.sendToTokens(
+        tokens.map((t) => t.token),
+        payload,
+      );
 
       // Handle invalid tokens
       if (sendResult.invalidTokens.length > 0) {
@@ -119,8 +134,8 @@ export const PushService = {
 
       // Update last_used_at for successful tokens
       const successfulTokens = tokens
-        .map(t => t.token)
-        .filter(token => !sendResult.invalidTokens.includes(token));
+        .map((t) => t.token)
+        .filter((token) => !sendResult.invalidTokens.includes(token));
 
       for (const token of successfulTokens) {
         await PushTokensModel.updateLastUsed(token);
@@ -128,7 +143,9 @@ export const PushService = {
 
       return sendResult;
     } catch (error) {
-      result.errors.push(`Failed to send push notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      result.errors.push(
+        `Failed to send push notification: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
       return result;
     }
   },
@@ -138,7 +155,7 @@ export const PushService = {
    */
   async sendToTokens(
     tokens: string[],
-    payload: PushNotificationPayload
+    payload: PushNotificationPayload,
   ): Promise<PushSendResult> {
     const result: PushSendResult = {
       success: false,
@@ -149,19 +166,18 @@ export const PushService = {
     };
 
     if (!this.initialized) {
-      result.errors.push('Firebase not initialized');
+      result.errors.push("Firebase not initialized");
       return result;
     }
 
     if (tokens.length === 0) {
-      result.errors.push('No tokens provided');
+      result.errors.push("No tokens provided");
       return result;
     }
 
     try {
-      // Prepare FCM message
-      const message: admin.messaging.MulticastMessage = {
-        tokens,
+      const BATCH_SIZE = 500;
+      const baseMessage = {
         notification: {
           title: payload.title,
           body: payload.body,
@@ -169,39 +185,41 @@ export const PushService = {
         },
         data: payload.data || {},
         webpush: payload.clickAction
-          ? {
-              fcmOptions: {
-                link: payload.clickAction,
-              },
-            }
+          ? { fcmOptions: { link: payload.clickAction } }
           : undefined,
       };
 
-      // Send multicast message
-      const response = await admin.messaging().sendEachForMulticast(message);
+      for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+        const batch = tokens.slice(i, i + BATCH_SIZE);
+        const message: admin.messaging.MulticastMessage = {
+          ...baseMessage,
+          tokens: batch,
+        };
+        const response = await admin.messaging().sendEachForMulticast(message);
 
-      result.successCount = response.successCount;
-      result.failureCount = response.failureCount;
-      result.success = response.failureCount === 0;
+        result.successCount += response.successCount;
+        result.failureCount += response.failureCount;
 
-      // Process responses to identify invalid tokens
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          const error = resp.error;
-          
-          // Check for invalid/expired token errors
-          if (
-            error?.code === 'messaging/invalid-registration-token' ||
-            error?.code === 'messaging/registration-token-not-registered'
-          ) {
-            result.invalidTokens.push(tokens[idx]);
-          } else {
-            result.errors.push(`Token ${idx}: ${error?.message || 'Unknown error'}`);
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            const error = resp.error;
+            if (
+              error?.code === "messaging/invalid-registration-token" ||
+              error?.code === "messaging/registration-token-not-registered"
+            ) {
+              result.invalidTokens.push(batch[idx]);
+            } else {
+              result.errors.push(
+                `Token ${i + idx}: ${error?.message || "Unknown error"}`,
+              );
+            }
           }
-        }
-      });
+        });
+      }
 
-      logger.info('Push notification sent', {
+      result.success = result.failureCount === 0;
+
+      logger.info("Push notification sent", {
         successCount: result.successCount,
         failureCount: result.failureCount,
         invalidTokenCount: result.invalidTokens.length,
@@ -209,8 +227,10 @@ export const PushService = {
 
       return result;
     } catch (error) {
-      result.errors.push(`Failed to send push notification: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      logger.error('Push notification error:', error);
+      result.errors.push(
+        `Failed to send push notification: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+      logger.error("Push notification error:", error);
       return result;
     }
   },
@@ -240,12 +260,12 @@ export const PushService = {
       scheduledAt: Date;
       durationMinutes: number;
       bookingId: string;
-    }
+    },
   ): Promise<PushSendResult> {
-    const title = 'Session Starting Soon';
+    const title = "Session Starting Soon";
     const body = `Your session with ${sessionDetails.mentorName} starts in 15 minutes`;
     const data = {
-      type: 'session_reminder',
+      type: "session_reminder",
       bookingId: sessionDetails.bookingId,
       scheduledAt: sessionDetails.scheduledAt.toISOString(),
     };
@@ -261,12 +281,12 @@ export const PushService = {
     paymentDetails: {
       amount: string;
       transactionId: string;
-    }
+    },
   ): Promise<PushSendResult> {
-    const title = 'Payment Confirmed';
+    const title = "Payment Confirmed";
     const body = `Your payment of ${paymentDetails.amount} XLM has been confirmed`;
     const data = {
-      type: 'payment_confirmed',
+      type: "payment_confirmed",
       transactionId: paymentDetails.transactionId,
       amount: paymentDetails.amount,
     };
@@ -283,12 +303,12 @@ export const PushService = {
       senderName: string;
       messagePreview: string;
       conversationId: string;
-    }
+    },
   ): Promise<PushSendResult> {
     const title = `New message from ${messageDetails.senderName}`;
     const body = messageDetails.messagePreview;
     const data = {
-      type: 'new_message',
+      type: "new_message",
       conversationId: messageDetails.conversationId,
     };
 
@@ -301,9 +321,9 @@ export const PushService = {
   async sendTestNotification(userId: string): Promise<PushSendResult> {
     return this.sendToUser(
       userId,
-      'Test Notification',
-      'This is a test push notification from MentorMinds',
-      { type: 'test' }
+      "Test Notification",
+      "This is a test push notification from MentorMinds",
+      { type: "test" },
     );
   },
 };
