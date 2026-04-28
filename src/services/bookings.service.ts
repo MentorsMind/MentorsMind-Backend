@@ -12,12 +12,12 @@ import pool from "../config/database";
 import { CalendarService } from "./calendar.service";
 import { SorobanEscrowService } from "./sorobanEscrow.service";
 import { QueueService } from "./queue.service";
-import { NotificationService } from "./notification.service";
 import {
-  NotificationType,
+  NotificationService,
   NotificationChannel,
   NotificationPriority,
-} from "../models/notifications.model";
+} from "./notification.service";
+import { NotificationType } from "../models/notifications.model";
 
 export interface CreateBookingData {
   menteeId: string;

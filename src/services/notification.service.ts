@@ -2,8 +2,6 @@ import {
   NotificationsModel,
   NotificationInput,
   NotificationType,
-  NotificationChannel,
-  NotificationPriority,
 } from "../models/notifications.model";
 import { UsersService } from "./users.service";
 import {
@@ -16,20 +14,30 @@ import { SocketService } from "./socket.service";
 import { PushService } from "./push.service";
 import { logger } from "../utils/logger";
 
+export enum NotificationChannel {
+  EMAIL = "email",
+  IN_APP = "in_app",
+  PUSH = "push",
+}
+
+export enum NotificationPriority {
+  LOW = "low",
+  NORMAL = "normal",
+  HIGH = "high",
+  CRITICAL = "critical",
+}
+
 export interface NotificationRecord {
   id: string;
   user_id: string;
   type: string;
-  channel: string;
-  priority: string;
   title: string;
   message: string;
-  template_id?: string;
-  template_data: Record<string, any>;
   data: Record<string, any>;
+  action_url: string | null;
   is_read: boolean;
-  scheduled_at?: Date;
-  expires_at?: Date;
+  dismissed_at: Date | null;
+  expires_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -45,8 +53,6 @@ export interface NotificationRequest {
   userId: string;
   type: NotificationType;
   channels: NotificationChannel[];
-  templateId?: string;
-  templateData?: Record<string, any>;
   data?: Record<string, any>;
   priority?: NotificationPriority;
   scheduledAt?: Date;
@@ -111,20 +117,15 @@ export const NotificationService = {
         request.type,
       );
 
-      // Create notifications for each allowed channel
+      // Create one notification record per allowed channel (for delivery tracking)
       for (const channel of allowedChannels) {
         try {
-          const notification = await this.createNotification({
+          const notification = await this.createNotification(channel, {
             user_id: request.userId,
             type: request.type,
-            channel,
-            priority: request.priority || NotificationPriority.NORMAL,
             title: request.title || this.getDefaultTitle(request.type),
             message: request.message || this.getDefaultMessage(request.type),
-            template_id: request.templateId,
-            template_data: request.templateData,
             data: request.data,
-            scheduled_at: request.scheduledAt,
             expires_at: request.expiresAt,
           });
 
@@ -162,15 +163,16 @@ export const NotificationService = {
   },
 
   /**
-   * Create a notification record in the database
+   * Create a notification record in the database and dispatch via the given channel.
    */
   async createNotification(
+    channel: NotificationChannel,
     input: NotificationInput,
   ): Promise<NotificationRecord | null> {
     const notification = await NotificationsModel.create(input);
 
     if (notification) {
-      // Emit notification:new event to the user via WebSocket
+      // Emit in-app event via WebSocket for all channels
       try {
         SocketService.emitToUser(notification.user_id, "notification:new", {
           notificationId: notification.id,
@@ -188,7 +190,7 @@ export const NotificationService = {
       }
 
       // Send push notification if channel is PUSH
-      if (input.channel === NotificationChannel.PUSH) {
+      if (channel === NotificationChannel.PUSH) {
         try {
           await PushService.sendToUser(
             notification.user_id,
@@ -226,20 +228,15 @@ export const NotificationService = {
     type: string,
     payload: { title: string; message: string; data?: Record<string, any> },
   ): Promise<NotificationRecord | null> {
-    return this.createNotification({
+    return this.createNotification(NotificationChannel.IN_APP, {
       user_id: userId,
       type,
-      channel: NotificationChannel.IN_APP,
-      priority: NotificationPriority.NORMAL,
       title: payload.title,
       message: payload.message,
       data: payload.data || {},
     });
   },
 
-  /**
-   * Create an in-app notification for a user (backward compatibility)
-   */
   async createInAppNotification(
     userId: string,
     type: string,
@@ -247,15 +244,16 @@ export const NotificationService = {
     message: string,
     data: Record<string, unknown> = {},
   ): Promise<NotificationRecord> {
-    const notification = await this.createNotification({
-      user_id: userId,
-      type,
-      channel: NotificationChannel.IN_APP,
-      priority: NotificationPriority.NORMAL,
-      title,
-      message,
-      data: data as Record<string, any>,
-    });
+    const notification = await this.createNotification(
+      NotificationChannel.IN_APP,
+      {
+        user_id: userId,
+        type,
+        title,
+        message,
+        data: data as Record<string, any>,
+      },
+    );
 
     if (!notification) {
       throw new Error("Failed to create in-app notification");
@@ -488,7 +486,8 @@ The MentorMinds Team
       [NotificationType.MEETING_CONFIRMED]: "Meeting Confirmed",
       [NotificationType.MESSAGE_RECEIVED]: "New Message",
       [NotificationType.SESSION_CANCELLED]: "Session Cancelled",
-      [NotificationType.CALENDAR_CONNECTION_EXPIRED]: "Calendar Connection Expired",
+      [NotificationType.CALENDAR_CONNECTION_EXPIRED]:
+        "Calendar Connection Expired",
     };
     return titles[type] || "Notification";
   },
@@ -507,7 +506,8 @@ The MentorMinds Team
       [NotificationType.MEETING_CONFIRMED]: "Your meeting has been confirmed.",
       [NotificationType.MESSAGE_RECEIVED]: "You have received a new message.",
       [NotificationType.SESSION_CANCELLED]: "Your session has been cancelled.",
-      [NotificationType.CALENDAR_CONNECTION_EXPIRED]: "Your Google Calendar connection has expired. Please reconnect.",
+      [NotificationType.CALENDAR_CONNECTION_EXPIRED]:
+        "Your Google Calendar connection has expired. Please reconnect.",
     };
     return messages[type] || "You have a new notification.";
   },
@@ -557,7 +557,7 @@ The MentorMinds Team
       return {
         id: notification.id,
         status: latestStatus?.status || DeliveryStatus.QUEUED,
-        channel: notification.channel,
+        channel: latestStatus?.channel || NotificationChannel.IN_APP,
         createdAt: notification.created_at,
         deliveryHistory,
       };
@@ -612,19 +612,19 @@ The MentorMinds Team
         return false;
       }
 
+      const latestStatus =
+        await NotificationDeliveryTrackingModel.getLatestStatus(notificationId);
+      const channel = latestStatus?.channel || NotificationChannel.IN_APP;
+
       // Update delivery tracking
       await NotificationDeliveryTrackingModel.create({
         notification_id: notificationId,
         status: DeliveryStatus.PROCESSING,
-        channel: notification.channel,
+        channel,
       });
 
       // Update analytics
-      await this.updateAnalytics(
-        notification.type,
-        notification.channel,
-        "sent",
-      );
+      await this.updateAnalytics(notification.type, channel, "sent");
 
       return true;
     } catch (error) {
@@ -660,7 +660,6 @@ The MentorMinds Team
   async getUserNotifications(
     userId: string,
     options: {
-      channel?: string;
       type?: string;
       isRead?: boolean;
       limit?: number;
@@ -816,15 +815,6 @@ The MentorMinds Team
       isValid: errors.length === 0,
       errors,
     };
-  },
-
-  /**
-   * Get scheduled notifications that are ready to be processed
-   */
-  async getScheduledNotificationsForProcessing(
-    limit: number = 100,
-  ): Promise<NotificationRecord[]> {
-    return await NotificationsModel.getScheduledNotifications(limit);
   },
 
   /**

@@ -1,20 +1,17 @@
-import pool from '../config/database';
-import { logger } from '../utils/logger';
+import pool from "../config/database";
+import { logger } from "../utils/logger";
 
 export interface NotificationRecord {
   id: string;
   user_id: string;
   type: string;
-  channel: string;
-  priority: string;
   title: string;
   message: string;
-  template_id?: string;
-  template_data: Record<string, any>;
   data: Record<string, any>;
+  action_url: string | null;
   is_read: boolean;
-  scheduled_at?: Date;
-  expires_at?: Date;
+  dismissed_at: Date | null;
+  expires_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -22,40 +19,23 @@ export interface NotificationRecord {
 export interface NotificationInput {
   user_id: string;
   type: string;
-  channel: string;
-  priority?: string;
   title: string;
   message: string;
-  template_id?: string;
-  template_data?: Record<string, any>;
   data?: Record<string, any>;
-  scheduled_at?: Date;
+  action_url?: string;
   expires_at?: Date;
 }
 
 export enum NotificationType {
-  BOOKING_CONFIRMED = 'booking_confirmed',
-  PAYMENT_PROCESSED = 'payment_processed',
-  SESSION_REMINDER = 'session_reminder',
-  DISPUTE_CREATED = 'dispute_created',
-  SYSTEM_ALERT = 'system_alert',
-  MEETING_CONFIRMED = 'meeting_confirmed',
-  MESSAGE_RECEIVED = 'message_received',
-  SESSION_CANCELLED = 'session_cancelled',
-  CALENDAR_CONNECTION_EXPIRED = 'calendar_connection_expired',
-}
-
-export enum NotificationChannel {
-  EMAIL = 'email',
-  IN_APP = 'in_app',
-  PUSH = 'push'
-}
-
-export enum NotificationPriority {
-  LOW = 'low',
-  NORMAL = 'normal',
-  HIGH = 'high',
-  CRITICAL = 'critical'
+  BOOKING_CONFIRMED = "booking_confirmed",
+  PAYMENT_PROCESSED = "payment_processed",
+  SESSION_REMINDER = "session_reminder",
+  DISPUTE_CREATED = "dispute_created",
+  SYSTEM_ALERT = "system_alert",
+  MEETING_CONFIRMED = "meeting_confirmed",
+  MESSAGE_RECEIVED = "message_received",
+  SESSION_CANCELLED = "session_cancelled",
+  CALENDAR_CONNECTION_EXPIRED = "calendar_connection_expired",
 }
 
 /**
@@ -71,27 +51,24 @@ export const NotificationsModel = {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         type VARCHAR(50) NOT NULL,
-        channel VARCHAR(20) NOT NULL,
-        priority VARCHAR(20) DEFAULT 'normal',
         title VARCHAR(255) NOT NULL,
         message TEXT NOT NULL,
-        template_id VARCHAR(100),
-        template_data JSONB DEFAULT '{}'::jsonb,
         data JSONB DEFAULT '{}'::jsonb,
+        action_url VARCHAR(500),
         is_read BOOLEAN DEFAULT FALSE,
-        scheduled_at TIMESTAMP WITH TIME ZONE,
-        expires_at TIMESTAMP WITH TIME ZONE,
+        dismissed_at TIMESTAMP WITH TIME ZONE,
+        expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '90 days'),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
 
       CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
-      CREATE INDEX IF NOT EXISTS idx_notifications_channel ON notifications(channel);
-      CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
-      CREATE INDEX IF NOT EXISTS idx_notifications_scheduled_at ON notifications(scheduled_at);
-      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+      CREATE INDEX IF NOT EXISTS idx_notifications_expires_at ON notifications(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_notifications_not_dismissed
+        ON notifications(user_id, created_at DESC) WHERE dismissed_at IS NULL;
     `;
     await pool.query(query);
   },
@@ -102,32 +79,27 @@ export const NotificationsModel = {
   async create(input: NotificationInput): Promise<NotificationRecord | null> {
     const query = `
       INSERT INTO notifications (
-        user_id, type, channel, priority, title, message, 
-        template_id, template_data, data, scheduled_at, expires_at
+        user_id, type, title, message, data, action_url, expires_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW() + INTERVAL '90 days'))
       RETURNING *;
     `;
 
     const values = [
       input.user_id,
       input.type,
-      input.channel,
-      input.priority || 'normal',
       input.title,
       input.message,
-      input.template_id,
-      JSON.stringify(input.template_data || {}),
       JSON.stringify(input.data || {}),
-      input.scheduled_at,
-      input.expires_at,
+      input.action_url ?? null,
+      input.expires_at ?? null,
     ];
 
     try {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to create notification:', error);
+      logger.error("Failed to create notification:", error);
       return null;
     }
   },
@@ -145,7 +117,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, [id]);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to get notification by ID:', error);
+      logger.error("Failed to get notification by ID:", error);
       return null;
     }
   },
@@ -156,24 +128,20 @@ export const NotificationsModel = {
   async getByUserId(
     userId: string,
     options: {
-      channel?: string;
       type?: string;
       isRead?: boolean;
       limit?: number;
       offset?: number;
-    } = {}
+    } = {},
   ): Promise<NotificationRecord[]> {
     let query = `
       SELECT * FROM notifications
       WHERE user_id = $1
+        AND dismissed_at IS NULL
+        AND (expires_at IS NULL OR expires_at > NOW())
     `;
     const values: any[] = [userId];
     let paramCount = 2;
-
-    if (options.channel) {
-      query += ` AND channel = $${paramCount++}`;
-      values.push(options.channel);
-    }
 
     if (options.type) {
       query += ` AND type = $${paramCount++}`;
@@ -201,7 +169,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows;
     } catch (error) {
-      logger.error('Failed to get notifications by user ID:', error);
+      logger.error("Failed to get notifications by user ID:", error);
       return [];
     }
   },
@@ -209,30 +177,11 @@ export const NotificationsModel = {
   /**
    * Get unread notifications for a user
    */
-  async getUnreadByUserId(userId: string, limit: number = 50): Promise<NotificationRecord[]> {
+  async getUnreadByUserId(
+    userId: string,
+    limit: number = 50,
+  ): Promise<NotificationRecord[]> {
     return this.getByUserId(userId, { isRead: false, limit });
-  },
-
-  /**
-   * Get scheduled notifications that are ready to be sent
-   */
-  async getScheduledNotifications(limit: number = 100): Promise<NotificationRecord[]> {
-    const query = `
-      SELECT * FROM notifications
-      WHERE scheduled_at IS NOT NULL 
-        AND scheduled_at <= NOW()
-        AND (expires_at IS NULL OR expires_at > NOW())
-      ORDER BY priority DESC, scheduled_at ASC
-      LIMIT $1;
-    `;
-
-    try {
-      const { rows } = await pool.query<NotificationRecord>(query, [limit]);
-      return rows;
-    } catch (error) {
-      logger.error('Failed to get scheduled notifications:', error);
-      return [];
-    }
   },
 
   /**
@@ -250,7 +199,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      logger.error('Failed to mark notification as read:', error);
+      logger.error("Failed to mark notification as read:", error);
       return false;
     }
   },
@@ -270,7 +219,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [userId]);
       return rowCount ?? 0;
     } catch (error) {
-      logger.error('Failed to mark all notifications as read:', error);
+      logger.error("Failed to mark all notifications as read:", error);
       return 0;
     }
   },
@@ -278,7 +227,10 @@ export const NotificationsModel = {
   /**
    * Update notification
    */
-  async update(id: string, updates: Partial<NotificationInput>): Promise<NotificationRecord | null> {
+  async update(
+    id: string,
+    updates: Partial<NotificationInput>,
+  ): Promise<NotificationRecord | null> {
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -291,17 +243,13 @@ export const NotificationsModel = {
       fields.push(`message = $${paramCount++}`);
       values.push(updates.message);
     }
-    if (updates.template_data !== undefined) {
-      fields.push(`template_data = $${paramCount++}`);
-      values.push(JSON.stringify(updates.template_data));
-    }
     if (updates.data !== undefined) {
       fields.push(`data = $${paramCount++}`);
       values.push(JSON.stringify(updates.data));
     }
-    if (updates.scheduled_at !== undefined) {
-      fields.push(`scheduled_at = $${paramCount++}`);
-      values.push(updates.scheduled_at);
+    if (updates.action_url !== undefined) {
+      fields.push(`action_url = $${paramCount++}`);
+      values.push(updates.action_url);
     }
     if (updates.expires_at !== undefined) {
       fields.push(`expires_at = $${paramCount++}`);
@@ -317,7 +265,7 @@ export const NotificationsModel = {
 
     const query = `
       UPDATE notifications
-      SET ${fields.join(', ')}
+      SET ${fields.join(", ")}
       WHERE id = $${paramCount}
       RETURNING *;
     `;
@@ -326,7 +274,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to update notification:', error);
+      logger.error("Failed to update notification:", error);
       return null;
     }
   },
@@ -345,7 +293,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      logger.error('Failed to delete notification:', error);
+      logger.error("Failed to delete notification:", error);
       return false;
     }
   },
@@ -364,7 +312,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query);
       return rowCount ?? 0;
     } catch (error) {
-      logger.error('Failed to delete expired notifications:', error);
+      logger.error("Failed to delete expired notifications:", error);
       return 0;
     }
   },
@@ -372,7 +320,9 @@ export const NotificationsModel = {
   /**
    * Get notification counts by status for a user
    */
-  async getCountsByUserId(userId: string): Promise<{ total: number; unread: number; read: number }> {
+  async getCountsByUserId(
+    userId: string,
+  ): Promise<{ total: number; unread: number; read: number }> {
     const query = `
       SELECT 
         COUNT(*) as total,
@@ -391,7 +341,7 @@ export const NotificationsModel = {
         read: parseInt(row.read, 10),
       };
     } catch (error) {
-      logger.error('Failed to get notification counts:', error);
+      logger.error("Failed to get notification counts:", error);
       return { total: 0, unread: 0, read: 0 };
     }
   },

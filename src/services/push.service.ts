@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin";
 import { PushTokensModel } from "../models/push-tokens.model";
 import { UsersService } from "./users.service";
-import { NotificationChannel } from "../models/notifications.model";
+import { NotificationChannel } from "./notification.service";
 import { logger } from "../utils/logger";
 import { env } from "../config/env";
 
