@@ -36,7 +36,8 @@ export interface MessageRecord {
 export const MessagingService = {
   /**
    * Get or create a conversation between two users.
-   * Returns null when they share no booking.
+   * Returns null when they share no valid booking.
+   * Valid bookings are those that are confirmed, in_progress, or completed.
    */
   async getOrCreateConversation(
     userAId: string,
@@ -46,6 +47,7 @@ export const MessagingService = {
       `SELECT id FROM bookings
        WHERE (mentor_id = $1 AND mentee_id = $2)
           OR (mentor_id = $2 AND mentee_id = $1)
+       AND status IN ('confirmed', 'in_progress', 'completed')
        LIMIT 1`,
       [userAId, userBId],
     );
