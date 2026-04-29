@@ -1,5 +1,5 @@
-import pool from '../config/database';
-import { logger } from '../utils/logger';
+import pool from "../config/database";
+import { logger } from "../utils/logger";
 
 export interface NotificationRecord {
   id: string;
@@ -34,28 +34,28 @@ export interface NotificationInput {
 }
 
 export enum NotificationType {
-  BOOKING_CONFIRMED = 'booking_confirmed',
-  PAYMENT_PROCESSED = 'payment_processed',
-  SESSION_REMINDER = 'session_reminder',
-  DISPUTE_CREATED = 'dispute_created',
-  SYSTEM_ALERT = 'system_alert',
-  MEETING_CONFIRMED = 'meeting_confirmed',
-  MESSAGE_RECEIVED = 'message_received',
-  SESSION_CANCELLED = 'session_cancelled',
-  CALENDAR_CONNECTION_EXPIRED = 'calendar_connection_expired',
+  BOOKING_CONFIRMED = "booking_confirmed",
+  PAYMENT_PROCESSED = "payment_processed",
+  SESSION_REMINDER = "session_reminder",
+  DISPUTE_CREATED = "dispute_created",
+  SYSTEM_ALERT = "system_alert",
+  MEETING_CONFIRMED = "meeting_confirmed",
+  MESSAGE_RECEIVED = "message_received",
+  SESSION_CANCELLED = "session_cancelled",
+  CALENDAR_CONNECTION_EXPIRED = "calendar_connection_expired",
 }
 
 export enum NotificationChannel {
-  EMAIL = 'email',
-  IN_APP = 'in_app',
-  PUSH = 'push'
+  EMAIL = "email",
+  IN_APP = "in_app",
+  PUSH = "push",
 }
 
 export enum NotificationPriority {
-  LOW = 'low',
-  NORMAL = 'normal',
-  HIGH = 'high',
-  CRITICAL = 'critical'
+  LOW = "low",
+  NORMAL = "normal",
+  HIGH = "high",
+  CRITICAL = "critical",
 }
 
 /**
@@ -113,7 +113,7 @@ export const NotificationsModel = {
       input.user_id,
       input.type,
       input.channel,
-      input.priority || 'normal',
+      input.priority || "normal",
       input.title,
       input.message,
       input.template_id,
@@ -127,7 +127,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to create notification:', error);
+      logger.error("Failed to create notification:", error);
       return null;
     }
   },
@@ -145,13 +145,14 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, [id]);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to get notification by ID:', error);
+      logger.error("Failed to get notification by ID:", error);
       return null;
     }
   },
 
   /**
-   * Get notifications for a user with filtering options
+   * Get notifications for a user with filtering options.
+   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) — verified correct, no bare paramCount interpolation.
    */
   async getByUserId(
     userId: string,
@@ -161,7 +162,7 @@ export const NotificationsModel = {
       isRead?: boolean;
       limit?: number;
       offset?: number;
-    } = {}
+    } = {},
   ): Promise<NotificationRecord[]> {
     let query = `
       SELECT * FROM notifications
@@ -201,7 +202,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows;
     } catch (error) {
-      logger.error('Failed to get notifications by user ID:', error);
+      logger.error("Failed to get notifications by user ID:", error);
       return [];
     }
   },
@@ -209,14 +210,19 @@ export const NotificationsModel = {
   /**
    * Get unread notifications for a user
    */
-  async getUnreadByUserId(userId: string, limit: number = 50): Promise<NotificationRecord[]> {
+  async getUnreadByUserId(
+    userId: string,
+    limit: number = 50,
+  ): Promise<NotificationRecord[]> {
     return this.getByUserId(userId, { isRead: false, limit });
   },
 
   /**
    * Get scheduled notifications that are ready to be sent
    */
-  async getScheduledNotifications(limit: number = 100): Promise<NotificationRecord[]> {
+  async getScheduledNotifications(
+    limit: number = 100,
+  ): Promise<NotificationRecord[]> {
     const query = `
       SELECT * FROM notifications
       WHERE scheduled_at IS NOT NULL 
@@ -230,7 +236,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, [limit]);
       return rows;
     } catch (error) {
-      logger.error('Failed to get scheduled notifications:', error);
+      logger.error("Failed to get scheduled notifications:", error);
       return [];
     }
   },
@@ -250,7 +256,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      logger.error('Failed to mark notification as read:', error);
+      logger.error("Failed to mark notification as read:", error);
       return false;
     }
   },
@@ -270,7 +276,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [userId]);
       return rowCount ?? 0;
     } catch (error) {
-      logger.error('Failed to mark all notifications as read:', error);
+      logger.error("Failed to mark all notifications as read:", error);
       return 0;
     }
   },
@@ -278,7 +284,10 @@ export const NotificationsModel = {
   /**
    * Update notification
    */
-  async update(id: string, updates: Partial<NotificationInput>): Promise<NotificationRecord | null> {
+  async update(
+    id: string,
+    updates: Partial<NotificationInput>,
+  ): Promise<NotificationRecord | null> {
     const fields = [];
     const values = [];
     let paramCount = 1;
@@ -317,7 +326,7 @@ export const NotificationsModel = {
 
     const query = `
       UPDATE notifications
-      SET ${fields.join(', ')}
+      SET ${fields.join(", ")}
       WHERE id = $${paramCount}
       RETURNING *;
     `;
@@ -326,7 +335,7 @@ export const NotificationsModel = {
       const { rows } = await pool.query<NotificationRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      logger.error('Failed to update notification:', error);
+      logger.error("Failed to update notification:", error);
       return null;
     }
   },
@@ -345,7 +354,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query, [id]);
       return (rowCount ?? 0) > 0;
     } catch (error) {
-      logger.error('Failed to delete notification:', error);
+      logger.error("Failed to delete notification:", error);
       return false;
     }
   },
@@ -364,7 +373,7 @@ export const NotificationsModel = {
       const { rowCount } = await pool.query(query);
       return rowCount ?? 0;
     } catch (error) {
-      logger.error('Failed to delete expired notifications:', error);
+      logger.error("Failed to delete expired notifications:", error);
       return 0;
     }
   },
@@ -372,7 +381,9 @@ export const NotificationsModel = {
   /**
    * Get notification counts by status for a user
    */
-  async getCountsByUserId(userId: string): Promise<{ total: number; unread: number; read: number }> {
+  async getCountsByUserId(
+    userId: string,
+  ): Promise<{ total: number; unread: number; read: number }> {
     const query = `
       SELECT 
         COUNT(*) as total,
@@ -391,7 +402,7 @@ export const NotificationsModel = {
         read: parseInt(row.read, 10),
       };
     } catch (error) {
-      logger.error('Failed to get notification counts:', error);
+      logger.error("Failed to get notification counts:", error);
       return { total: 0, unread: 0, read: 0 };
     }
   },
