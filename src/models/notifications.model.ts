@@ -5,16 +5,13 @@ export interface NotificationRecord {
   id: string;
   user_id: string;
   type: string;
-  channel: string;
-  priority: string;
   title: string;
   message: string;
-  template_id?: string;
-  template_data: Record<string, any>;
   data: Record<string, any>;
+  action_url: string | null;
   is_read: boolean;
-  scheduled_at?: Date;
-  expires_at?: Date;
+  dismissed_at: Date | null;
+  expires_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -22,14 +19,10 @@ export interface NotificationRecord {
 export interface NotificationInput {
   user_id: string;
   type: string;
-  channel: string;
-  priority?: string;
   title: string;
   message: string;
-  template_id?: string;
-  template_data?: Record<string, any>;
   data?: Record<string, any>;
-  scheduled_at?: Date;
+  action_url?: string;
   expires_at?: Date;
 }
 
@@ -73,10 +66,9 @@ export const NotificationsModel = {
   async create(input: NotificationInput): Promise<NotificationRecord | null> {
     const query = `
       INSERT INTO notifications (
-        user_id, type, channel, priority, title, message, 
-        template_id, template_data, data, scheduled_at, expires_at
+        user_id, type, title, message, data, action_url, expires_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW() + INTERVAL '90 days'))
       RETURNING *;
     `;
 
@@ -87,11 +79,9 @@ export const NotificationsModel = {
       input.priority || "normal",
       input.title,
       input.message,
-      input.template_id,
-      JSON.stringify(input.template_data || {}),
       JSON.stringify(input.data || {}),
-      input.scheduled_at,
-      input.expires_at,
+      input.action_url ?? null,
+      input.expires_at ?? null,
     ];
 
     try {
@@ -128,7 +118,6 @@ export const NotificationsModel = {
   async getByUserId(
     userId: string,
     options: {
-      channel?: string;
       type?: string;
       isRead?: boolean;
       limit?: number;
@@ -138,14 +127,11 @@ export const NotificationsModel = {
     let query = `
       SELECT * FROM notifications
       WHERE user_id = $1
+        AND dismissed_at IS NULL
+        AND (expires_at IS NULL OR expires_at > NOW())
     `;
     const values: any[] = [userId];
     let paramCount = 2;
-
-    if (options.channel) {
-      query += ` AND channel = $${paramCount++}`;
-      values.push(options.channel);
-    }
 
     if (options.type) {
       query += ` AND type = $${paramCount++}`;
@@ -271,17 +257,13 @@ export const NotificationsModel = {
       fields.push(`message = $${paramCount++}`);
       values.push(updates.message);
     }
-    if (updates.template_data !== undefined) {
-      fields.push(`template_data = $${paramCount++}`);
-      values.push(JSON.stringify(updates.template_data));
-    }
     if (updates.data !== undefined) {
       fields.push(`data = $${paramCount++}`);
       values.push(JSON.stringify(updates.data));
     }
-    if (updates.scheduled_at !== undefined) {
-      fields.push(`scheduled_at = $${paramCount++}`);
-      values.push(updates.scheduled_at);
+    if (updates.action_url !== undefined) {
+      fields.push(`action_url = $${paramCount++}`);
+      values.push(updates.action_url);
     }
     if (updates.expires_at !== undefined) {
       fields.push(`expires_at = $${paramCount++}`);

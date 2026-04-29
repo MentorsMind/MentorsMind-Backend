@@ -46,22 +46,20 @@ export const InAppNotificationService = {
    * Create a notification and deliver via Socket.IO in real time.
    */
   async create(input: CreateNotificationInput): Promise<InAppNotification> {
-    const { rows } = await pool.query<InAppNotification>(
-      `INSERT INTO notifications
-         (user_id, type, title, message, data, action_url, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '90 days')
-       RETURNING *`,
-      [
-        input.userId,
-        input.type,
-        input.title,
-        input.message,
-        JSON.stringify(input.data || {}),
-        input.actionUrl || null,
-      ],
-    );
+    const record = await NotificationsModel.create({
+      user_id: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      data: input.data,
+      action_url: input.actionUrl,
+    });
 
-    const notification = rows[0];
+    if (!record) {
+      throw new Error("Failed to create notification");
+    }
+
+    const notification = record as unknown as InAppNotification;
 
     SocketService.emitToUser(input.userId, "notification:new", notification);
 
