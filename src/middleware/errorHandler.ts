@@ -16,11 +16,12 @@ export const errorHandler = (
 ) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
-  
+
   const context = traceStore.getStore();
-  const requestId = context?.requestId || (req as any).requestId || res.locals?.requestId;
+  const requestId =
+    context?.requestId || (req as any).requestId || res.locals?.requestId;
   const correlationId = context?.correlationId || (req as any).correlationId;
-  
+
   const user = (req as any).user;
 
   logger.error(`${req.method} ${req.path}`, {
