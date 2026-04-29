@@ -1,35 +1,69 @@
-import { WebSocket } from "ws";
+import WebSocket from "ws";
 import { logger } from "../utils/logger.utils";
 
-/** userId → set of active WebSocket connections */
-const clients = new Map<string, Set<WebSocket>>();
+type WsClient = WebSocket;
+
+const clients = new Map<string, Set<WsClient>>();
+let subscribed = false;
 
 export const WsService = {
-  addClient(userId: string, ws: WebSocket): void {
+  addClient(userId: string, ws: WsClient): void {
     if (!clients.has(userId)) clients.set(userId, new Set());
     clients.get(userId)!.add(ws);
   },
 
-  removeClient(userId: string, ws: WebSocket): void {
+  removeClient(userId: string, ws: WsClient): void {
     const set = clients.get(userId);
     if (!set) return;
     set.delete(ws);
     if (set.size === 0) clients.delete(userId);
   },
 
-  /** Send a raw payload to all connections for a user. */
-  sendToUser(userId: string, payload: object): void {
+  sendToUser(userId: string, event: string, data: unknown): void {
     const set = clients.get(userId);
     if (!set) return;
-    const data = JSON.stringify(payload);
+    const payload = JSON.stringify({ event, data });
     for (const ws of set) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(data);
+      if (ws.readyState === WebSocket.OPEN) ws.send(payload);
     }
   },
 
-  /** Publish an event+data envelope to a user. */
   async publish(userId: string, event: string, data: unknown): Promise<void> {
-    this.sendToUser(userId, { event, data });
+    this.sendToUser(userId, event, data);
+  },
+
+  /**
+   * Subscribe to Redis pub/sub for cross-process WS delivery.
+   * Dedup guard: only one subscription is created regardless of call count.
+   */
+  subscribeToRedis(callback: (userId: string, payload: unknown) => void): void {
+    if (subscribed) return;
+    subscribed = true;
+
+    (async () => {
+      try {
+        const { getRedisClients } = await import("../config/redis.pubsub");
+        const { sub, CHANNEL } = await getRedisClients();
+
+        sub.removeAllListeners("message");
+        await sub.subscribe(CHANNEL);
+
+        sub.on("message", (_channel: string, message: string) => {
+          try {
+            const { userId, payload } = JSON.parse(message);
+            callback(userId, payload);
+          } catch {
+            logger.warn({ message }, "WsService: invalid Redis message");
+          }
+        });
+      } catch (err: any) {
+        subscribed = false; // allow retry on next call
+        logger.error(
+          { error: err.message },
+          "WsService: subscribeToRedis failed",
+        );
+      }
+    })();
   },
 
   getConnectedCount(): number {
@@ -38,19 +72,13 @@ export const WsService = {
     return count;
   },
 
-  /** Remove all closed sockets from the client map. */
   cleanup(): void {
-    for (const [userId, set] of clients) {
-      for (const ws of set) {
-        if (ws.readyState !== WebSocket.OPEN) set.delete(ws);
-      }
-      if (set.size === 0) clients.delete(userId);
-    }
-    logger.debug("WsService: cleanup complete", {
-      connected: this.getConnectedCount(),
-    });
+    clients.clear();
+    subscribed = false;
   },
 
-  /** No-op stub — kept for interface compatibility with Redis-backed variants. */
-  subscribeToRedis(): void {},
+  /** Exposed for testing only */
+  _resetSubscribed(): void {
+    subscribed = false;
+  },
 };

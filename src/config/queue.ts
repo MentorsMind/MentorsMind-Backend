@@ -12,6 +12,8 @@ export const redisConnection: ConnectionOptions = {
   // Required by BullMQ — disables ioredis per-request retry for blocking ops
   maxRetriesPerRequest: null,
   enableOfflineQueue: false,
+  // Enable TLS for rediss:// URLs
+  ...(url.protocol === 'rediss:' && { tls: {} }),
 };
 
 /**

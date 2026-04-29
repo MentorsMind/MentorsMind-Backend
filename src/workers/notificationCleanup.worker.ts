@@ -1,6 +1,6 @@
 import { Worker, Job } from 'bullmq';
-import { redisConnection } from '../queues/queue.config';
-import { NOTIFICATION_CLEANUP_QUEUE, NotificationCleanupJobData } from '../queues/notificationCleanup.queue';
+import { redisConnection, QUEUE_NAMES } from '../queues/queue.config';
+import { NotificationCleanupJobData } from '../queues/notificationCleanup.queue';
 import { runNotificationCleanupJob } from '../jobs/notificationCleanup.job';
 import { logger } from '../utils/logger.utils';
 
@@ -12,7 +12,7 @@ async function processNotificationCleanupJob(
 }
 
 export const notificationCleanupWorker = new Worker<NotificationCleanupJobData>(
-  NOTIFICATION_CLEANUP_QUEUE,
+  QUEUE_NAMES.NOTIFICATION_CLEANUP,
   processNotificationCleanupJob,
   { connection: redisConnection, concurrency: 1 },
 );
