@@ -63,38 +63,9 @@ export enum NotificationPriority {
  */
 export const NotificationsModel = {
   /**
-   * Initialize the notifications table with enhanced schema
+   * Notifications table schemas are managed by database migrations.
+   * Runtime DDL creation is intentionally removed to avoid schema drift.
    */
-  async initializeTable(): Promise<void> {
-    const query = `
-      CREATE TABLE IF NOT EXISTS notifications (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        channel VARCHAR(20) NOT NULL,
-        priority VARCHAR(20) DEFAULT 'normal',
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        template_id VARCHAR(100),
-        template_data JSONB DEFAULT '{}'::jsonb,
-        data JSONB DEFAULT '{}'::jsonb,
-        is_read BOOLEAN DEFAULT FALSE,
-        scheduled_at TIMESTAMP WITH TIME ZONE,
-        expires_at TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-      CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
-      CREATE INDEX IF NOT EXISTS idx_notifications_channel ON notifications(channel);
-      CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority);
-      CREATE INDEX IF NOT EXISTS idx_notifications_scheduled_at ON notifications(scheduled_at);
-      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
-      CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-    `;
-    await pool.query(query);
-  },
 
   /**
    * Create a new notification
