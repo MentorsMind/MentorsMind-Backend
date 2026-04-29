@@ -41,9 +41,11 @@ export class HealthService {
   private static readinessCache: {
     status: DetailedHealthStatus;
     timestamp: number;
+    lastError: string | null;
   } | null = null;
 
-  private static readonly CACHE_TTL_MS = 5000;
+  private static readonly HEALTHY_CACHE_TTL_MS = 5000;
+  private static readonly UNHEALTHY_CACHE_TTL_MS = 1000;
 
   /**
    * GET /health/live
@@ -56,24 +58,79 @@ export class HealthService {
   /**
    * GET /health/ready
    * Readiness probe - checks critical dependencies.
-   * Cached for 5 seconds to prevent hammering.
+   * Cached briefly to prevent hammering while still detecting recovery quickly.
    */
   static async checkReadiness(): Promise<DetailedHealthStatus> {
     const now = Date.now();
     if (
       this.readinessCache &&
-      now - this.readinessCache.timestamp < this.CACHE_TTL_MS
+      now - this.readinessCache.timestamp <
+        this.getCacheTtl(this.readinessCache.status)
     ) {
       return this.readinessCache.status;
     }
 
-    const status = await this.performFullCheck();
+    let status: DetailedHealthStatus;
+    try {
+      status = await this.performFullCheck();
+    } catch (err: any) {
+      const lastError = err instanceof Error ? err.message : String(err);
+      logger.error("Readiness check threw an exception", { error: lastError });
+      return this.createUnhandledErrorStatus(lastError);
+    }
+
     this.readinessCache = {
       status,
       timestamp: now,
+      lastError: this.getHealthStatusError(status),
     };
 
     return status;
+  }
+
+  private static getCacheTtl(status: DetailedHealthStatus): number {
+    return status.status === "unhealthy"
+      ? this.UNHEALTHY_CACHE_TTL_MS
+      : this.HEALTHY_CACHE_TTL_MS;
+  }
+
+  private static getHealthStatusError(
+    status: DetailedHealthStatus,
+  ): string | null {
+    if (status.status === "healthy") {
+      return null;
+    }
+
+    return (
+      Object.entries(status.components)
+        .map(([name, component]) =>
+          component.error ? `${name}: ${component.error}` : undefined,
+        )
+        .find((error): error is string => Boolean(error)) ?? null
+    );
+  }
+
+  private static createUnhandledErrorStatus(
+    error: string,
+  ): DetailedHealthStatus {
+    const failedComponent: HealthComponent = {
+      status: "unhealthy",
+      error,
+    };
+
+    return {
+      status: "unhealthy",
+      components: {
+        db: failedComponent,
+        redis: failedComponent,
+        horizon: failedComponent,
+        queues: failedComponent,
+        system: this.getSystemInfo(),
+      },
+      uptime: process.uptime(),
+      version: config.server.apiVersion || CURRENT_VERSION,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
