@@ -17,14 +17,18 @@ export const redisConnection: ConnectionOptions = {
 };
 
 /**
- * Default job options: 3 attempts, exponential backoff starting at 1 second.
+ * Default job options: 5 attempts, exponential backoff starting at 2 seconds.
+ * Sequence: 2s → 4s → 8s → 16s → 32s.
  * Failed jobs are retained for dead-letter inspection.
+ *
+ * Queue-level overrides:
+ *   - paymentPollQueue: attempts=20, fixed delay=30s (Stellar polling)
  */
 export const defaultJobOptions: DefaultJobOptions = {
-  attempts: 3,
+  attempts: 5,
   backoff: {
     type: "exponential",
-    delay: 1000, // 1s → 2s → 4s
+    delay: 2000, // 2s → 4s → 8s → 16s → 32s
   },
   removeOnComplete: { count: 100 },
   removeOnFail: false,
