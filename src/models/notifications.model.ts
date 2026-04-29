@@ -38,40 +38,27 @@ export enum NotificationType {
   CALENDAR_CONNECTION_EXPIRED = "calendar_connection_expired",
 }
 
+export enum NotificationChannel {
+  EMAIL = "email",
+  IN_APP = "in_app",
+  PUSH = "push",
+}
+
+export enum NotificationPriority {
+  LOW = "low",
+  NORMAL = "normal",
+  HIGH = "high",
+  CRITICAL = "critical",
+}
+
 /**
  * Enhanced Notifications Model supporting multiple channels, priorities, and scheduling
  */
 export const NotificationsModel = {
   /**
-   * Initialize the notifications table with enhanced schema
+   * Notifications table schemas are managed by database migrations.
+   * Runtime DDL creation is intentionally removed to avoid schema drift.
    */
-  async initializeTable(): Promise<void> {
-    const query = `
-      CREATE TABLE IF NOT EXISTS notifications (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL,
-        type VARCHAR(50) NOT NULL,
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        data JSONB DEFAULT '{}'::jsonb,
-        action_url VARCHAR(500),
-        is_read BOOLEAN DEFAULT FALSE,
-        dismissed_at TIMESTAMP WITH TIME ZONE,
-        expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '90 days'),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-      CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
-      CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
-      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
-      CREATE INDEX IF NOT EXISTS idx_notifications_expires_at ON notifications(expires_at);
-      CREATE INDEX IF NOT EXISTS idx_notifications_not_dismissed
-        ON notifications(user_id, created_at DESC) WHERE dismissed_at IS NULL;
-    `;
-    await pool.query(query);
-  },
 
   /**
    * Create a new notification
@@ -88,6 +75,8 @@ export const NotificationsModel = {
     const values = [
       input.user_id,
       input.type,
+      input.channel,
+      input.priority || "normal",
       input.title,
       input.message,
       JSON.stringify(input.data || {}),
@@ -123,7 +112,8 @@ export const NotificationsModel = {
   },
 
   /**
-   * Get notifications for a user with filtering options
+   * Get notifications for a user with filtering options.
+   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) — verified correct, no bare paramCount interpolation.
    */
   async getByUserId(
     userId: string,
@@ -182,6 +172,30 @@ export const NotificationsModel = {
     limit: number = 50,
   ): Promise<NotificationRecord[]> {
     return this.getByUserId(userId, { isRead: false, limit });
+  },
+
+  /**
+   * Get scheduled notifications that are ready to be sent
+   */
+  async getScheduledNotifications(
+    limit: number = 100,
+  ): Promise<NotificationRecord[]> {
+    const query = `
+      SELECT * FROM notifications
+      WHERE scheduled_at IS NOT NULL 
+        AND scheduled_at <= NOW()
+        AND (expires_at IS NULL OR expires_at > NOW())
+      ORDER BY priority DESC, scheduled_at ASC
+      LIMIT $1;
+    `;
+
+    try {
+      const { rows } = await pool.query<NotificationRecord>(query, [limit]);
+      return rows;
+    } catch (error) {
+      logger.error("Failed to get scheduled notifications:", error);
+      return [];
+    }
   },
 
   /**

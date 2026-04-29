@@ -1,17 +1,19 @@
-import { Request, Response } from 'express';
-import { AuthService } from '../services/auth.service';
-import { UsersService } from '../services/users.service';
+import { Request, Response } from "express";
+import { AuthService } from "../services/auth.service";
+import { UsersService } from "../services/users.service";
 import {
   registerSchema,
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
-  refreshTokenSchema,
-} from '../validators/auth.validator';
-import { AuthenticatedRequest } from '../middleware/auth.middleware';
-import { ZodError } from 'zod';
-import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
-import { LoginAttemptsService } from '../services/loginAttempts.service';
+} from "../validators/auth.validator";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
+import { ZodError } from "zod";
+import {
+  AuditLogService,
+  extractIpAddress,
+} from "../services/auditLog.service";
+import { LoginAttemptsService } from "../services/loginAttempts.service";
 
 export const AuthController = {
   async register(req: Request, res: Response) {
@@ -21,18 +23,24 @@ export const AuthController = {
 
       await AuditLogService.log({
         userId: result.userId || null,
-        action: 'USER_REGISTERED',
-        resourceType: 'auth',
+        action: "USER_REGISTERED",
+        resourceType: "auth",
         resourceId: result.userId || null,
         ipAddress: extractIpAddress(req),
-        userAgent: req.headers['user-agent'] || null,
+        userAgent: req.headers["user-agent"] || null,
         metadata: { email: validatedData.email, role: validatedData.role },
       });
 
       return res.status(201).json({ success: true, data: result });
     } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "Validation failed",
+            details: error.issues,
+          });
       }
       return res.status(400).json({ success: false, error: error.message });
     }
@@ -40,7 +48,7 @@ export const AuthController = {
 
   async login(req: Request, res: Response) {
     const ipAddress = extractIpAddress(req);
-    const userAgent = req.headers['user-agent'] || null;
+    const userAgent = req.headers["user-agent"] || null;
 
     try {
       const validatedData = loginSchema.parse(req).body;
@@ -52,32 +60,41 @@ export const AuthController = {
       if (lockStatus.locked) {
         await AuditLogService.log({
           userId: null,
-          action: 'LOGIN_BLOCKED_LOCKOUT',
-          resourceType: 'auth',
+          action: "LOGIN_BLOCKED_LOCKOUT",
+          resourceType: "auth",
           ipAddress,
           userAgent,
-          metadata: { email, permanent: lockStatus.permanent, attempts: lockStatus.attempts },
+          metadata: {
+            email,
+            permanent: lockStatus.permanent,
+            attempts: lockStatus.attempts,
+          },
         });
 
         if (lockStatus.permanent) {
           return res.status(429).json({
             success: false,
-            error: 'Account permanently locked due to too many failed attempts. Contact support.',
+            error:
+              "Account permanently locked due to too many failed attempts. Contact support.",
             captcha_required: true,
           });
         }
 
-        res.setHeader('Retry-After', String(lockStatus.retryAfter ?? 900));
+        res.setHeader("Retry-After", String(lockStatus.retryAfter ?? 900));
         return res.status(429).json({
           success: false,
-          error: 'Account temporarily locked. Too many failed login attempts.',
+          error: "Account temporarily locked. Too many failed login attempts.",
           retry_after: lockStatus.retryAfter,
           captcha_required: true,
         });
       }
 
       // ── Attempt login ──
-      const result = await AuthService.login(validatedData, ipAddress, userAgent);
+      const result = await AuthService.login(
+        validatedData,
+        ipAddress,
+        userAgent,
+      );
 
       if (result.mfaRequired) {
         return res.status(200).json({
@@ -92,8 +109,8 @@ export const AuthController = {
 
       await AuditLogService.log({
         userId: result.userId,
-        action: 'LOGIN_SUCCESS',
-        resourceType: 'auth',
+        action: "LOGIN_SUCCESS",
+        resourceType: "auth",
         resourceId: result.userId,
         ipAddress,
         userAgent,
@@ -108,12 +125,16 @@ export const AuthController = {
 
       if (email) {
         // Record failure and get updated status
-        const lockStatus = await LoginAttemptsService.recordFailure(email, ipAddress, email);
+        const lockStatus = await LoginAttemptsService.recordFailure(
+          email,
+          ipAddress,
+          email,
+        );
 
         await AuditLogService.log({
           userId: null,
-          action: 'LOGIN_FAILED',
-          resourceType: 'auth',
+          action: "LOGIN_FAILED",
+          resourceType: "auth",
           ipAddress,
           userAgent,
           metadata: {
@@ -129,15 +150,17 @@ export const AuthController = {
           if (lockStatus.permanent) {
             return res.status(429).json({
               success: false,
-              error: 'Account permanently locked due to too many failed attempts. Contact support.',
+              error:
+                "Account permanently locked due to too many failed attempts. Contact support.",
               captcha_required: true,
             });
           }
 
-          res.setHeader('Retry-After', String(lockStatus.retryAfter ?? 900));
+          res.setHeader("Retry-After", String(lockStatus.retryAfter ?? 900));
           return res.status(429).json({
             success: false,
-            error: 'Account temporarily locked. Too many failed login attempts.',
+            error:
+              "Account temporarily locked. Too many failed login attempts.",
             retry_after: lockStatus.retryAfter,
             captcha_required: true,
           });
@@ -145,19 +168,31 @@ export const AuthController = {
 
         // Not yet locked — return normal auth error with captcha hint
         if (error instanceof ZodError) {
-          return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
+          return res
+            .status(400)
+            .json({
+              success: false,
+              error: "Validation failed",
+              details: error.issues,
+            });
         }
 
         return res.status(401).json({
           success: false,
-          error: 'Invalid email or password.',
+          error: "Invalid email or password.",
           captcha_required: lockStatus.captchaRequired,
           attempts_remaining: Math.max(0, 5 - lockStatus.attempts),
         });
       }
 
       if (error instanceof ZodError) {
-        return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "Validation failed",
+            details: error.issues,
+          });
       }
       return res.status(400).json({ success: false, error: error.message });
     }
@@ -171,29 +206,18 @@ export const AuthController = {
 
         await AuditLogService.log({
           userId,
-          action: 'LOGOUT',
-          resourceType: 'auth',
+          action: "LOGOUT",
+          resourceType: "auth",
           resourceId: userId,
           ipAddress: extractIpAddress(req),
-          userAgent: req.headers['user-agent'] || null,
+          userAgent: req.headers["user-agent"] || null,
         });
       }
-      return res.status(200).json({ success: true, message: 'Logged out successfully.' });
+      return res
+        .status(200)
+        .json({ success: true, message: "Logged out successfully." });
     } catch (error: any) {
       return res.status(500).json({ success: false, error: error.message });
-    }
-  },
-
-  async refresh(req: Request, res: Response) {
-    try {
-      const validatedData = refreshTokenSchema.parse(req).body;
-      const result = await AuthService.refresh(validatedData.refreshToken);
-      return res.status(200).json({ success: true, data: result });
-    } catch (error: any) {
-      if (error instanceof ZodError) {
-        return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
-      }
-      return res.status(401).json({ success: false, error: error.message });
     }
   },
 
@@ -203,11 +227,17 @@ export const AuthController = {
       await AuthService.forgotPassword(validatedData.email);
       return res.status(200).json({
         success: true,
-        message: 'If the email exists, a reset link has been generated.',
+        message: "If the email exists, a reset link has been generated.",
       });
     } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "Validation failed",
+            details: error.issues,
+          });
       }
       return res.status(400).json({ success: false, error: error.message });
     }
@@ -221,22 +251,29 @@ export const AuthController = {
       if (userId) {
         await AuditLogService.log({
           userId,
-          action: 'PASSWORD_CHANGED',
-          resourceType: 'auth',
+          action: "PASSWORD_CHANGED",
+          resourceType: "auth",
           resourceId: userId,
           ipAddress: extractIpAddress(req),
-          userAgent: req.headers['user-agent'] || null,
-          metadata: { method: 'reset_token' },
+          userAgent: req.headers["user-agent"] || null,
+          metadata: { method: "reset_token" },
         });
       }
 
       return res.status(200).json({
         success: true,
-        message: 'Password reset successfully. You can now login with your new password.',
+        message:
+          "Password reset successfully. You can now login with your new password.",
       });
     } catch (error: any) {
       if (error instanceof ZodError) {
-        return res.status(400).json({ success: false, error: 'Validation failed', details: error.issues });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "Validation failed",
+            details: error.issues,
+          });
       }
       return res.status(400).json({ success: false, error: error.message });
     }
@@ -246,12 +283,14 @@ export const AuthController = {
     try {
       const userId = req.user?.userId;
       if (!userId) {
-        return res.status(401).json({ success: false, error: 'Unauthorized' });
+        return res.status(401).json({ success: false, error: "Unauthorized" });
       }
 
       const user = await UsersService.findPublicById(userId);
       if (!user) {
-        return res.status(404).json({ success: false, error: 'User not found.' });
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found." });
       }
 
       return res.status(200).json({ success: true, data: user });

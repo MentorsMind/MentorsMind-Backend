@@ -1,11 +1,11 @@
-import { SocketService } from '../../services/socket.service';
-import { logger } from '../../utils/logger.utils';
+import { WsService } from "../../services/ws.service";
+import { logger } from "../../utils/logger.utils";
 
 export interface PaymentStatusPayload {
   transactionId: string;
   bookingId: string;
   userId: string;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: "pending" | "completed" | "failed" | "refunded";
   amount?: string;
   currency?: string;
 }
@@ -28,7 +28,7 @@ export async function notifyPaymentStatus(
   const { userId, transactionId, bookingId, status, amount, currency } =
     payload;
 
-  SocketService.emitToUser(userId, 'payment:status', {
+  WsService.publish(userId, "payment:status", {
     transactionId,
     bookingId,
     status,
@@ -36,7 +36,7 @@ export async function notifyPaymentStatus(
     currency,
   });
 
-  logger.info('WS payment: status update', { userId, transactionId, status });
+  logger.info("WS payment: status update", { userId, transactionId, status });
 }
 
 /**
@@ -50,9 +50,9 @@ export async function notifyEscrowUpdate(
   const data = { escrowId, bookingId, status, amount };
 
   await Promise.all([
-    SocketService.emitToUser(mentorId, 'escrow:update', data),
-    SocketService.emitToUser(menteeId, 'escrow:update', data),
+    WsService.publish(mentorId, "escrow:update", data),
+    WsService.publish(menteeId, "escrow:update", data),
   ]);
 
-  logger.info('WS payment: escrow update', { escrowId, status });
+  logger.info("WS payment: escrow update", { escrowId, status });
 }

@@ -1,4 +1,4 @@
-import { NotificationsModel } from "../models/notifications.model";
+import pool from "../config/database";
 import { SocketService } from "./socket.service";
 import { logger } from "../utils/logger.utils";
 
@@ -73,7 +73,7 @@ export const InAppNotificationService = {
   },
 
   /**
-   * List notifications for a user (excluding dismissed/expired), newest first.
+   * List notifications for a user (excluding dismissed/expired), unread first then newest.
    */
   async list(
     userId: string,
@@ -93,7 +93,7 @@ export const InAppNotificationService = {
          WHERE user_id = $1
            AND dismissed_at IS NULL
            AND (expires_at IS NULL OR expires_at > NOW())
-         ORDER BY created_at DESC
+         ORDER BY is_read ASC, created_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset],
       ),

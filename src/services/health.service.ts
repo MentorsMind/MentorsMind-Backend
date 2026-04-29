@@ -1,16 +1,16 @@
-import pool from '../config/database';
-import { server } from '../config/stellar';
-import config from '../config';
-import { redisConfig } from '../config/redis.config';
-import { CacheService } from './cache.service';
-import { logger } from '../utils/logger.utils';
-import { CURRENT_VERSION } from '../config/api-versions.config';
-import { validateRequiredTables } from '../utils/table-validator.utils';
-import * as os from 'node:os';
+import pool from "../config/database";
+import { server } from "../config/stellar";
+import config from "../config";
+import { redisConfig } from "../config/redis.config";
+import { CacheService } from "./cache.service";
+import { logger } from "../utils/logger.utils";
+import { CURRENT_VERSION } from "../config/api-versions.config";
+import { validateRequiredTables } from "../utils/table-validator.utils";
+import * as os from "node:os";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy';
+export type HealthStatus = "healthy" | "degraded" | "unhealthy";
 
 export interface HealthComponent {
   status: HealthStatus;
@@ -27,6 +27,7 @@ export interface DetailedHealthStatus {
     horizon: HealthComponent;
     queues: HealthComponent;
     tables?: HealthComponent;
+    analyticsViews?: HealthComponent;
     system?: HealthComponent;
   };
   uptime: number;
@@ -40,9 +41,11 @@ export class HealthService {
   private static readinessCache: {
     status: DetailedHealthStatus;
     timestamp: number;
+    lastError: string | null;
   } | null = null;
 
-  private static readonly CACHE_TTL_MS = 5000;
+  private static readonly HEALTHY_CACHE_TTL_MS = 5000;
+  private static readonly UNHEALTHY_CACHE_TTL_MS = 1000;
 
   /**
    * GET /health/live
@@ -55,44 +58,110 @@ export class HealthService {
   /**
    * GET /health/ready
    * Readiness probe - checks critical dependencies.
-   * Cached for 5 seconds to prevent hammering.
+   * Cached briefly to prevent hammering while still detecting recovery quickly.
    */
   static async checkReadiness(): Promise<DetailedHealthStatus> {
     const now = Date.now();
-    if (this.readinessCache && now - this.readinessCache.timestamp < this.CACHE_TTL_MS) {
+    if (
+      this.readinessCache &&
+      now - this.readinessCache.timestamp <
+        this.getCacheTtl(this.readinessCache.status)
+    ) {
       return this.readinessCache.status;
     }
 
-    const status = await this.performFullCheck();
+    let status: DetailedHealthStatus;
+    try {
+      status = await this.performFullCheck();
+    } catch (err: any) {
+      const lastError = err instanceof Error ? err.message : String(err);
+      logger.error("Readiness check threw an exception", { error: lastError });
+      return this.createUnhandledErrorStatus(lastError);
+    }
+
     this.readinessCache = {
       status,
       timestamp: now,
+      lastError: this.getHealthStatusError(status),
     };
 
     return status;
+  }
+
+  private static getCacheTtl(status: DetailedHealthStatus): number {
+    return status.status === "unhealthy"
+      ? this.UNHEALTHY_CACHE_TTL_MS
+      : this.HEALTHY_CACHE_TTL_MS;
+  }
+
+  private static getHealthStatusError(
+    status: DetailedHealthStatus,
+  ): string | null {
+    if (status.status === "healthy") {
+      return null;
+    }
+
+    return (
+      Object.entries(status.components)
+        .map(([name, component]) =>
+          component.error ? `${name}: ${component.error}` : undefined,
+        )
+        .find((error): error is string => Boolean(error)) ?? null
+    );
+  }
+
+  private static createUnhandledErrorStatus(
+    error: string,
+  ): DetailedHealthStatus {
+    const failedComponent: HealthComponent = {
+      status: "unhealthy",
+      error,
+    };
+
+    return {
+      status: "unhealthy",
+      components: {
+        db: failedComponent,
+        redis: failedComponent,
+        horizon: failedComponent,
+        queues: failedComponent,
+        system: this.getSystemInfo(),
+      },
+      uptime: process.uptime(),
+      version: config.server.apiVersion || CURRENT_VERSION,
+      timestamp: new Date().toISOString(),
+    };
   }
 
   /**
    * Internal full health check
    */
   private static async performFullCheck(): Promise<DetailedHealthStatus> {
-    const [dbCheck, redisCheck, horizonCheck, queueCheck, tablesCheck] = await Promise.all([
-      this.checkDatabase(),
-      this.checkRedis(),
-      this.checkHorizon(),
-      this.checkBullMQ(),
-      this.checkDatabaseTables(),
-    ]);
+    const [dbCheck, redisCheck, horizonCheck, queueCheck, tablesCheck] =
+      await Promise.all([
+        this.checkDatabase(),
+        this.checkRedis(),
+        this.checkHorizon(),
+        this.checkBullMQ(),
+        this.checkDatabaseTables(),
+      ]);
 
     // Critical components for readiness: all must not be 'unhealthy'
     const criticalComponents = [dbCheck, redisCheck, horizonCheck];
-    const isUnhealthy = criticalComponents.some(c => c.status === 'unhealthy');
-    const isDegraded = !isUnhealthy && criticalComponents.some(c => c.status === 'degraded');
+    const isUnhealthy = criticalComponents.some(
+      (c) => c.status === "unhealthy",
+    );
+    const isDegraded =
+      !isUnhealthy && criticalComponents.some((c) => c.status === "degraded");
 
-    const status: HealthStatus = isUnhealthy ? 'unhealthy' : (isDegraded ? 'degraded' : 'healthy');
+    const status: HealthStatus = isUnhealthy
+      ? "unhealthy"
+      : isDegraded
+        ? "degraded"
+        : "healthy";
 
-    if (status !== 'healthy') {
-      logger.warn('Health check failed or degraded', {
+    if (status !== "healthy") {
+      logger.warn("Health check failed or degraded", {
         status,
         db: dbCheck.status,
         redis: redisCheck.status,
@@ -108,6 +177,7 @@ export class HealthService {
         horizon: horizonCheck,
         queues: queueCheck,
         tables: tablesCheck,
+        analyticsViews: analyticsViewsCheck,
         system: this.getSystemInfo(),
       },
       uptime: process.uptime(),
@@ -119,13 +189,13 @@ export class HealthService {
   private static async checkDatabase(): Promise<HealthComponent> {
     const start = Date.now();
     try {
-      await pool.query('SELECT 1');
-      return { status: 'healthy', responseTimeMs: Date.now() - start };
+      await pool.query("SELECT 1");
+      return { status: "healthy", responseTimeMs: Date.now() - start };
     } catch (err: any) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         responseTimeMs: Date.now() - start,
-        error: err.message
+        error: err.message,
       };
     }
   }
@@ -138,14 +208,14 @@ export class HealthService {
 
       if (validation.allTablesExist) {
         return {
-          status: 'healthy',
+          status: "healthy",
           responseTimeMs,
           details: { totalTables: validation.totalTables },
         };
       }
 
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         responseTimeMs,
         error: `Missing ${validation.missingTables.length} required table(s)`,
         details: {
@@ -155,7 +225,59 @@ export class HealthService {
       };
     } catch (err: any) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
+        responseTimeMs: Date.now() - start,
+        error: err.message,
+      };
+    }
+  }
+
+  private static async checkAnalyticsViews(): Promise<HealthComponent> {
+    const start = Date.now();
+    try {
+      const requiredViews = [
+        'mv_daily_revenue',
+        'mv_daily_users',
+        'mv_session_stats',
+        'mv_top_mentors',
+        'mv_asset_distribution',
+      ];
+
+      const query = `
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_type = 'MATERIALIZED VIEW'
+          AND table_name = ANY($1::text[])
+      `;
+
+      const { rows } = await pool.query(query, [requiredViews]);
+      const foundViews = rows.map((r) => r.table_name);
+      const allExist = requiredViews.every((v) => foundViews.includes(v));
+      const responseTimeMs = Date.now() - start;
+
+      if (allExist) {
+        return {
+          status: 'healthy',
+          responseTimeMs,
+          details: { totalViews: requiredViews.length },
+        };
+      }
+
+      const missing = requiredViews.filter((v) => !foundViews.includes(v));
+      return {
+        status: 'degraded',
+        responseTimeMs,
+        error: `Missing ${missing.length} analytics view(s)`,
+        details: {
+          missingViews: missing,
+          totalViews: requiredViews.length,
+          message: 'Run migration 015_analytics_views.sql to create views',
+        },
+      };
+    } catch (err: any) {
+      return {
+        status: 'degraded',
         responseTimeMs: Date.now() - start,
         error: err.message,
       };
@@ -166,20 +288,20 @@ export class HealthService {
     const start = Date.now();
 
     if (!redisConfig.url) {
-      return { status: 'degraded', error: 'Redis URL not configured' };
+      return { status: "degraded", error: "Redis URL not configured" };
     }
 
     if (!CacheService.isDistributed()) {
-      return { status: 'degraded', error: 'Redis shared client not connected' };
+      return { status: "degraded", error: "Redis shared client not connected" };
     }
 
     try {
       // Ping via the shared client — no new connection created
       await CacheService.ping();
-      return { status: 'healthy', responseTimeMs: Date.now() - start };
+      return { status: "healthy", responseTimeMs: Date.now() - start };
     } catch (err: any) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         responseTimeMs: Date.now() - start,
         error: err.message,
       };
@@ -189,7 +311,6 @@ export class HealthService {
   private static async checkBullMQ(): Promise<HealthComponent> {
     const start = Date.now();
     try {
-      // Use the email queue as a representative check
       const { emailQueue } = await import("../queues/email.queue");
       const counts = await emailQueue.getJobCounts(
         "active",
@@ -197,10 +318,25 @@ export class HealthService {
         "completed",
         "failed",
       );
+      if (counts.failed > 100) {
+        return {
+          status: "degraded",
+          responseTimeMs: Date.now() - start,
+          details: {
+            emailQueueFailed: counts.failed,
+            active: counts.active,
+            waiting: counts.waiting,
+          },
+        };
+      }
       return {
         status: "healthy",
         responseTimeMs: Date.now() - start,
-        details: { active: counts.active, waiting: counts.waiting },
+        details: {
+          active: counts.active,
+          waiting: counts.waiting,
+          failed: counts.failed,
+        },
       };
     } catch (err: any) {
       return {
@@ -215,12 +351,12 @@ export class HealthService {
     const start = Date.now();
     try {
       await server.ledgers().limit(1).call();
-      return { status: 'healthy', responseTimeMs: Date.now() - start };
+      return { status: "healthy", responseTimeMs: Date.now() - start };
     } catch (err: any) {
       return {
-        status: 'degraded',
+        status: "degraded",
         responseTimeMs: Date.now() - start,
-        error: err.message
+        error: err.message,
       };
     }
   }
@@ -252,7 +388,7 @@ export class HealthService {
   }
 
   static async initialize(): Promise<void> {
-    logger.info('HealthService initialized');
+    logger.info("HealthService initialized");
   }
 }
 
