@@ -250,6 +250,17 @@ function handleSignal(
   );
 }
 
+// ─── Periodic stale-connection cleanup ───────────────────────────────────────
+
+setInterval(() => {
+  for (const [sessionId, room] of sessionRooms) {
+    for (const ws of room) {
+      if (ws.readyState !== WebSocket.OPEN) room.delete(ws);
+    }
+    if (room.size === 0) sessionRooms.delete(sessionId);
+  }
+}, 30_000).unref();
+
 // ─── Cleanup ─────────────────────────────────────────────────────────────────
 
 /**
