@@ -579,9 +579,17 @@ describe("MentorsService", () => {
         submitted: true,
         message: "Verification request submitted successfully",
       });
+      
+      // Should insert into mentor_verifications table
       expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining("jsonb_set"),
-        expect.any(Array),
+        expect.stringContaining("INSERT INTO mentor_verifications"),
+        [mentorId, payload.documentType, payload.documentUrl, payload.linkedinUrl, payload.additionalNotes],
+      );
+      
+      // Should update user status to pending_verification
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining("UPDATE users"),
+        [mentorId],
       );
     });
   });
