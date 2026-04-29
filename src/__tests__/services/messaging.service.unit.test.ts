@@ -21,6 +21,118 @@ describe("MessagingService", () => {
     jest.clearAllMocks();
   });
 
+  describe("getOrCreateConversation", () => {
+    const userAId = "user-123";
+    const userBId = "user-456";
+
+    it("should return null when only a cancelled booking exists", async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rows: [], // No valid bookings found
+      });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toBeNull();
+      expect(mockPool.query).toHaveBeenCalledWith(
+        expect.stringContaining("status IN ('confirmed', 'in_progress', 'completed')"),
+        [userAId, userBId]
+      );
+    });
+
+    it("should return null when only a rejected booking exists", async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rows: [], // No valid bookings found
+      });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toBeNull();
+    });
+
+    it("should return null when no booking exists", async () => {
+      mockPool.query.mockResolvedValueOnce({
+        rows: [],
+      });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toBeNull();
+    });
+
+    it("should create conversation when a confirmed booking exists", async () => {
+      const mockConversation = {
+        id: "conv-123",
+        participant_one_id: userAId,
+        participant_two_id: userBId,
+        last_message_id: null,
+        last_message_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{ id: "booking-123" }], // Valid booking found
+        })
+        .mockResolvedValueOnce({
+          rows: [mockConversation], // Conversation created
+        });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toEqual(mockConversation);
+      expect(mockPool.query).toHaveBeenCalledTimes(2);
+    });
+
+    it("should create conversation when an in_progress booking exists", async () => {
+      const mockConversation = {
+        id: "conv-123",
+        participant_one_id: userAId,
+        participant_two_id: userBId,
+        last_message_id: null,
+        last_message_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{ id: "booking-123" }],
+        })
+        .mockResolvedValueOnce({
+          rows: [mockConversation],
+        });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toEqual(mockConversation);
+    });
+
+    it("should create conversation when a completed booking exists", async () => {
+      const mockConversation = {
+        id: "conv-123",
+        participant_one_id: userAId,
+        participant_two_id: userBId,
+        last_message_id: null,
+        last_message_at: null,
+        created_at: new Date(),
+        updated_at: new Date(),
+      };
+
+      mockPool.query
+        .mockResolvedValueOnce({
+          rows: [{ id: "booking-123" }],
+        })
+        .mockResolvedValueOnce({
+          rows: [mockConversation],
+        });
+
+      const result = await MessagingService.getOrCreateConversation(userAId, userBId);
+
+      expect(result).toEqual(mockConversation);
+    });
+  });
+
   describe("searchMessages", () => {
     const userId = "user-123";
     const mockConversation = {

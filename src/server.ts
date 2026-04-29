@@ -23,9 +23,7 @@ import app from "./app";
 import { createSocketServer } from "./config/socket";
 import { initializeSocketService } from "./services/socket.service";
 import { initializeGraphQL } from "./graphql/server";
-import {
-  stellarMonitorJob,
-} from "./jobs/stellarMonitor.job";
+import { stellarMonitorJob } from "./jobs/stellarMonitor.job";
 import {
   emailWorker,
   paymentWorker,
@@ -75,6 +73,25 @@ import("./services/jwks.service").then(({ JwksService }) =>
   ),
 );
 
+// Log effective retry configuration for each active queue
+import { defaultJobOptions, QUEUE_NAMES } from "./config/queue";
+const queueRetryOverrides: Record<
+  string,
+  { attempts: number; backoff: unknown }
+> = {
+  [QUEUE_NAMES.PAYMENT_POLL]: {
+    attempts: 20,
+    backoff: { type: "fixed", delay: 30_000 },
+  },
+};
+Object.values(QUEUE_NAMES).forEach((name) => {
+  const effective = queueRetryOverrides[name] ?? {
+    attempts: defaultJobOptions.attempts,
+    backoff: defaultJobOptions.backoff,
+  };
+  logger.info("Queue retry config", { queue: name, ...effective });
+});
+
 // Start background job workers and scheduler
 startScheduler().catch((err) => {
   logger.error("Failed to start job scheduler", { error: err });
@@ -111,9 +128,13 @@ stellarMonitorJob.start().catch((err) => {
 });
 
 // Start background exchange rate refresh (60s interval, cached in Redis)
-import('./services/assetExchange.service').then(({ AssetExchangeService }) => {
-  AssetExchangeService.startRateRefresh();
-}).catch((err) => logger.error('Failed to start asset exchange rate refresh', { error: err }));
+import("./services/assetExchange.service")
+  .then(({ AssetExchangeService }) => {
+    AssetExchangeService.startRateRefresh();
+  })
+  .catch((err) =>
+    logger.error("Failed to start asset exchange rate refresh", { error: err }),
+  );
 
 // Graceful shutdown
 async function shutdown(signal: string) {

@@ -28,7 +28,7 @@ export const ConversationsController = {
     if (!conversation) {
       ResponseUtil.forbidden(
         res,
-        'Messaging is only available between users who share at least one booking',
+        'Messaging is only available between users who share at least one confirmed booking',
       );
       return;
     }

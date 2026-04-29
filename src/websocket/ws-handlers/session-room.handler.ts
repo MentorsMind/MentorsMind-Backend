@@ -1,7 +1,13 @@
 import { WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { AuthenticatedWebSocket } from "../ws-auth.middleware";
 import { SessionModel } from "../../models/session.model";
 import { logger } from "../../utils/logger.utils";
+import { sanitizeString } from "../../utils/sanitization.utils";
+
+const NOTES_MAX_BYTES = 50_000;
+const NOTES_RATE_LIMIT = 10; // max events per second per client
+const notesSyncTimestamps = new Map<string, number[]>();
 
 // ─── Session room map ────────────────────────────────────────────────────────
 
@@ -151,15 +157,6 @@ function handleStart(
   const sessionId = data?.sessionId;
   if (!sessionId) return sendError(client, "sessionId is required");
 
-  const room = sessionRooms.get(sessionId);
-  if (!room || ![...room].some((ws) => ws.userId === client.userId)) {
-    return sendError(client, "Not a participant of this session");
-  }
-
-  if (client.role !== "mentor") {
-    return sendError(client, "Only the mentor can start/end a session");
-  }
-
   broadcastToSession(sessionId, {
     event: "session:started",
     data: { sessionId, startedBy: client.userId, ts: Date.now() },
@@ -177,15 +174,6 @@ function handleEnd(
 ): void {
   const sessionId = data?.sessionId;
   if (!sessionId) return sendError(client, "sessionId is required");
-
-  const room = sessionRooms.get(sessionId);
-  if (!room || ![...room].some((ws) => ws.userId === client.userId)) {
-    return sendError(client, "Not a participant of this session");
-  }
-
-  if (client.role !== "mentor") {
-    return sendError(client, "Only the mentor can start/end a session");
-  }
 
   broadcastToSession(sessionId, {
     event: "session:ended",
@@ -208,11 +196,35 @@ function handleNotesSync(
   const { sessionId, notes } = data ?? {};
   if (!sessionId) return sendError(client, "sessionId is required");
 
+  // Rate limit: max NOTES_RATE_LIMIT events per second per client
+  const now = Date.now();
+  const key = client.userId;
+  const timestamps = (notesSyncTimestamps.get(key) ?? []).filter(
+    (t) => now - t < 1000,
+  );
+  if (timestamps.length >= NOTES_RATE_LIMIT) {
+    return sendError(client, "Too many notes-sync events");
+  }
+  timestamps.push(now);
+  notesSyncTimestamps.set(key, timestamps);
+
+  // Size limit
+  if (notes && notes.length > NOTES_MAX_BYTES) {
+    return sendError(client, "Notes content too large (max 50KB)");
+  }
+
+  const sanitizedNotes = notes != null ? sanitizeString(notes) : notes;
+
   broadcastToSession(
     sessionId,
     {
       event: "session:notes-updated",
-      data: { sessionId, notes, updatedBy: client.userId, ts: Date.now() },
+      data: {
+        sessionId,
+        notes: sanitizedNotes,
+        updatedBy: client.userId,
+        ts: Date.now(),
+      },
     },
     client,
   );

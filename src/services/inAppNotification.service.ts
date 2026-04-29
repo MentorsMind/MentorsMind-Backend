@@ -1,21 +1,21 @@
-import pool from '../config/database';
-import { SocketService } from './socket.service';
-import { logger } from '../utils/logger.utils';
+import pool from "../config/database";
+import { SocketService } from "./socket.service";
+import { logger } from "../utils/logger.utils";
 
 export type InAppNotificationType =
-  | 'booking_confirmed'
-  | 'session_reminder'
-  | 'payment_received'
-  | 'review_received'
-  | 'message_received'
-  | 'verification_approved'
-  | 'dispute_opened'
-  | 'session_booked'
-  | 'session_cancelled'
-  | 'payment_failed'
-  | 'escrow_released'
-  | 'meeting_confirmed'
-  | 'system_alert';
+  | "booking_confirmed"
+  | "session_reminder"
+  | "payment_received"
+  | "review_received"
+  | "message_received"
+  | "verification_approved"
+  | "dispute_opened"
+  | "session_booked"
+  | "session_cancelled"
+  | "payment_failed"
+  | "escrow_released"
+  | "meeting_confirmed"
+  | "system_alert";
 
 export interface InAppNotification {
   id: string;
@@ -63,9 +63,9 @@ export const InAppNotificationService = {
 
     const notification = rows[0];
 
-    SocketService.emitToUser(input.userId, 'notification:new', notification);
+    SocketService.emitToUser(input.userId, "notification:new", notification);
 
-    logger.debug('InAppNotificationService: created', {
+    logger.debug("InAppNotificationService: created", {
       notificationId: notification.id,
       userId: input.userId,
       type: input.type,
@@ -75,7 +75,7 @@ export const InAppNotificationService = {
   },
 
   /**
-   * List notifications for a user (excluding dismissed/expired), newest first.
+   * List notifications for a user (excluding dismissed/expired), unread first then newest.
    */
   async list(
     userId: string,
@@ -95,7 +95,7 @@ export const InAppNotificationService = {
          WHERE user_id = $1
            AND dismissed_at IS NULL
            AND (expires_at IS NULL OR expires_at > NOW())
-         ORDER BY created_at DESC
+         ORDER BY is_read ASC, created_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset],
       ),
