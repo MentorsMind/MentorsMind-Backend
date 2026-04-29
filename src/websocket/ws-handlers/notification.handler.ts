@@ -40,10 +40,11 @@ export async function notifyBookingConfirmed(
     WsService.publish(mentorId, mentorMsg.event, mentorMsg.data),
   ]);
 
-  logger.info(
-    { bookingId, mentorId, menteeId },
-    "WS notification: booking confirmed",
-  );
+  logger.info("WS notification: booking confirmed", {
+    bookingId,
+    mentorId,
+    menteeId,
+  });
 }
 
 /**
@@ -59,7 +60,7 @@ export async function notifyBookingCancelled(
     WsService.publish(mentorId, "booking:cancelled", { bookingId, menteeId }),
   ]);
 
-  logger.info({ bookingId }, "WS notification: booking cancelled");
+  logger.info("WS notification: booking cancelled", { bookingId });
 }
 
 /**
@@ -70,11 +71,11 @@ export async function notifySessionStatus(
 ): Promise<void> {
   const { userId, sessionId, status, meetingUrl } = payload;
 
-  await WsService.publish(userId, "session:status", {
+  WsService.publish(userId, "session:status", {
     sessionId,
     status,
     meetingUrl,
   });
 
-  logger.info({ userId, sessionId, status }, "WS notification: session status");
+  logger.info("WS notification: session status", { userId, sessionId, status });
 }

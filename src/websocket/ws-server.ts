@@ -1,6 +1,9 @@
 import { Server as HttpServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { authenticateWsConnection } from "./ws-auth.middleware";
+import {
+  authenticateWsConnection,
+  AuthenticatedWebSocket,
+} from "./ws-auth.middleware";
 import { WsService } from "../services/ws.service";
 import { logger } from "../utils/logger.utils";
 
@@ -14,10 +17,16 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
       return;
     }
 
-    const { userId } = auth;
-    WsService.addClient(userId, ws);
+    const socket = ws as AuthenticatedWebSocket;
+    socket.userId = auth.userId;
+    socket.role = auth.role;
+    socket.isAlive = true;
 
-    ws.send(JSON.stringify({ event: "connected", data: { userId } }));
+    WsService.addClient(auth.userId, ws);
+
+    ws.send(
+      JSON.stringify({ event: "connected", data: { userId: auth.userId } }),
+    );
 
     ws.on("message", (raw) => {
       try {
@@ -31,14 +40,30 @@ export function initWebSocketServer(httpServer: HttpServer): WebSocketServer {
     });
 
     ws.on("close", () => {
-      WsService.removeClient(userId, ws);
-      logger.debug({ userId }, "WS: client disconnected");
+      WsService.removeClient(auth.userId, ws);
+      logger.debug("WS: client disconnected", { userId: auth.userId });
     });
 
-    ws.on("error", (err) => {
-      logger.warn({ userId, error: err.message }, "WS: socket error");
+    ws.on("pong", () => {
+      socket.isAlive = true;
     });
   });
 
+  // Heartbeat interval
+  const heartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      const socket = ws as AuthenticatedWebSocket;
+      if (!socket.isAlive) {
+        ws.terminate();
+        return;
+      }
+      socket.isAlive = false;
+      ws.ping();
+    });
+  }, 30_000);
+
+  wss.on("close", () => clearInterval(heartbeat));
+
+  logger.info("WebSocket server initialized");
   return wss;
 }

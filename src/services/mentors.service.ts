@@ -457,27 +457,37 @@ export const MentorsService = {
     id: string,
     payload: SubmitVerificationInput,
   ): Promise<{ submitted: boolean; message: string }> {
-    // Store verification request in metadata
+    // Insert verification record into mentor_verifications table
     await pool.query(
-      `UPDATE users
-       SET metadata = jsonb_set(
-         COALESCE(metadata, '{}'::jsonb),
-         '{verification_request}',
-         $1::jsonb
-       ), updated_at = NOW()
-       WHERE id = $2 AND role = 'mentor' AND is_active = true`,
+      `INSERT INTO mentor_verifications (
+         mentor_id,
+         document_type,
+         document_url,
+         linkedin_url,
+         additional_notes,
+         status
+       ) VALUES ($1, $2, $3, $4, $5, 'pending')`,
       [
-        JSON.stringify({
-          documentType: payload.documentType,
-          documentUrl: payload.documentUrl,
-          linkedinUrl: payload.linkedinUrl ?? null,
-          additionalNotes: payload.additionalNotes ?? null,
-          submittedAt: new Date().toISOString(),
-          status: 'pending',
-        }),
         id,
+        payload.documentType,
+        payload.documentUrl,
+        payload.linkedinUrl ?? null,
+        payload.additionalNotes ?? null,
       ],
     );
+
+    // Update user's status to indicate pending verification
+    await pool.query(
+      `UPDATE users
+       SET status = 'pending_verification', updated_at = NOW()
+       WHERE id = $1 AND role = 'mentor' AND is_active = true`,
+      [id],
+    );
+
+    // Invalidate mentor profile cache
+    await CacheService.del(CacheKeys.mentorProfile(id));
+    logger.info('Verification request submitted', { mentorId: id, documentType: payload.documentType });
+
     return { submitted: true, message: 'Verification request submitted successfully' };
   },
 }

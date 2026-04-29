@@ -28,7 +28,7 @@ export async function notifyPaymentStatus(
   const { userId, transactionId, bookingId, status, amount, currency } =
     payload;
 
-  await WsService.publish(userId, "payment:status", {
+  WsService.publish(userId, "payment:status", {
     transactionId,
     bookingId,
     status,
@@ -36,7 +36,7 @@ export async function notifyPaymentStatus(
     currency,
   });
 
-  logger.info({ userId, transactionId, status }, "WS payment: status update");
+  logger.info("WS payment: status update", { userId, transactionId, status });
 }
 
 /**
@@ -54,5 +54,5 @@ export async function notifyEscrowUpdate(
     WsService.publish(menteeId, "escrow:update", data),
   ]);
 
-  logger.info({ escrowId, status }, "WS payment: escrow update");
+  logger.info("WS payment: escrow update", { escrowId, status });
 }

@@ -1,159 +1,84 @@
-import type WebSocket from "ws";
-import { redis } from "../config/redis";
+import WebSocket from "ws";
 import { logger } from "../utils/logger.utils";
 
-const WS_CHANNEL = "ws:events";
-const PENDING_LIST_PREFIX = "ws:pending:";
-const PENDING_TTL_SECONDS = 300; // 5 minutes
+type WsClient = WebSocket;
 
-// Metric counter for cross-instance delivery failures
-let crossInstanceFailures = 0;
-
-// In-process room map: userId -> Set of WebSocket connections
-const rooms = new Map<string, Set<WebSocket>>();
+const clients = new Map<string, Set<WsClient>>();
+let subscribed = false;
 
 export const WsService = {
-  addClient(userId: string, ws: WebSocket): void {
-    if (!rooms.has(userId)) rooms.set(userId, new Set());
-    rooms.get(userId)!.add(ws);
+  addClient(userId: string, ws: WsClient): void {
+    if (!clients.has(userId)) clients.set(userId, new Set());
+    clients.get(userId)!.add(ws);
   },
 
-  removeClient(userId: string, ws: WebSocket): void {
-    const room = rooms.get(userId);
-    if (!room) return;
-    room.delete(ws);
-    if (room.size === 0) rooms.delete(userId);
+  removeClient(userId: string, ws: WsClient): void {
+    const set = clients.get(userId);
+    if (!set) return;
+    set.delete(ws);
+    if (set.size === 0) clients.delete(userId);
   },
 
-  sendToUser(userId: string, payload: object): void {
-    const room = rooms.get(userId);
-    if (!room) return;
-    const msg = JSON.stringify(payload);
-    for (const ws of room) {
-      try {
-        ws.send(msg);
-      } catch {
-        // ignore send errors on individual sockets
-      }
+  sendToUser(userId: string, event: string, data: unknown): void {
+    const set = clients.get(userId);
+    if (!set) return;
+    const payload = JSON.stringify({ event, data });
+    for (const ws of set) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(payload);
     }
   },
 
-  /**
-   * Publish an event to a user.
-   *
-   * 1. Attempt Redis PUBLISH so all instances receive it.
-   * 2. On Redis failure, fall back to in-process delivery.
-   *    - If the user is NOT connected to this instance, log a warn and
-   *      increment the cross-instance failure counter.
-   *    - Store the event in a Redis list (persistent fallback) so it can be
-   *      replayed when the user reconnects.
-   */
   async publish(userId: string, event: string, data: unknown): Promise<void> {
-    const payload = { userId, event, data };
+    this.sendToUser(userId, event, data);
+  },
 
-    try {
-      await redis.publish(WS_CHANNEL, JSON.stringify(payload));
-      return;
-    } catch (err: any) {
-      logger.warn(
-        { error: err.message },
-        "WsService: Redis publish failed, falling back",
-      );
-    }
+  /**
+   * Subscribe to Redis pub/sub for cross-process WS delivery.
+   * Dedup guard: only one subscription is created regardless of call count.
+   */
+  subscribeToRedis(callback: (userId: string, payload: unknown) => void): void {
+    if (subscribed) return;
+    subscribed = true;
 
-    // Fallback: in-process delivery
-    this.sendToUser(userId, { event, data });
-
-    // Warn if the user is not on this instance — event may be lost
-    if (!rooms.has(userId)) {
-      crossInstanceFailures++;
-      logger.warn(
-        { userId, event, crossInstanceFailures },
-        "WsService: event may be lost — user not on this instance",
-      );
-
-      // Persistent fallback: push to Redis list so the event can be replayed
+    (async () => {
       try {
-        const key = `${PENDING_LIST_PREFIX}${userId}`;
-        await redis.rpush(key, JSON.stringify({ event, data, ts: Date.now() }));
-        await redis.expire(key, PENDING_TTL_SECONDS);
-      } catch (redisErr: any) {
-        logger.warn(
-          { userId, event, error: redisErr.message },
-          "WsService: failed to persist pending event",
-        );
-      }
-    }
-  },
+        const { getRedisClients } = await import("../config/redis.pubsub");
+        const { sub, CHANNEL } = await getRedisClients();
 
-  /**
-   * Replay pending events stored in Redis for a user (call on reconnect).
-   */
-  async replayPending(userId: string): Promise<void> {
-    const key = `${PENDING_LIST_PREFIX}${userId}`;
-    try {
-      const items = await redis.lrange(key, 0, -1);
-      if (items.length === 0) return;
-      await redis.del(key);
-      for (const raw of items) {
-        const { event, data } = JSON.parse(raw);
-        this.sendToUser(userId, { event, data });
-      }
-      logger.info(
-        { userId, count: items.length },
-        "WsService: replayed pending events",
-      );
-    } catch (err: any) {
-      logger.warn(
-        { userId, error: err.message },
-        "WsService: failed to replay pending events",
-      );
-    }
-  },
+        sub.removeAllListeners("message");
+        await sub.subscribe(CHANNEL);
 
-  /**
-   * Subscribe to the Redis channel and deliver events to local clients.
-   * Call once at server startup.
-   */
-  subscribeToRedis(): void {
-    // Use a dedicated subscriber connection (ioredis requires a separate client
-    // for subscribe mode)
-    const subscriber = redis.duplicate();
-    subscriber.subscribe(WS_CHANNEL, (err) => {
-      if (err) {
+        sub.on("message", (_channel: string, message: string) => {
+          try {
+            const { userId, payload } = JSON.parse(message);
+            callback(userId, payload);
+          } catch {
+            logger.warn({ message }, "WsService: invalid Redis message");
+          }
+        });
+      } catch (err: any) {
+        subscribed = false; // allow retry on next call
         logger.error(
           { error: err.message },
-          "WsService: Redis subscribe failed",
+          "WsService: subscribeToRedis failed",
         );
       }
-    });
-
-    subscriber.on("message", (_channel: string, message: string) => {
-      try {
-        const { userId, event, data } = JSON.parse(message);
-        this.sendToUser(userId, { event, data });
-      } catch (err: any) {
-        logger.warn(
-          { error: err.message },
-          "WsService: failed to parse Redis message",
-        );
-      }
-    });
+    })();
   },
 
   getConnectedCount(): number {
     let count = 0;
-    for (const room of rooms.values()) count += room.size;
+    for (const set of clients.values()) count += set.size;
     return count;
   },
 
-  /** Exposed for testing */
-  getCrossInstanceFailures(): number {
-    return crossInstanceFailures;
+  cleanup(): void {
+    clients.clear();
+    subscribed = false;
   },
 
-  cleanup(): void {
-    rooms.clear();
-    crossInstanceFailures = 0;
+  /** Exposed for testing only */
+  _resetSubscribed(): void {
+    subscribed = false;
   },
 };
