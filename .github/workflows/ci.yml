@@ -62,6 +62,15 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Run database migrations
+        run: |
+          chmod +x database/migrate.sh
+          ./database/migrate.sh || echo "Migrations may not be configured for CI"
+        continue-on-error: true
+      - name: Refresh analytics views
+        run: |
+          PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -c "SELECT refresh_analytics_views();" || echo "Analytics views not yet available"
+        continue-on-error: true
       - name: Lint
         run: npm run lint
       - name: Type-check

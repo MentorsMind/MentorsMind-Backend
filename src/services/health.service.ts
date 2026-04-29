@@ -27,6 +27,7 @@ export interface DetailedHealthStatus {
     horizon: HealthComponent;
     queues: HealthComponent;
     tables?: HealthComponent;
+    analyticsViews?: HealthComponent;
     system?: HealthComponent;
   };
   uptime: number;
@@ -76,12 +77,13 @@ export class HealthService {
    * Internal full health check
    */
   private static async performFullCheck(): Promise<DetailedHealthStatus> {
-    const [dbCheck, redisCheck, horizonCheck, queueCheck, tablesCheck] = await Promise.all([
+    const [dbCheck, redisCheck, horizonCheck, queueCheck, tablesCheck, analyticsViewsCheck] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
       this.checkHorizon(),
       this.checkBullMQ(),
       this.checkDatabaseTables(),
+      this.checkAnalyticsViews(),
     ]);
 
     // Critical components for readiness: all must not be 'unhealthy'
@@ -108,6 +110,7 @@ export class HealthService {
         horizon: horizonCheck,
         queues: queueCheck,
         tables: tablesCheck,
+        analyticsViews: analyticsViewsCheck,
         system: this.getSystemInfo(),
       },
       uptime: process.uptime(),
@@ -156,6 +159,58 @@ export class HealthService {
     } catch (err: any) {
       return {
         status: 'unhealthy',
+        responseTimeMs: Date.now() - start,
+        error: err.message,
+      };
+    }
+  }
+
+  private static async checkAnalyticsViews(): Promise<HealthComponent> {
+    const start = Date.now();
+    try {
+      const requiredViews = [
+        'mv_daily_revenue',
+        'mv_daily_users',
+        'mv_session_stats',
+        'mv_top_mentors',
+        'mv_asset_distribution',
+      ];
+
+      const query = `
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_type = 'MATERIALIZED VIEW'
+          AND table_name = ANY($1::text[])
+      `;
+
+      const { rows } = await pool.query(query, [requiredViews]);
+      const foundViews = rows.map((r) => r.table_name);
+      const allExist = requiredViews.every((v) => foundViews.includes(v));
+      const responseTimeMs = Date.now() - start;
+
+      if (allExist) {
+        return {
+          status: 'healthy',
+          responseTimeMs,
+          details: { totalViews: requiredViews.length },
+        };
+      }
+
+      const missing = requiredViews.filter((v) => !foundViews.includes(v));
+      return {
+        status: 'degraded',
+        responseTimeMs,
+        error: `Missing ${missing.length} analytics view(s)`,
+        details: {
+          missingViews: missing,
+          totalViews: requiredViews.length,
+          message: 'Run migration 015_analytics_views.sql to create views',
+        },
+      };
+    } catch (err: any) {
+      return {
+        status: 'degraded',
         responseTimeMs: Date.now() - start,
         error: err.message,
       };
