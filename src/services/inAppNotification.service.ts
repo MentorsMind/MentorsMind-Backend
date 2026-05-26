@@ -1,21 +1,21 @@
-import pool from '../config/database';
-import { SocketService } from './socket.service';
-import { logger } from '../utils/logger.utils';
+import pool from "../config/database";
+import { SocketService } from "./socket.service";
+import { logger } from "../utils/logger.utils";
 
 export type InAppNotificationType =
-  | 'booking_confirmed'
-  | 'session_reminder'
-  | 'payment_received'
-  | 'review_received'
-  | 'message_received'
-  | 'verification_approved'
-  | 'dispute_opened'
-  | 'session_booked'
-  | 'session_cancelled'
-  | 'payment_failed'
-  | 'escrow_released'
-  | 'meeting_confirmed'
-  | 'system_alert';
+  | "booking_confirmed"
+  | "session_reminder"
+  | "payment_received"
+  | "review_received"
+  | "message_received"
+  | "verification_approved"
+  | "dispute_opened"
+  | "session_booked"
+  | "session_cancelled"
+  | "payment_failed"
+  | "escrow_released"
+  | "meeting_confirmed"
+  | "system_alert";
 
 export interface InAppNotification {
   id: string;
@@ -46,26 +46,24 @@ export const InAppNotificationService = {
    * Create a notification and deliver via Socket.IO in real time.
    */
   async create(input: CreateNotificationInput): Promise<InAppNotification> {
-    const { rows } = await pool.query<InAppNotification>(
-      `INSERT INTO notifications
-         (user_id, type, title, message, data, action_url, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '90 days')
-       RETURNING *`,
-      [
-        input.userId,
-        input.type,
-        input.title,
-        input.message,
-        JSON.stringify(input.data || {}),
-        input.actionUrl || null,
-      ],
-    );
+    const record = await NotificationsModel.create({
+      user_id: input.userId,
+      type: input.type,
+      title: input.title,
+      message: input.message,
+      data: input.data,
+      action_url: input.actionUrl,
+    });
 
-    const notification = rows[0];
+    if (!record) {
+      throw new Error("Failed to create notification");
+    }
 
-    SocketService.emitToUser(input.userId, 'notification:new', notification);
+    const notification = record as unknown as InAppNotification;
 
-    logger.debug('InAppNotificationService: created', {
+    SocketService.emitToUser(input.userId, "notification:new", notification);
+
+    logger.debug("InAppNotificationService: created", {
       notificationId: notification.id,
       userId: input.userId,
       type: input.type,
@@ -75,7 +73,7 @@ export const InAppNotificationService = {
   },
 
   /**
-   * List notifications for a user (excluding dismissed/expired), newest first.
+   * List notifications for a user (excluding dismissed/expired), unread first then newest.
    */
   async list(
     userId: string,
@@ -95,7 +93,7 @@ export const InAppNotificationService = {
          WHERE user_id = $1
            AND dismissed_at IS NULL
            AND (expires_at IS NULL OR expires_at > NOW())
-         ORDER BY created_at DESC
+         ORDER BY is_read ASC, created_at DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset],
       ),

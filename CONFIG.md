@@ -138,6 +138,7 @@ Load order (later files override earlier ones):
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `BCRYPT_ROUNDS` | No | `10` | bcrypt cost factor for password hashing |
+| `FILE_SIGNING_SECRET` 🔒 | **Yes** | — | HMAC signing key for file access tokens — minimum 32 characters, must be different from JWT_SECRET |
 
 ---
 
@@ -169,6 +170,7 @@ Store a JSON object in Secrets Manager with these keys:
   "JWT_SECRET": "...",
   "JWT_REFRESH_SECRET": "...",
   "JWT_SECRET_PREVIOUS": "...",
+  "FILE_SIGNING_SECRET": "...",
   "DB_PASSWORD": "...",
   "SMTP_PASS": "...",
   "PLATFORM_SECRET_KEY": "..."
@@ -183,6 +185,7 @@ Set `SECRETS_PROVIDER=aws` and `AWS_SECRET_ID=mentorminds/prod/app-secrets`.
 vault kv put secret/mentorminds/prod \
   JWT_SECRET=... \
   JWT_REFRESH_SECRET=... \
+  FILE_SIGNING_SECRET=... \
   DB_PASSWORD=...
 ```
 
@@ -221,3 +224,28 @@ Set `SECRETS_PROVIDER=vault`, `VAULT_ADDR`, `VAULT_TOKEN`, `VAULT_SECRET_PATH=se
 ---
 
 🔒 = sensitive — never logged, never included in error output, injected via secrets provider in production.
+
+---
+
+## Queue Retry Policy
+
+All BullMQ queues share a single `defaultJobOptions` defined in `src/config/queue.ts` (re-exported via `src/queues/queue.config.ts`).
+
+### Default (all queues unless overridden)
+
+| Setting | Value |
+|---------|-------|
+| `attempts` | `5` |
+| `backoff.type` | `exponential` |
+| `backoff.delay` | `2000 ms` |
+| Retry sequence | 2 s → 4 s → 8 s → 16 s → 32 s |
+| `removeOnComplete` | last 100 jobs |
+| `removeOnFail` | `false` (retained for dead-letter inspection) |
+
+### Per-queue overrides
+
+| Queue | `attempts` | `backoff.type` | `backoff.delay` | Reason |
+|-------|-----------|----------------|-----------------|--------|
+| `payment-poll-queue` | `20` | `fixed` | `30 000 ms` | Polls Stellar network every 30 s for up to 10 min |
+
+On startup the server logs the effective retry configuration for every registered queue (level: `info`, field: `queue retry config`).

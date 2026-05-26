@@ -49,6 +49,11 @@ const envSchema = z.object({
   PII_ENCRYPTION_KEYS: z.string().optional(),
   PII_ENCRYPTION_CURRENT_KEY_VERSION: z.string().optional(),
 
+  // File Signing — separate secret for file access tokens (prevents conflation with JWT_SECRET)
+  FILE_SIGNING_SECRET: z
+    .string()
+    .min(32, "FILE_SIGNING_SECRET must be at least 32 characters"),
+
   // Stellar
   STELLAR_NETWORK: z.enum(["testnet", "mainnet"]).default("testnet"),
   STELLAR_HORIZON_URL: z
@@ -118,6 +123,9 @@ const envSchema = z.object({
   // Secrets management
   SECRETS_PROVIDER: z.enum(["env", "aws", "vault"]).default("env"),
   AWS_REGION: z.string().default("us-east-1"),
+  AWS_S3_BUCKET: z.string().min(1, "AWS_S3_BUCKET is required"),
+  AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required"),
+  AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required"),
   AWS_SECRET_ID: z.string().optional(),
   VAULT_ADDR: z.string().url().optional(),
   VAULT_TOKEN: z.string().optional(),
@@ -125,6 +133,17 @@ const envSchema = z.object({
 
   // Sentry
   SENTRY_DSN: z.string().optional(),
+  DAILY_API_KEY: z.string().optional(),
+  APP_BASE_URL: z.string().url().default("http://localhost:5000"),
+  APP_CLIENT_URL: z.string().url().default("http://localhost:3000"),
+  FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+
+  // Deep Linking
+  DEEP_LINK_SCHEME: z.string().default("mentorminds"),
+  IOS_BUNDLE_ID: z.string().default("com.mentorminds.app"),
+  ANDROID_PACKAGE_NAME: z.string().default("com.mentorminds.app"),
+  IOS_APP_STORE_URL: z.string().url().optional(),
+  ANDROID_PLAY_STORE_URL: z.string().url().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -135,6 +154,7 @@ const SENSITIVE_KEYS = new Set([
   "JWT_SECRET",
   "JWT_REFRESH_SECRET",
   "JWT_SECRET_PREVIOUS",
+  "FILE_SIGNING_SECRET",
   "PII_ENCRYPTION_KEYS",
   "PLATFORM_SECRET_KEY",
   "SMTP_PASS",
@@ -142,7 +162,9 @@ const SENSITIVE_KEYS = new Set([
   "FIREBASE_PRIVATE_KEY",
   "VAULT_TOKEN",
   "AWS_SECRET_ID",
+  "AWS_SECRET_ACCESS_KEY",
   "ENCRYPTION_KEY",
+  "DAILY_API_KEY",
 ]);
 
 function validateEnv() {

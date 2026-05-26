@@ -164,6 +164,30 @@ async function createJitsiRoom(
 }
 
 /**
+ * Generate Daily.co participant token
+ */
+async function generateDailyToken(roomName: string, participantName: string): Promise<string> {
+  const response = await axios.post(
+    `${meetingConfig.baseUrl}/meeting-tokens`,
+    {
+      properties: {
+        room_name: roomName,
+        user_name: participantName,
+        is_owner: false,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${meetingConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  return response.data.token;
+}
+
+/**
  * Check if an error is retryable
  */
 function isRetryableError(error: unknown): boolean {
@@ -266,6 +290,27 @@ export const MeetingService = {
       provider: meetingConfig.provider,
       baseUrl: meetingConfig.baseUrl,
     };
+  },
+
+  /**
+   * Generate participant token for provider-specific authentication
+   */
+  async generateToken(roomId: string, participantName: string): Promise<string> {
+    switch (meetingConfig.provider) {
+      case MeetingProvider.DAILY:
+        return await generateDailyToken(roomId, participantName);
+      case MeetingProvider.WHEREBY:
+        // Whereby doesn't use tokens - return empty string
+        return '';
+      case MeetingProvider.ZOOM:
+        // Zoom uses JWT tokens but they're generated differently
+        return '';
+      case MeetingProvider.JITSI:
+        // Jitsi doesn't require tokens for basic usage
+        return '';
+      default:
+        throw new Error(`Token generation not supported for provider: ${meetingConfig.provider}`);
+    }
   },
 };
 

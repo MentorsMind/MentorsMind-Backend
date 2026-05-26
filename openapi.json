@@ -336,6 +336,55 @@
         }
       }
     },
+    "/admin/users/{id}/unlock": {
+      "post": {
+        "summary": "Unlock a permanently or temporarily locked account",
+        "tags": [
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/schemas/UUIDParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account unlocked"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/admin/auth/rotate-keys": {
+      "post": {
+        "summary": "Rotate JWT signing key pair (zero-downtime)",
+        "description": "Generates a new RSA-256 key pair. The current key is demoted to \"previous\" and remains valid for 24 hours so existing tokens keep working. After 24 hours the previous key is rejected.\n",
+        "tags": [
+          "Admin",
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Keys rotated — returns new and previous kid values"
+          },
+          "403": {
+            "description": "Admin role required"
+          }
+        }
+      }
+    },
     "/admin/transactions": {
       "get": {
         "summary": "List all platform transactions",
@@ -776,6 +825,300 @@
         }
       }
     },
+    "/admin/audit-log": {
+      "get": {
+        "summary": "Query audit logs with filtering and pagination",
+        "tags": [
+          "Admin",
+          "Audit"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter by user ID"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by action type"
+          },
+          {
+            "name": "resourceType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by resource type"
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/audit-log/export": {
+      "get": {
+        "summary": "Export audit logs as CSV for compliance reporting",
+        "tags": [
+          "Admin",
+          "Audit"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV file download",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/audit-log/verify": {
+      "get": {
+        "summary": "Verify audit log chain integrity",
+        "tags": [
+          "Admin",
+          "Audit"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chain integrity verification result"
+          }
+        }
+      }
+    },
+    "/admin/audit-log/stats": {
+      "get": {
+        "summary": "Get audit log statistics",
+        "tags": [
+          "Admin",
+          "Audit"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "startDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log statistics"
+          }
+        }
+      }
+    },
+    "/admin/email/preview/{template}": {
+      "post": {
+        "summary": "Preview rendered email template",
+        "description": "Render an email template with sample data for preview purposes",
+        "tags": [
+          "Admin",
+          "Email"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "template",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Template name (e.g., welcome, booking-confirmed, payment-received)"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "example": {
+                "userName": "John Doe",
+                "mentorName": "Jane Smith",
+                "sessionDate": "2024-03-15",
+                "sessionTime": "10:00 AM"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rendered template preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "template": {
+                              "type": "string"
+                            },
+                            "subject": {
+                              "type": "string"
+                            },
+                            "html": {
+                              "type": "string"
+                            },
+                            "text": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Template name is required"
+          },
+          "500": {
+            "description": "Failed to render template"
+          }
+        }
+      }
+    },
     "/admin/analytics/revenue": {
       "get": {
         "summary": "Revenue breakdown",
@@ -1005,6 +1348,317 @@
         }
       }
     },
+    "/admin/reports/revenue": {
+      "get": {
+        "summary": "Get platform revenue summary for a period",
+        "tags": [
+          "Admin",
+          "Reporting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "period",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "7d",
+                "30d",
+                "90d",
+                "1y"
+              ],
+              "default": "30d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue summary with period comparison"
+          }
+        }
+      }
+    },
+    "/admin/reports/revenue/daily": {
+      "get": {
+        "summary": "Get daily revenue time series",
+        "tags": [
+          "Admin",
+          "Reporting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily revenue report"
+          }
+        }
+      }
+    },
+    "/admin/reports/transactions": {
+      "get": {
+        "summary": "Get filterable transaction report",
+        "tags": [
+          "Admin",
+          "Reporting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction report list"
+          }
+        }
+      }
+    },
+    "/admin/reports/export": {
+      "get": {
+        "summary": "Export report data as CSV",
+        "tags": [
+          "Admin",
+          "Reporting"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "revenue"
+              ],
+              "default": "revenue"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "csv"
+              ],
+              "default": "csv"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV export generated"
+          }
+        }
+      }
+    },
+    "/admin/security/blocklist": {
+      "get": {
+        "summary": "List all blocked IP ranges",
+        "tags": [
+          "Admin",
+          "Security"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of blocked IP rules"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add an IP or CIDR to the global blocklist",
+        "tags": [
+          "Admin",
+          "Security"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ipRange": {
+                    "type": "string",
+                    "example": "1.2.3.4"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Suspicious activity"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "IP rule created"
+          }
+        }
+      }
+    },
+    "/admin/security/blocklist/{id}": {
+      "delete": {
+        "summary": "Remove an IP rule from the blocklist",
+        "tags": [
+          "Admin",
+          "Security"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "IP rule removed"
+          }
+        }
+      }
+    },
+    "/admin/security/allowlist": {
+      "post": {
+        "summary": "Add an IP or CIDR to the admin allowlist",
+        "tags": [
+          "Admin",
+          "Security"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ipRange": {
+                    "type": "string",
+                    "example": "127.0.0.1"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Admin office VPN"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Admin allowlist rule added"
+          }
+        }
+      }
+    },
     "/admin/moderation/queue": {
       "get": {
         "summary": "Get moderation queue",
@@ -1193,6 +1847,210 @@
         }
       }
     },
+    "/admin/verifications": {
+      "get": {
+        "summary": "List all mentor verification submissions",
+        "tags": [
+          "Admin",
+          "Verification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "more_info_requested",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of verifications"
+          }
+        }
+      }
+    },
+    "/admin/verifications/{id}/approve": {
+      "put": {
+        "summary": "Approve a mentor verification",
+        "tags": [
+          "Admin",
+          "Verification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification approved"
+          }
+        }
+      }
+    },
+    "/admin/verifications/{id}/reject": {
+      "put": {
+        "summary": "Reject a mentor verification",
+        "tags": [
+          "Admin",
+          "Verification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "reason"
+                ],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification rejected"
+          }
+        }
+      }
+    },
+    "/admin/verifications/{id}/request-more": {
+      "put": {
+        "summary": "Request additional documents from mentor",
+        "tags": [
+          "Admin",
+          "Verification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Additional info requested"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/consent/stats": {
+      "get": {
+        "summary": "Aggregate consent rates by type (Admin only)",
+        "tags": [
+          "Consent",
+          "Admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consent statistics aggregated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - Admin access required"
+          }
+        }
+      }
+    },
     "/admin/analytics/overview": {
       "get": {
         "summary": "Platform KPI summary",
@@ -1240,6 +2098,34 @@
       }
     },
     "/api/v1/bookings": {
+      "post": {
+        "summary": "Create a new booking",
+        "tags": [
+          "Bookings"
+        ],
+        "security": [
+          {
+            "bearerAuth": true
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Unique key to prevent duplicate bookings"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Booking created"
+          }
+        }
+      },
       "get": {
         "summary": "List user's bookings",
         "tags": [
@@ -1507,6 +2393,393 @@
         }
       }
     },
+    "/api/v1/consent": {
+      "post": {
+        "summary": "Record user's cookie consent choices",
+        "tags": [
+          "Consent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "analytics_consent",
+                  "marketing_consent",
+                  "functional_consent"
+                ],
+                "properties": {
+                  "analytics_consent": {
+                    "type": "boolean"
+                  },
+                  "marketing_consent": {
+                    "type": "boolean"
+                  },
+                  "functional_consent": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Consent record created successfully"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve current consent record for authenticated user",
+        "tags": [
+          "Consent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current consent choices retrieved"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No consent record found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update consent preferences (append-only)",
+        "tags": [
+          "Consent"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "analytics_consent",
+                  "marketing_consent",
+                  "functional_consent"
+                ],
+                "properties": {
+                  "analytics_consent": {
+                    "type": "boolean"
+                  },
+                  "marketing_consent": {
+                    "type": "boolean"
+                  },
+                  "functional_consent": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Consent record created successfully"
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations": {
+      "post": {
+        "summary": "Create or retrieve a conversation",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "participantId"
+                ],
+                "properties": {
+                  "participantId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Conversation retrieved or created"
+          },
+          "403": {
+            "description": "No shared booking between users"
+          }
+        }
+      },
+      "get": {
+        "summary": "List all conversations for the authenticated user",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversation list with last message preview and unread count"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/messages": {
+      "get": {
+        "summary": "Get paginated message history (cursor-based)",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Message ID to paginate from"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated messages with nextCursor"
+          }
+        }
+      },
+      "post": {
+        "summary": "Send a message (REST fallback)",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message sent"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/messages/{msgId}": {
+      "delete": {
+        "summary": "Soft-delete own message",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "msgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message deleted"
+          },
+          "404": {
+            "description": "Message not found or not sender"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/read": {
+      "post": {
+        "summary": "Mark all messages in a conversation as read",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages marked as read"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{id}/attachments": {
+      "post": {
+        "summary": "Upload a file attachment (JPEG/PNG/WebP max 10MB, PDF max 20MB)",
+        "tags": [
+          "Conversations"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Attachment uploaded with signed URL"
+          },
+          "400": {
+            "description": "Invalid file type/size or quota exceeded"
+          }
+        }
+      }
+    },
     "/users/me/export": {
       "post": {
         "summary": "Request personal data export",
@@ -1539,6 +2812,66 @@
         ]
       }
     },
+    "/api/v1/goals": {
+      "post": {
+        "summary": "Create a new learning goal",
+        "tags": [
+          "Goals"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "get": {
+        "summary": "List user's goals",
+        "tags": [
+          "Goals"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goals/{id}": {
+      "get": {
+        "summary": "Get specific goal",
+        "tags": [
+          "Goals"
+        ]
+      },
+      "put": {
+        "summary": "Update goal title, description, or target_date",
+        "tags": [
+          "Goals"
+        ]
+      },
+      "delete": {
+        "summary": "Delete goal",
+        "tags": [
+          "Goals"
+        ]
+      }
+    },
+    "/api/v1/goals/{id}/progress": {
+      "put": {
+        "summary": "Updates goal progress (0-100)",
+        "tags": [
+          "Goals"
+        ]
+      }
+    },
+    "/api/v1/goals/{id}/link-session": {
+      "post": {
+        "summary": "Link session (booking) to goal",
+        "tags": [
+          "Goals"
+        ]
+      }
+    },
     "/": {
       "get": {
         "summary": "API version info",
@@ -1552,33 +2885,20 @@
         }
       }
     },
-    "/health": {
+    "/api/v1/learners/progress": {
       "get": {
-        "summary": "Service health check",
+        "summary": "Get learner's overall progress summary",
         "tags": [
-          "Health"
-        ],
-        "responses": {
-          "200": {
-            "description": "Service is healthy"
-          }
-        }
+          "Learners"
+        ]
       }
     },
-    "/ready": {
+    "/api/v1/learners/timeline": {
       "get": {
-        "summary": "Service readiness check",
+        "summary": "Get goal completion timeline over 12 months",
         "tags": [
-          "Health"
-        ],
-        "responses": {
-          "200": {
-            "description": "Service is ready"
-          },
-          "503": {
-            "description": "Service not ready"
-          }
-        }
+          "Learners"
+        ]
       }
     },
     "/api/v1/mentors": {
@@ -1649,19 +2969,18 @@
         "parameters": [
           {
             "in": "query",
-            "name": "cursor",
+            "name": "page",
             "schema": {
-              "type": "string"
-            },
-            "description": "Base64 encoded cursor { id, created_at } for pagination"
+              "type": "integer",
+              "default": 1
+            }
           },
           {
             "in": "query",
             "name": "limit",
             "schema": {
               "type": "integer",
-              "default": 10,
-              "maximum": 100
+              "default": 10
             }
           },
           {
@@ -2073,6 +3392,165 @@
         }
       }
     },
+    "/api/v1/mentors/verification/submit": {
+      "post": {
+        "summary": "Submit mentor verification documents",
+        "tags": [
+          "Mentors",
+          "Verification"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "documentType",
+                  "documentUrl"
+                ],
+                "properties": {
+                  "documentType": {
+                    "type": "string",
+                    "enum": [
+                      "passport",
+                      "national_id",
+                      "drivers_license",
+                      "professional_certificate"
+                    ]
+                  },
+                  "documentUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "credentialUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "linkedinUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "additionalNotes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Verification submitted"
+          }
+        }
+      }
+    },
+    "/api/v1/mentors/{id}/verification-status": {
+      "get": {
+        "summary": "Get mentor verification status (public)",
+        "tags": [
+          "Mentors",
+          "Verification"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification status"
+          },
+          "404": {
+            "description": "No verification record found"
+          }
+        }
+      }
+    },
+    "/api/v1/mentors/{id}/rating-summary": {
+      "get": {
+        "summary": "Get aggregated rating summary for a mentor (public)",
+        "tags": [
+          "Mentors",
+          "Reviews"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rating summary"
+          },
+          "404": {
+            "description": "Mentor not found"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/v1/messages/search": {
+      "get": {
+        "summary": "Full-text search across all user conversations",
+        "tags": [
+          "Messages"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search query"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Page number (20 results per page)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matched messages with conversation context and highlighted snippet"
+          },
+          "400": {
+            "description": "Missing search query"
+          }
+        }
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "summary": "Get paginated list of notifications (unread first)",
@@ -2300,6 +3778,202 @@
         }
       }
     },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "summary": "Get user's current notification preferences",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification preferences"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update notification preferences",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preferences": {
+                    "type": "object",
+                    "description": "Preference matrix (type x channel)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Preferences updated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/preferences/reset": {
+      "post": {
+        "summary": "Reset notification preferences to defaults",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preferences reset successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/subscribe": {
+      "post": {
+        "summary": "Subscribe to push notifications",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "FCM device token"
+                  },
+                  "deviceType": {
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "android",
+                      "ios"
+                    ]
+                  },
+                  "deviceId": {
+                    "type": "string",
+                    "description": "Unique device identifier"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully subscribed"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/unsubscribe": {
+      "delete": {
+        "summary": "Unsubscribe from push notifications",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "FCM device token to remove"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully unsubscribed"
+          },
+          "404": {
+            "description": "Token not found"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/tokens": {
+      "get": {
+        "summary": "Get all active push tokens for the authenticated user",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active push tokens"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/test": {
+      "post": {
+        "summary": "Send test push notification",
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test notification sent"
+          }
+        }
+      }
+    },
     "/payments/webhook": {
       "post": {
         "summary": "Handle Stellar webhook events",
@@ -2419,11 +4093,11 @@
         "parameters": [
           {
             "in": "query",
-            "name": "page",
+            "name": "cursor",
             "schema": {
-              "type": "integer",
-              "default": 1
-            }
+              "type": "string"
+            },
+            "description": "Base64 encoded cursor { id, created_at }"
           },
           {
             "in": "query",
@@ -2486,6 +4160,108 @@
         "responses": {
           "200": {
             "description": "Payment history with total volume"
+          }
+        }
+      }
+    },
+    "/payments/fee-estimate": {
+      "get": {
+        "summary": "Get Stellar fee estimate",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "operations",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Number of operations in transaction"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fee estimate retrieved successfully"
+          }
+        }
+      }
+    },
+    "/payments/assets": {
+      "get": {
+        "summary": "List supported payment assets with current XLM exchange rates",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Supported assets (XLM, USDC, PYUSD) with live rates"
+          }
+        }
+      }
+    },
+    "/payments/quote": {
+      "get": {
+        "summary": "Get a payment quote with slippage info",
+        "tags": [
+          "Payments"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "XLM",
+                "USDC",
+                "PYUSD"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "XLM",
+                "USDC",
+                "PYUSD"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "amount",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "50"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quote with rate, receive amount, and slippage bounds"
           }
         }
       }
@@ -2646,12 +4422,116 @@
         }
       }
     },
-    "/reviews/{id}/flag": {
+    "/reviews": {
       "post": {
-        "summary": "Flag a review for moderation",
+        "summary": "Create a review for a completed session",
         "tags": [
-          "Reviews",
-          "Moderation"
+          "Reviews"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "session_id",
+                  "rating"
+                ],
+                "properties": {
+                  "session_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Review created"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Not authorized for this session"
+          },
+          "409": {
+            "description": "Review already exists for this session"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/reviews/mentor/{id}": {
+      "get": {
+        "summary": "Get paginated reviews for a mentor",
+        "tags": [
+          "Reviews"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of reviews"
+          },
+          "404": {
+            "description": "Mentor not found"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/reviews/{id}": {
+      "put": {
+        "summary": "Update own review within the 48-hour edit window",
+        "tags": [
+          "Reviews"
         ],
         "security": [
           {
@@ -2660,8 +4540,153 @@
         ],
         "parameters": [
           {
-            "name": "id",
             "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "rating": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Review updated"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Not the review owner or edit window expired"
+          },
+          "404": {
+            "description": "Review not found"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Admin-only — permanently delete a review",
+        "tags": [
+          "Reviews"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Review deleted"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Admin role required"
+          },
+          "404": {
+            "description": "Review not found"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/reviews/{id}/helpful": {
+      "post": {
+        "summary": "Mark a review as helpful",
+        "tags": [
+          "Reviews"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Vote recorded"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Cannot vote on own review"
+          },
+          "404": {
+            "description": "Review not found"
+          },
+          "409": {
+            "description": "Already voted"
+          },
+          "422": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/reviews/{id}/flag": {
+      "post": {
+        "summary": "Flag a review for moderation",
+        "tags": [
+          "Reviews"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
             "required": true,
             "schema": {
               "type": "string",
@@ -2690,10 +4715,19 @@
         },
         "responses": {
           "201": {
-            "description": "Review flagged successfully"
+            "description": "Review flagged"
           },
           "401": {
             "description": "Authentication required"
+          },
+          "404": {
+            "description": "Review not found"
+          },
+          "409": {
+            "description": "Already flagged by this user"
+          },
+          "422": {
+            "description": "Validation error"
           }
         }
       }
@@ -3186,12 +5220,38 @@
           }
         }
       }
+    },
+    "/wallets/activate": {
+      "post": {
+        "summary": "Activate Stellar wallet",
+        "tags": [
+          "Wallets"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wallet activated successfully"
+          }
+        }
+      }
     }
   },
   "tags": [
     {
       "name": "Bookings",
       "description": "Session booking and meeting room management endpoints"
+    },
+    {
+      "name": "Consent",
+      "description": "Cookie consent tracking and management"
+    },
+    {
+      "name": "Conversations",
+      "description": "Direct messaging between mentors and learners"
     },
     {
       "name": "Mentors",

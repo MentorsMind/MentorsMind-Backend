@@ -15,7 +15,7 @@ CREATE INDEX idx_users_mentor_search ON users(role, is_available, average_rating
 CREATE INDEX idx_users_auth_lookup ON users(email, status) WHERE deleted_at IS NULL;
 
 -- Index for locked accounts
-CREATE INDEX idx_users_locked ON users(locked_until) WHERE locked_until IS NOT NULL AND locked_until > NOW();
+CREATE INDEX idx_users_locked ON users(locked_until) WHERE locked_until IS NOT NULL;
 
 -- ============================================================================
 -- Wallets Table - Additional Indexes
@@ -68,9 +68,7 @@ CREATE INDEX idx_bookings_payment_processing ON bookings(payment_status, status)
 
 -- Index for upcoming sessions requiring reminders
 CREATE INDEX idx_bookings_reminders ON bookings(scheduled_start, reminder_sent_mentee, reminder_sent_mentor)
-    WHERE status IN ('confirmed', 'pending') 
-    AND scheduled_start > NOW() 
-    AND scheduled_start < NOW() + INTERVAL '24 hours';
+    WHERE status IN ('confirmed', 'pending');
 
 -- Index for completed sessions without reviews
 CREATE INDEX idx_bookings_needs_review ON bookings(status, completed_at)

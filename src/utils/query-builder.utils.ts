@@ -1,12 +1,12 @@
 export const buildSearchQuery = (filters: any) => {
   const { skills, minPrice, maxPrice, minRating, language, sort, page = 1, limit = 10 } = filters;
   const offset = (page - 1) * limit;
-  let query = `SELECT m.*, COUNT(*) OVER() as total_count FROM mentors m WHERE 1=1`;
+  let query = `SELECT m.*, COUNT(*) OVER() as total_count FROM users m WHERE m.role = 'mentor'`;
   const values: any[] = [];
 
   if (skills && skills.length > 0) {
     values.push(skills);
-    query += ` AND m.skills && $${values.length}`;
+    query += ` AND m.expertise && $${values.length}`;
   }
 
   if (minPrice) {
@@ -26,7 +26,7 @@ export const buildSearchQuery = (filters: any) => {
 
   if (language) {
     values.push(language);
-    query += ` AND $${values.length} = ANY(m.languages)`;
+    query += ` AND $${values.length} = ANY(m.expertise)`;
   }
 
   const sortMap: any = {

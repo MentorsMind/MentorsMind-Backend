@@ -7,7 +7,8 @@ export const registerSchema = z.object({
     password: passwordSchema,
     firstName: z.string().min(2, 'First name must be at least 2 characters'),
     lastName: z.string().min(2, 'Last name must be at least 2 characters'),
-    role: z.enum(['mentee', 'mentor']).default('mentee'),
+    role: z.enum(['mentee', 'mentor'])
+      .default('mentee'),
   }),
 });
 

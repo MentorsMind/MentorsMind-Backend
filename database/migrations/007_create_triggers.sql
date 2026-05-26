@@ -68,10 +68,20 @@ CREATE TRIGGER trigger_booking_notes_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 
 -- Disputes table
-CREATE TRIGGER trigger_disputes_updated_at
-    BEFORE UPDATE ON disputes
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'disputes'
+    ) THEN
+        CREATE TRIGGER trigger_disputes_updated_at
+            BEFORE UPDATE ON disputes
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
 -- ============================================================================
 -- Function: Update user statistics on review creation

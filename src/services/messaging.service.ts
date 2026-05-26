@@ -36,7 +36,8 @@ export interface MessageRecord {
 export const MessagingService = {
   /**
    * Get or create a conversation between two users.
-   * Returns null when they share no booking.
+   * Returns null when they share no valid booking.
+   * Valid bookings are those that are confirmed, in_progress, or completed.
    */
   async getOrCreateConversation(
     userAId: string,
@@ -46,6 +47,7 @@ export const MessagingService = {
       `SELECT id FROM bookings
        WHERE (mentor_id = $1 AND mentee_id = $2)
           OR (mentor_id = $2 AND mentee_id = $1)
+       AND status IN ('confirmed', 'in_progress', 'completed')
        LIMIT 1`,
       [userAId, userBId],
     );
@@ -294,18 +296,15 @@ export const MessagingService = {
     page: number;
     totalPages: number;
   }> {
+    // Input validation - limit query length to prevent abuse
+    if (!query || query.length > 200) {
+      return { results: [], total: 0, page, totalPages: 0 };
+    }
+
     const offset = (page - 1) * limit;
+    const trimmedQuery = query.trim();
 
-    // Build a prefix-search tsquery
-    const tsQuery = query
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((w) => w.replace(/[^a-zA-Z0-9]/g, '') + ':*')
-      .filter(Boolean)
-      .join(' & ');
-
-    if (!tsQuery) {
+    if (!trimmedQuery) {
       return { results: [], total: 0, page, totalPages: 0 };
     }
 
@@ -327,12 +326,12 @@ export const MessagingService = {
        JOIN users u ON u.id = m.sender_id
        WHERE (c.participant_one_id = $1 OR c.participant_two_id = $1)
          AND m.is_deleted = FALSE
-         AND to_tsvector('english', m.body) @@ to_tsquery('english', $3)
+         AND to_tsvector('english', m.body) @@ plainto_tsquery('english', $2)
        ORDER BY
-         ts_rank(to_tsvector('english', m.body), to_tsquery('english', $3)) DESC,
+         ts_rank(to_tsvector('english', m.body), plainto_tsquery('english', $2)) DESC,
          m.created_at DESC
-       LIMIT $4 OFFSET $5`,
-      [userId, query, tsQuery, limit, offset],
+       LIMIT $3 OFFSET $4`,
+      [userId, trimmedQuery, limit, offset],
     );
 
     const total = rows.length > 0 ? parseInt((rows[0] as any).total_count, 10) : 0;

@@ -4,6 +4,7 @@ import authRoutes from "./auth.routes";
 import usersRoutes from "./users.routes";
 import exportRoutes from "./export.routes";
 import adminRoutes from "./admin.routes";
+import moderationRoutes from "./moderation.routes";
 import bookingsRoutes from "./bookings.routes";
 import timezoneRoutes from "./timezone.routes";
 import mentorsRoutes from "./mentors.routes";
@@ -12,34 +13,27 @@ import reviewsRoutes from "./reviews.routes";
 import conversationsRoutes from "./conversations.routes";
 import messageSearchRoutes from "./messageSearch.routes";
 import integrationsRoutes from "./integrations.routes";
-import recommendationsRoutes from "./recommendations.routes";
-import { AdminService } from "../services/admin.service";
+import consentRoutes from "./consent.routes";
 import { BookingsService } from "../services/bookings.service";
-import { VerificationService } from "../services/verification.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
   CURRENT_VERSION,
   SUPPORTED_VERSIONS,
 } from "../config/api-versions.config";
 import { asyncHandler } from "../utils/asyncHandler.utils";
+import { HealthController } from "../controllers/health.controller";
 import { logger } from "../utils/logger.utils";
 import { JwksController } from "../controllers/jwks.controller";
+import { metricsRegistry } from "../config/metrics";
+import { monitoringConfig } from "../config/monitoring.config";
 
 const router = Router();
 
-// Initialize admin tables (async, don't block)
-AdminService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize admin tables:", err);
-});
-
-// Initialize bookings tables (async, don't block)
+// Service initialization (async, non-blocking)
+// Note: These services no longer create tables at runtime.
+// Table schema is managed exclusively by migration files.
 BookingsService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize bookings tables:", err);
-});
-
-// Initialize verification tables (async, don't block)
-VerificationService.initialize().catch((err) => {
-  logger.error("Failed to initialize verification tables:", err);
+  logger.error("Failed to initialize bookings service:", err);
 });
 
 // Initialize notification cleanup service (async, don't block)
@@ -52,6 +46,7 @@ router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
 router.use("/", exportRoutes);
 router.use("/admin", adminRoutes);
+router.use("/admin/moderation", moderationRoutes);
 router.use("/bookings", bookingsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/mentors", mentorsRoutes);
@@ -60,7 +55,7 @@ router.use("/reviews", reviewsRoutes);
 router.use("/conversations", conversationsRoutes);
 router.use("/messages", messageSearchRoutes);
 router.use("/integrations", integrationsRoutes);
-router.use("/recommendations", recommendationsRoutes);
+router.use("/consent", consentRoutes);
 
 // JWKS public endpoint — no auth required
 router.get("/.well-known/jwks.json", asyncHandler(JwksController.getJwks));
@@ -98,5 +93,20 @@ router.get("/", (_req, res) => {
 
 // ── Health ───────────────────────────────────────────────────────────────────
 // Health routes moved to app.ts for global accessibility
+router.get("/health/live", asyncHandler(HealthController.getLive));
+router.get("/health/ready", asyncHandler(HealthController.getReady));
+router.get("/health", (_req, res) => res.redirect("/health/ready"));
+
+// ── Metrics ──────────────────────────────────────────────────────────────────
+const metricsEndpoint = monitoringConfig.prometheus.endpoint || "/metrics";
+router.get(metricsEndpoint, async (_req, res) => {
+  try {
+    const output = await metricsRegistry.metrics();
+    res.setHeader("Content-Type", metricsRegistry.contentType);
+    res.send(output);
+  } catch {
+    res.status(500).send("Error collecting metrics");
+  }
+});
 
 export default router;

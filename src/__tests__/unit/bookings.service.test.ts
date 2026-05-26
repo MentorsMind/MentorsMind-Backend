@@ -3,16 +3,21 @@ import { BookingModel, BookingRecord } from "../../models/booking.model";
 import { BookingsService } from "../../services/bookings.service";
 import { CacheService } from "../../services/cache.service";
 import { SocketService } from "../../services/socket.service";
+import { NotificationService } from "../../services/notification.service";
 
 jest.mock("../../config/database");
 jest.mock("../../models/booking.model");
 jest.mock("../../services/cache.service");
 jest.mock("../../services/socket.service");
+jest.mock("../../services/notification.service");
 
 const mockPool = pool as unknown as { query: jest.Mock };
 const mockBookingModel = BookingModel as jest.Mocked<typeof BookingModel>;
 const mockCache = CacheService as jest.Mocked<typeof CacheService>;
 const mockSocket = SocketService as jest.Mocked<typeof SocketService>;
+const mockNotification = NotificationService as jest.Mocked<
+  typeof NotificationService
+>;
 
 function baseBooking(overrides: Partial<BookingRecord> = {}): BookingRecord {
   const now = new Date();
@@ -40,25 +45,16 @@ function baseBooking(overrides: Partial<BookingRecord> = {}): BookingRecord {
 describe("BookingsService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNotification.sendNotification.mockResolvedValue(undefined);
   });
 
   describe("initialize", () => {
-    it("inicializa la tabla de reservas", async () => {
-      mockBookingModel.initializeTable.mockResolvedValue(undefined);
-
+    it("inicializa el servicio de reservas sin crear tablas", async () => {
+      // Initialize no longer calls initializeTable - only starts background jobs
       await BookingsService.initialize();
 
-      expect(mockBookingModel.initializeTable).toHaveBeenCalled();
-    });
-
-    it("propaga error de inicialización", async () => {
-      mockBookingModel.initializeTable.mockRejectedValue(
-        new Error("migration failed"),
-      );
-
-      await expect(BookingsService.initialize()).rejects.toThrow(
-        "migration failed",
-      );
+      // Verify that initializeTable is NOT called (schema managed by migrations)
+      expect(mockBookingModel.initializeTable).not.toHaveBeenCalled();
     });
   });
 
@@ -74,7 +70,7 @@ describe("BookingsService", () => {
     it("crea reserva cuando usuarios y horario son válidos", async () => {
       mockPool.query.mockResolvedValue({
         rows: [
-          { id: "mentee-1", role: "learner" },
+          { id: "mentee-1", role: "mentee" },
           { id: "mentor-1", role: "mentor" },
         ],
       });
@@ -100,7 +96,7 @@ describe("BookingsService", () => {
 
     it("valida que exista el mentor", async () => {
       mockPool.query.mockResolvedValue({
-        rows: [{ id: "mentee-1", role: "learner" }],
+        rows: [{ id: "mentee-1", role: "mentee" }],
       });
 
       await expect(BookingsService.createBooking(createData)).rejects.toThrow(
@@ -111,8 +107,8 @@ describe("BookingsService", () => {
     it("valida rol mentor", async () => {
       mockPool.query.mockResolvedValue({
         rows: [
-          { id: "mentee-1", role: "learner" },
-          { id: "mentor-1", role: "learner" },
+          { id: "mentee-1", role: "mentee" },
+
         ],
       });
 
@@ -124,7 +120,7 @@ describe("BookingsService", () => {
     it("detecta conflicto de agenda", async () => {
       mockPool.query.mockResolvedValue({
         rows: [
-          { id: "mentee-1", role: "learner" },
+          { id: "mentee-1", role: "mentee" },
           { id: "mentor-1", role: "mentor" },
         ],
       });
@@ -294,15 +290,13 @@ describe("BookingsService", () => {
     });
 
     it("exige pago antes de confirmar", async () => {
-      jest
-        .spyOn(BookingsService, "getBookingById")
-        .mockResolvedValue(
-          baseBooking({
-            mentor_id: "mentor-1",
-            status: "pending",
-            payment_status: "pending",
-          }),
-        );
+      jest.spyOn(BookingsService, "getBookingById").mockResolvedValue(
+        baseBooking({
+          mentor_id: "mentor-1",
+          status: "pending",
+          payment_status: "pending",
+        }),
+      );
 
       await expect(
         BookingsService.confirmBooking("booking-1", "mentor-1"),

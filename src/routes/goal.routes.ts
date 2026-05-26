@@ -57,11 +57,22 @@ router.delete('/:id', GoalController.delete);
 /**
  * @swagger
  * /api/v1/goals/{id}/progress:
- *   put:
- *     summary: Updates goal progress (0-100)
+ *   post:
+ *     summary: Log goal progress history
  *     tags: [Goals]
+ *     security: [{ bearerAuth: [] }]
  */
-router.put('/:id/progress', GoalController.updateProgress);
+router.post('/:id/progress', GoalController.updateProgress);
+
+/**
+ * @swagger
+ * /api/v1/goals/{id}/progress:
+ *   get:
+ *     summary: View goal progress history
+ *     tags: [Goals]
+ *     security: [{ bearerAuth: [] }]
+ */
+router.get('/:id/progress', GoalController.getProgress);
 
 /**
  * @swagger

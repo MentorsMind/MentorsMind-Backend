@@ -6,6 +6,21 @@
 import pool from '../config/database';
 import { enqueueEmail } from '../queues/email.queue';
 import { logger } from '../utils/logger.utils';
+import * as StellarSdk from '@stellar/stellar-sdk';
+
+const SOROBAN_RPC_URL = process.env.SOROBAN_RPC_URL || 'https://soroban-testnet.stellar.org';
+const VERIFICATION_CONTRACT_ADDRESS = process.env.VERIFICATION_CONTRACT_ADDRESS;
+
+interface VerificationContractInvocation {
+  contractAddress: string;
+  method: string;
+  args: unknown[];
+}
+
+interface OnChainVerificationResult {
+  txHash: string | null;
+  successful: boolean;
+}
 
 export type VerificationStatus =
     | 'pending'
@@ -58,30 +73,8 @@ const VERIFICATION_COLUMNS = `
 `;
 
 export const VerificationService = {
-    async initialize(): Promise<void> {
-        await pool.query(`
-      CREATE TABLE IF NOT EXISTS mentor_verifications (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        mentor_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        document_type VARCHAR(50) NOT NULL,
-        document_url VARCHAR(500) NOT NULL,
-        credential_url VARCHAR(500),
-        linkedin_url VARCHAR(500),
-        additional_notes TEXT,
-        status VARCHAR(30) NOT NULL DEFAULT 'pending',
-        reviewed_by UUID REFERENCES users(id),
-        reviewed_at TIMESTAMP WITH TIME ZONE,
-        rejection_reason TEXT,
-        additional_info_request TEXT,
-        on_chain_tx_hash VARCHAR(100),
-        expires_at TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS idx_mentor_verifications_mentor_id ON mentor_verifications(mentor_id);
-      CREATE INDEX IF NOT EXISTS idx_mentor_verifications_status ON mentor_verifications(status);
-    `);
-    },
+    // initialize() removed - schema management moved to migrations
+
 
     /** POST /mentors/verification/submit */
     async submit(mentorId: string, input: SubmitVerificationInput): Promise<VerificationRecord> {
@@ -208,14 +201,15 @@ export const VerificationService = {
         expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
         const onChainTxHash = await this.triggerOnChainVerification(verification.mentor_id);
+        const onChainPending = onChainTxHash === null;
 
         const { rows } = await pool.query<VerificationRecord>(
             `UPDATE mentor_verifications
        SET status = 'approved', reviewed_by = $1, reviewed_at = NOW(),
-           expires_at = $2, on_chain_tx_hash = $3, updated_at = NOW()
-       WHERE id = $4
+           expires_at = $2, on_chain_tx_hash = $3, on_chain_pending = $4, updated_at = NOW()
+       WHERE id = $5
        RETURNING *`,
-            [adminId, expiresAt, onChainTxHash, verificationId],
+            [adminId, expiresAt, onChainTxHash, onChainPending, verificationId],
         );
 
         await pool.query(
@@ -271,8 +265,8 @@ export const VerificationService = {
     ): Promise<VerificationRecord> {
         const verification = await this.getById(verificationId);
         if (!verification) throw new Error('Verification not found');
-        if (verification.status !== 'pending') {
-            throw new Error('Verification is not pending');
+        if (!['pending', 'more_info_requested'].includes(verification.status)) {
+            throw new Error('Verification is not in a reviewable state');
         }
 
         const { rows } = await pool.query<VerificationRecord>(
@@ -299,26 +293,69 @@ export const VerificationService = {
 
     /** Cron: flag verifications past their expiry date */
     async flagExpiredVerifications(): Promise<number> {
-        const { rowCount } = await pool.query(
-            `UPDATE mentor_verifications
-       SET status = 'expired', updated_at = NOW()
-       WHERE status = 'approved' AND expires_at < NOW()`,
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const { rowCount } = await client.query(
+                `WITH expired_verifications AS (
+                   UPDATE mentor_verifications
+                   SET status = 'expired', updated_at = NOW()
+                   WHERE status = 'approved' AND expires_at < NOW()
+                   RETURNING mentor_id
+                 )
+                 UPDATE users
+                 SET is_verified = FALSE, updated_at = NOW()
+                 FROM expired_verifications
+                 WHERE users.id = expired_verifications.mentor_id`
+            );
+
+            await client.query('COMMIT');
+
+            const count = rowCount ?? 0;
+            if (count > 0) {
+                logger.info('[VerificationService] Expired verifications flagged', { count });
+            }
+
+            return count;
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
+        } finally {
+            client.release();
+        }
+    },
+
+    /** Background Job: Retry pending on-chain verifications */
+    async retryPendingOnChainVerifications(): Promise<number> {
+        const { rows } = await pool.query<VerificationRecord>(
+            `SELECT * FROM mentor_verifications WHERE on_chain_pending = TRUE`
         );
 
-        const count = rowCount ?? 0;
-
-        if (count > 0) {
-            await pool.query(
-                `UPDATE users SET is_verified = FALSE, updated_at = NOW()
-         WHERE id IN (
-           SELECT mentor_id FROM mentor_verifications
-           WHERE status = 'expired' AND updated_at >= NOW() - INTERVAL '1 minute'
-         )`,
-            );
-            logger.info('[VerificationService] Expired verifications flagged', { count });
+        let successCount = 0;
+        for (const verification of rows) {
+            try {
+                const txHash = await this.triggerOnChainVerification(verification.mentor_id);
+                if (txHash) {
+                    await pool.query(
+                        `UPDATE mentor_verifications SET on_chain_tx_hash = $1, on_chain_pending = FALSE, updated_at = NOW() WHERE id = $2`,
+                        [txHash, verification.id]
+                    );
+                    successCount++;
+                }
+            } catch (err) {
+                logger.warn('[VerificationService] Retry on-chain verification failed', {
+                    verificationId: verification.id,
+                    error: err instanceof Error ? err.message : String(err)
+                });
+            }
         }
-
-        return count;
+        
+        if (successCount > 0) {
+            logger.info('[VerificationService] Retried pending on-chain verifications', { successCount });
+        }
+        
+        return successCount;
     },
 
     async sendStatusEmail(
@@ -368,11 +405,107 @@ export const VerificationService = {
         }
     },
 
-    async triggerOnChainVerification(_mentorId: string): Promise<string | null> {
-        logger.info('[VerificationService] On-chain verification triggered (placeholder)', {
-            mentorId: _mentorId,
-        });
-        // TODO: integrate with Stellar smart contract
-        return null;
+    async triggerOnChainVerification(mentorId: string): Promise<string | null> {
+        if (!VERIFICATION_CONTRACT_ADDRESS) {
+            logger.warn('[VerificationService] VERIFICATION_CONTRACT_ADDRESS not configured, skipping on-chain verification', { mentorId });
+            return null;
+        }
+
+        const sdkAny = StellarSdk as any;
+        const SorobanRpc = sdkAny.SorobanRpc || sdkAny.rpc;
+
+        if (!SorobanRpc?.Server) {
+            logger.error('[VerificationService] Soroban RPC not available in stellar-sdk', { mentorId });
+            throw new Error('Soroban RPC is not available. Cannot proceed with on-chain verification.');
+        }
+
+        const rpcServer = new SorobanRpc.Server(SOROBAN_RPC_URL);
+
+        const platformKeypair = process.env.PLATFORM_SECRET_KEY
+            ? sdkAny.Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY)
+            : null;
+
+        const sourcePublicKey = platformKeypair?.publicKey?.() || process.env.PLATFORM_PUBLIC_KEY;
+
+        if (!sourcePublicKey) {
+            logger.error('[VerificationService] Platform signing key not configured', { mentorId });
+            throw new Error('Platform signing key is not configured. Cannot proceed with on-chain verification.');
+        }
+
+        const networkPassphrase = process.env.STELLAR_NETWORK === 'mainnet'
+            ? sdkAny.Networks.PUBLIC
+            : sdkAny.Networks.TESTNET;
+
+        try {
+            const account = await rpcServer.getAccount(sourcePublicKey);
+
+            const contract = new sdkAny.Contract(VERIFICATION_CONTRACT_ADDRESS);
+
+            const verificationData = {
+                mentor_id: mentorId,
+                verified_at: Math.floor(Date.now() / 1000),
+            };
+
+            const scValData = sdkAny.nativeToScVal
+                ? sdkAny.nativeToScVal(verificationData, { type: 'map' })
+                : verificationData;
+
+            const operation = contract.call('verify_credential', scValData);
+
+            const tx = new sdkAny.TransactionBuilder(account, {
+                fee: '200',
+                networkPassphrase,
+            })
+                .addOperation(operation)
+                .setTimeout(30)
+                .build();
+
+            const simulation = await rpcServer.simulateTransaction(tx);
+
+            if (simulation?.error) {
+                logger.error('[VerificationService] On-chain verification simulation failed', {
+                    mentorId,
+                    error: String(simulation.error),
+                });
+                throw new Error(`Verification simulation failed: ${simulation.error}`);
+            }
+
+            let preparedTx = tx;
+            if (SorobanRpc.assembleTransaction) {
+                const assembled = SorobanRpc.assembleTransaction(tx, simulation);
+                preparedTx = assembled?.build ? assembled.build() : assembled;
+            }
+
+            if (platformKeypair && typeof preparedTx?.sign === 'function') {
+                preparedTx.sign(platformKeypair);
+            }
+
+            const sendResult = await rpcServer.sendTransaction(preparedTx);
+
+            if (sendResult?.status === 'PENDING' || sendResult?.status === 'OK') {
+                const txHash = sendResult.hash || sendResult.id;
+
+                logger.info('[VerificationService] On-chain verification transaction submitted', {
+                    mentorId,
+                    txHash,
+                });
+
+                return txHash;
+            }
+
+            logger.error('[VerificationService] On-chain verification transaction rejected', {
+                mentorId,
+                status: sendResult?.status,
+            });
+            throw new Error(`Verification transaction rejected with status: ${sendResult?.status}`);
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.error('[VerificationService] On-chain verification failed', {
+                mentorId,
+                error: errorMessage,
+            });
+            throw new Error(`On-chain verification failed: ${errorMessage}`);
+        }
     },
 };

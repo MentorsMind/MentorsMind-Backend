@@ -1,13 +1,13 @@
-import db from "../../config/db";
+import pool from "../../config/database";
 import { SearchService } from "../../services/search.service";
 import { CacheService } from "../../services/cache.service";
 import { buildSearchQuery } from "../../utils/query-builder.utils";
 
-jest.mock("../../config/db");
+jest.mock("../../config/database");
 jest.mock("../../services/cache.service");
 jest.mock("../../utils/query-builder.utils");
 
-const mockDb = db as unknown as { query: jest.Mock };
+const mockDb = pool as unknown as { query: jest.Mock };
 const mockCache = CacheService as jest.Mocked<typeof CacheService>;
 const mockBuildSearchQuery = buildSearchQuery as jest.MockedFunction<
   typeof buildSearchQuery

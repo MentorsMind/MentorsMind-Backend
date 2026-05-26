@@ -1,12 +1,16 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": ".",
+    "rootDir": "./src",
     "outDir": "./dist"
   },
   "include": [
-    "src/config/env.ts",
-    "src/config/monitoring.config.ts",
-    "src/tests/setup.ts"
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }

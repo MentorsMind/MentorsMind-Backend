@@ -38,7 +38,15 @@ export function cacheMiddleware(options: {
     const isAuthed = !!(req as any).user;
     if (isAuthed && !cacheAuthenticated) return next();
 
-    const key = keyFn ? keyFn(req) : `mm:http:${req.originalUrl}`;
+    // When caching authenticated responses, scope the key to the user to
+    // prevent one user's private data from being served to another user.
+    const userId = (req as any).user?.userId ?? (req as any).user?.id;
+    if (cacheAuthenticated && !userId) return next();
+
+    const defaultKey = cacheAuthenticated
+      ? `mm:http:${userId}:${req.originalUrl}`
+      : `mm:http:${req.originalUrl}`;
+    const key = keyFn ? keyFn(req) : defaultKey;
     const cached = await CacheService.get<{ status: number; body: unknown }>(
       key,
     );

@@ -7,9 +7,19 @@ ALTER TABLE users
 ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'UTC';
 
 -- Add constraint to validate IANA timezone format
-ALTER TABLE users
-ADD CONSTRAINT IF NOT EXISTS valid_timezone 
-CHECK (timezone ~ '^[A-Za-z_]+/[A-Za-z_]+$' OR timezone = 'UTC' OR timezone = 'Etc/UTC');
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'valid_timezone'
+      AND conrelid = 'users'::regclass
+  ) THEN
+    ALTER TABLE users
+    ADD CONSTRAINT valid_timezone
+    CHECK (timezone ~ '^[A-Za-z_]+/[A-Za-z_]+$' OR timezone = 'UTC' OR timezone = 'Etc/UTC');
+  END IF;
+END $$;
 
 -- Create sessions table
 CREATE TABLE IF NOT EXISTS sessions (

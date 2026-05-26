@@ -10,10 +10,18 @@ export class LearnerController {
     } catch (err) { next(err); }
   }
 
-  static async getTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+  static async getGoalCompletionTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const learnerId = (req as any).user.userId;
-      const timeline = await LearnerService.getTimeline(learnerId);
+      const timeline = await LearnerService.getGoalCompletionTimeline(learnerId);
+      res.json({ status: 'success', data: timeline });
+    } catch (err) { next(err); }
+  }
+
+  static async getSessionTimeline(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const learnerId = (req as any).user.userId;
+      const timeline = await LearnerService.getSessionTimeline(learnerId);
       res.json({ status: 'success', data: timeline });
     } catch (err) { next(err); }
   }

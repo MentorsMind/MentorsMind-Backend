@@ -29,7 +29,10 @@ CREATE TABLE IF NOT EXISTS flags (
     
     -- Timestamps
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    -- Ensure a user can only flag an entity once
+    UNIQUE (entity_type, entity_id, flagger_id)
 );
 
 -- Create indexes

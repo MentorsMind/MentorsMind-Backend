@@ -1,7 +1,9 @@
 import { Response } from "express";
 import { AuthenticatedRequest } from "../types/api.types";
 import { CalendarService } from "../services/calendar.service";
+import { env } from "../config/env";
 import { createError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger";
 
 export const CalendarController = {
   // ---- iCal ----------------------------------------------------------------
@@ -12,6 +14,13 @@ export const CalendarController = {
    */
   async getICalFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { token } = req.params;
+
+    // Audit log: record every access to the public iCal feed with the requesting IP
+    logger.info("iCal feed accessed", {
+      ip: req.ip,
+      tokenPrefix: (token as string).slice(0, 8),
+    });
+
     const feed = await CalendarService.getICalFeed(token as string);
 
     res.setHeader("Content-Type", "text/calendar; charset=utf-8");
@@ -19,7 +28,9 @@ export const CalendarController = {
       "Content-Disposition",
       'attachment; filename="mentorminds.ics"',
     );
-    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    // private: disallow CDN/proxy caching of personal schedule data
+    // no-store: do not persist the response body in any cache
+    res.setHeader("Cache-Control", "private, no-store");
     res.send(feed);
   },
 
@@ -38,7 +49,7 @@ export const CalendarController = {
       status: "success",
       message: "iCal token regenerated. Your old feed URL is now invalid.",
       data: {
-        icalUrl: `${process.env.APP_BASE_URL}/api/v1/calendar/ical/${token}`,
+        icalUrl: `${env.APP_BASE_URL}/api/v1/calendar/ical/${token}`,
       },
     });
   },
@@ -54,7 +65,7 @@ export const CalendarController = {
     res.json({
       status: "success",
       data: {
-        icalUrl: `${process.env.APP_BASE_URL}/api/v1/calendar/ical/${token}`,
+        icalUrl: `${env.APP_BASE_URL}/api/v1/calendar/ical/${token}`,
       },
     });
   },
@@ -67,7 +78,7 @@ export const CalendarController = {
    */
   async googleConnect(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = req.user!.id;
-    const url = CalendarService.getGoogleAuthUrl(userId);
+    const url = await CalendarService.getGoogleAuthUrl(userId);
     res.redirect(url);
   },
 
@@ -79,20 +90,40 @@ export const CalendarController = {
     req: AuthenticatedRequest,
     res: Response,
   ): Promise<void> {
-    const { code, state: userId, error } = req.query as Record<string, string>;
+    const { code, state, error } = req.query as Record<string, string>;
 
     if (error) {
       throw createError(`Google OAuth error: ${error}`, 400);
     }
-    if (!code || !userId) {
+    if (!code || !state) {
       throw createError("Missing OAuth code or state", 400);
+    }
+
+    let userId: string;
+    let csrf: string;
+
+    try {
+      const parsedState = JSON.parse(state);
+      userId = parsedState.userId;
+      csrf = parsedState.csrf;
+    } catch (e) {
+      throw createError("Invalid OAuth state format", 400);
+    }
+
+    if (!userId || !csrf) {
+      throw createError("Incomplete OAuth state", 400);
+    }
+
+    const isValid = await CalendarService.verifyAndClearCsrfToken(userId, csrf);
+    if (!isValid) {
+      throw createError("Invalid or expired CSRF token", 403);
     }
 
     await CalendarService.connectGoogleCalendar(userId, code);
 
     // Redirect to a success page in the client app
     res.redirect(
-      `${process.env.APP_CLIENT_URL}/settings/calendar?connected=true`,
+      `${env.APP_CLIENT_URL}/settings/calendar?connected=true`,
     );
   },
 

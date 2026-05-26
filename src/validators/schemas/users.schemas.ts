@@ -45,7 +45,8 @@ export const listUsersSchema = z.object({
     query: z.object({
         page: z.string().optional().transform((v) => (v ? parseInt(v, 10) : 1)),
         limit: z.string().optional().transform((v) => (v ? parseInt(v, 10) : 10)),
-        role: z.enum(['mentor', 'mentee']).optional(),
+        role: z.enum(['mentor', 'mentee'])
+            .optional(),
         search: z.string().trim().max(200, 'Search term is too long').optional(),
         sortBy: z.enum(['createdAt', 'firstName', 'lastName']).optional(),
         sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),

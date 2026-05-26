@@ -20,12 +20,10 @@ Sentry.init({
 // Config must be imported first — validates env vars before anything else loads
 import config from "./config";
 import app from "./app";
-import { initializeModels } from "./models";
 import { createSocketServer } from "./config/socket";
 import { initializeSocketService } from "./services/socket.service";
-import {
-  stellarMonitorJob,
-} from "./jobs/stellarMonitor.job";
+import { initializeGraphQL } from "./graphql/server";
+import { stellarMonitorJob } from "./jobs/stellarMonitor.job";
 import {
   emailWorker,
   paymentWorker,
@@ -41,14 +39,32 @@ import {
 } from "./workers";
 import { initializeEmailTemplates } from "./services/template-initializer.service";
 import { logger } from "./utils/logger.utils";
+import { validateRequiredTables } from "./utils/table-validator.utils";
 
-// Initialize database tables, then seed email templates
-initializeModels()
-  .then(() => initializeEmailTemplates())
+// Validate that all required tables exist (from migrations)
+// This replaces the anti-pattern of creating tables at runtime via DDL
+validateRequiredTables()
+  .then((validation) => {
+    if (!validation.allTablesExist) {
+      logger.error(
+        `Database validation failed: ${validation.missingTables.length} table(s) missing. ` +
+          "Please run migrations before starting the server.",
+        { missingTables: validation.missingTables },
+      );
+      // Don't exit here - allow health check to report the issue
+      // This gives ops teams time to fix via migrations
+    } else {
+      logger.info("Database validation successful: all required tables exist");
+    }
+  })
   .catch((err) => {
-    logger.error({ err }, "Failed to initialize models");
-    console.error("Failed to initialize models:", err);
+    logger.error({ err }, "Failed to validate database tables");
   });
+
+// Initialize email templates
+initializeEmailTemplates().catch((err) => {
+  logger.error("Failed to initialize email templates", { error: err });
+});
 
 // Initialize JWKS key store (generates RSA key pair if none exists)
 import("./services/jwks.service").then(({ JwksService }) =>
@@ -56,6 +72,25 @@ import("./services/jwks.service").then(({ JwksService }) =>
     logger.error("Failed to initialize JWKS key store", { error: err }),
   ),
 );
+
+// Log effective retry configuration for each active queue
+import { defaultJobOptions, QUEUE_NAMES } from "./config/queue";
+const queueRetryOverrides: Record<
+  string,
+  { attempts: number; backoff: unknown }
+> = {
+  [QUEUE_NAMES.PAYMENT_POLL]: {
+    attempts: 20,
+    backoff: { type: "fixed", delay: 30_000 },
+  },
+};
+Object.values(QUEUE_NAMES).forEach((name) => {
+  const effective = queueRetryOverrides[name] ?? {
+    attempts: defaultJobOptions.attempts,
+    backoff: defaultJobOptions.backoff,
+  };
+  logger.info("Queue retry config", { queue: name, ...effective });
+});
 
 // Start background job workers and scheduler
 startScheduler().catch((err) => {
@@ -65,6 +100,11 @@ startScheduler().catch((err) => {
 const { port: PORT, apiVersion: API_VERSION } = config.server;
 const NODE_ENV = config.env;
 
+// Initialize GraphQL server
+initializeGraphQL(app).catch((err) => {
+  logger.error("Failed to initialize GraphQL server", { error: err });
+});
+
 // Start server
 const server = app.listen(PORT, () => {
   logger.info("Server started", {
@@ -73,6 +113,7 @@ const server = app.listen(PORT, () => {
     apiUrl: `http://localhost:${PORT}/api/${API_VERSION}`,
     healthCheck: `http://localhost:${PORT}/health`,
     apiDocs: `http://localhost:${PORT}/api/${API_VERSION}/docs`,
+    graphql: `http://localhost:${PORT}/api/graphql`,
     webSocket: `ws://localhost:${PORT}/ws`,
   });
 });
@@ -87,9 +128,13 @@ stellarMonitorJob.start().catch((err) => {
 });
 
 // Start background exchange rate refresh (60s interval, cached in Redis)
-import('./services/assetExchange.service').then(({ AssetExchangeService }) => {
-  AssetExchangeService.startRateRefresh();
-}).catch((err) => logger.error('Failed to start asset exchange rate refresh', { error: err }));
+import("./services/assetExchange.service")
+  .then(({ AssetExchangeService }) => {
+    AssetExchangeService.startRateRefresh();
+  })
+  .catch((err) =>
+    logger.error("Failed to start asset exchange rate refresh", { error: err }),
+  );
 
 // Graceful shutdown
 async function shutdown(signal: string) {

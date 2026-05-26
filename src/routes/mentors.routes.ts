@@ -4,10 +4,11 @@
 
 import { Router } from "express";
 import { MentorsController } from "../controllers/mentors.controller";
+import { EarningsReportController } from "../controllers/earningsReport.controller";
 import { VerificationController } from "../controllers/verification.controller";
 import { ReviewsController } from "../controllers/reviews.controller";
 import { authenticate } from "../middleware/auth.middleware";
-import { requireOwnerOrAdmin } from "../middleware/rbac.middleware";
+import { requireOwnerOrAdmin, requireRole } from "../middleware/rbac.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { mentorIdParamSchema } from "../validators/reviews.validator";
@@ -21,6 +22,13 @@ import {
   getMentorEarningsSchema,
   submitVerificationSchema,
 } from "../validators/schemas/mentors.schemas";
+import {
+  getEarningsSummarySchema,
+  getEarningsBreakdownSchema,
+  exportEarningsSchema,
+  getExportStatusSchema,
+  downloadExportSchema,
+} from "../validators/schemas/earnings.schemas";
 import { submitVerificationSchema as verificationSubmitSchema } from "../validators/schemas/verification.schemas";
 import { idParamSchema } from "../validators/schemas/common.schemas";
 
@@ -429,6 +437,177 @@ router.get(
   "/:id/rating-summary",
   validate(mentorIdParamSchema),
   asyncHandler(ReviewsController.getRatingSummary),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/me/earnings:
+ *   get:
+ *     summary: Get mentor earnings summary
+ *     tags: [Mentors, Earnings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: period
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *         description: Earnings period
+ *     responses:
+ *       200:
+ *         description: Earnings summary with gross, platform fee, net, and asset breakdown
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/me/earnings",
+  authenticate,
+  validate(getEarningsSummarySchema),
+  asyncHandler(EarningsReportController.getEarningsSummary),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/me/earnings/breakdown:
+ *   get:
+ *     summary: Get per-session earnings breakdown
+ *     tags: [Mentors, Earnings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 20, maximum: 100 }
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Paginated list of sessions with earnings
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/me/earnings/breakdown",
+  authenticate,
+  validate(getEarningsBreakdownSchema),
+  asyncHandler(EarningsReportController.getEarningsBreakdown),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/me/earnings/export:
+ *   get:
+ *     summary: Export earnings as CSV or PDF
+ *     tags: [Mentors, Earnings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: format
+ *         schema: { type: string, enum: [csv, pdf], default: csv }
+ *         required: true
+ *       - in: query
+ *         name: period
+ *         schema: { type: string, enum: [7d, 30d, 90d, 1y], default: 30d }
+ *       - in: query
+ *         name: startDate
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: endDate
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: File download (for immediate export)
+ *       202:
+ *         description: Export queued for processing (for large ranges)
+ *       400:
+ *         description: Invalid parameters
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/me/earnings/export",
+  authenticate,
+  validate(exportEarningsSchema),
+  asyncHandler(EarningsReportController.exportEarnings),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/me/earnings/export/{jobId}/status:
+ *   get:
+ *     summary: Check status of queued export job
+ *     tags: [Mentors, Earnings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: Export job status
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (not job owner)
+ *       404:
+ *         description: Job not found
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/me/earnings/export/:jobId/status",
+  authenticate,
+  validate(getExportStatusSchema),
+  asyncHandler(EarningsReportController.getExportStatus),
+);
+
+/**
+ * @swagger
+ * /api/v1/mentors/me/earnings/export/{jobId}/download:
+ *   get:
+ *     summary: Download completed export
+ *     tags: [Mentors, Earnings]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: jobId
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200:
+ *         description: File download
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (not job owner)
+ *       404:
+ *         description: Job not found
+ *       410:
+ *         description: Download link expired
+ *       500:
+ *         description: Server error
+ */
+router.get(
+  "/me/earnings/export/:jobId/download",
+  authenticate,
+  validate(downloadExportSchema),
+  asyncHandler(EarningsReportController.downloadExport),
 );
 
 export default router;

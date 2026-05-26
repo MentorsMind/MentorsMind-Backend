@@ -10,7 +10,8 @@ export interface WalletEvent {
     | "trustline_add"
     | "transaction_view"
     | "wallet_created"
-    | "earnings_view";
+    | "earnings_view"
+    | "wallet_status_changed";
   metadata: Record<string, any>;
   ip_address: string | null;
   user_agent: string | null;

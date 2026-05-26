@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import pool from "../config/database";
 import { MessagingService } from "./messaging.service";
+import { GoalService } from "./goal.service";
 
 const TRIGGERS = [
   "new_booking",
@@ -40,7 +41,9 @@ export const ZapierService = {
     return ACTIONS;
   },
 
-  async authenticateApiKey(rawApiKey: string | undefined): Promise<ZapierContext | null> {
+  async authenticateApiKey(
+    rawApiKey: string | undefined,
+  ): Promise<ZapierContext | null> {
     if (!rawApiKey) {
       return null;
     }
@@ -87,7 +90,13 @@ export const ZapierService = {
          (api_key_id, trigger_name, target_url, secret, metadata)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id`,
-      [context.apiKeyId, trigger, targetUrl, secret ?? null, JSON.stringify(metadata)],
+      [
+        context.apiKeyId,
+        trigger,
+        targetUrl,
+        secret ?? null,
+        JSON.stringify(metadata),
+      ],
     );
 
     return {
@@ -160,14 +169,49 @@ export const ZapierService = {
     return samples[trigger];
   },
 
+  getSampleActionPayload(action: ActionName): Record<string, unknown> {
+    const samples: Record<ActionName, Record<string, unknown>> = {
+      send_message: {
+        conversationId: "conversation_sample_123",
+        body: "Hello! This is a test message from Zapier.",
+      },
+      create_note: {
+        bookingId: "booking_sample_123",
+        authorId: "user_123",
+        content: "This is a private note about the booking.",
+        isPrivate: true,
+      },
+      update_goal_progress: {
+        goalId: "goal_sample_123",
+        learnerId: "learner_123",
+        progress: 75,
+      },
+    };
+
+    return samples[action];
+  },
+
   async executeAction(
     action: ActionName,
     payload: Record<string, any>,
+    context: ZapierContext,
   ): Promise<Record<string, unknown>> {
     if (action === "send_message") {
+      const { rows: keyRows } = await pool.query<{ scopes: string[] }>(
+        `SELECT scopes FROM integration_api_keys WHERE id = $1`,
+        [context.apiKeyId],
+      );
+      if (!keyRows[0]?.scopes?.includes("messaging:write")) {
+        throw new Error("API key missing required scope: messaging:write");
+      }
+
+      if (!context.ownerUserId) {
+        throw new Error("API key has no associated owner user");
+      }
+
       const message = await MessagingService.sendMessage(
         payload.conversationId,
-        payload.senderId,
+        context.ownerUserId,
         String(payload.body ?? ""),
       );
       if (!message) {
@@ -181,25 +225,30 @@ export const ZapierService = {
         `INSERT INTO booking_notes (booking_id, author_id, content, is_private)
          VALUES ($1, $2, $3, COALESCE($4, FALSE))
          RETURNING id`,
-        [payload.bookingId, payload.authorId, payload.content, payload.isPrivate],
+        [
+          payload.bookingId,
+          payload.authorId,
+          payload.content,
+          payload.isPrivate,
+        ],
       );
       return { noteId: rows[0].id };
     }
 
-    const { rows } = await pool.query(
-      `UPDATE learner_progress
-          SET total_sessions = COALESCE($2, total_sessions),
-              total_hours_spent = COALESCE($3, total_hours_spent),
-              last_updated = NOW()
-        WHERE learner_id = $1
-        RETURNING *`,
-      [
-        payload.learnerId,
-        payload.totalSessions ?? null,
-        payload.totalHoursSpent ?? null,
-      ],
-    );
+    if (action === "update_goal_progress") {
+      if (!payload.goalId || !payload.learnerId || payload.progress === undefined) {
+        throw new Error("Missing required fields: goalId, learnerId, progress");
+      }
 
-    return { updated: true, progress: rows[0] ?? null };
+      const updatedGoal = await GoalService.updateProgress(
+        payload.goalId,
+        payload.learnerId,
+        Number(payload.progress)
+      );
+
+      return { updated: true, goal: updatedGoal };
+    }
+
+    throw new Error(`Unknown action: ${action}`);
   },
 };

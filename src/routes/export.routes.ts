@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { ExportController } from '../controllers/export.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { asyncHandler } from '../utils/asyncHandler.utils';
+import { exportLimiter } from '../middleware/rate-limit.middleware';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.use(authenticate);
  *     summary: Request personal data export
  *     tags: [Export]
  */
-router.post('/users/me/export', asyncHandler(ExportController.requestExport));
+router.post('/users/me/export', exportLimiter, asyncHandler(ExportController.requestExport));
 
 /**
  * @swagger

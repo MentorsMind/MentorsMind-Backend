@@ -55,8 +55,8 @@ export const disputeEscrowSchema = z.object({
 export const resolveDisputeSchema = z.object({
   params: idParamSchema.shape.params,
   body: z.object({
-    resolution: z.enum(['release_to_mentor', 'refund_to_learner'], {
-      errorMap: () => ({ message: 'Resolution must be either "release_to_mentor" or "refund_to_learner"' }),
+    resolution: z.enum(['release_to_mentor', 'refund_to_mentee'], {
+      errorMap: () => ({ message: 'Resolution must be either "release_to_mentor" or "refund_to_mentee"' }),
     }),
     notes: longTextSchema.optional(),
     stellarTxHash: z
@@ -95,7 +95,8 @@ export const listEscrowsSchema = z.object({
     status: z
       .enum(['pending', 'funded', 'released', 'disputed', 'resolved', 'refunded', 'cancelled'])
       .optional(),
-    role: z.enum(['learner', 'mentor']).optional(),
+    role: z.enum(['mentee', 'mentor'])
+      .optional(),
   }),
 });
 

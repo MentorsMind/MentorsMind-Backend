@@ -26,27 +26,16 @@ export const HealthController = {
    */
   getReady: asyncHandler(async (_req: any, res: Response) => {
     const healthStatus = await HealthService.checkReadiness();
-    
-    // Readiness returns 503 if any critical component is down (unhealthy)
-    const statusCode = healthStatus.status === 'unhealthy' ? 503 : 200;
-    
+    const statusCode = healthStatus.status === "unhealthy" ? 503 : 200;
+
     if (statusCode === 503) {
-      logger.warn('Readiness check failed', { components: healthStatus.components });
+      logger.warn("Readiness check failed", {
+        components: healthStatus.components,
+      });
     }
 
-    // Response structure as requested: { status, components, uptime, version }
-    const response = {
-      status: healthStatus.status,
-      components: {
-        db: healthStatus.components.db.status,
-        redis: healthStatus.components.redis.status,
-        horizon: healthStatus.components.horizon.status,
-      },
-      uptime: healthStatus.uptime,
-      version: healthStatus.version,
-    };
-
-    return res.status(statusCode).json(response);
+    const simplified = await HealthService.getSimplifiedStatus();
+    return res.status(statusCode).json(simplified);
   }),
 
   /**

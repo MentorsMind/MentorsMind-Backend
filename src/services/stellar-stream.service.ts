@@ -1,5 +1,5 @@
 import { stellarService } from './stellar.service';
-import { WsService } from './ws.service';
+import { SocketService } from './socket.service';
 import { WalletModel } from '../models/wallet.model';
 import { getPlatformKeypair } from '../config/stellar';
 import { logger } from '../utils/logger.utils';
@@ -65,7 +65,7 @@ async function handleIncomingPayment(
   // Resolve the sender to a platform user
   const senderWallet = await WalletModel.findByStellarPublicKey(payment.from);
   if (senderWallet) {
-    await WsService.publish(senderWallet.user_id, 'payment:confirmed', {
+    SocketService.emitToUser(senderWallet.user_id, 'payment:confirmed', {
       transactionHash: payment.transactionHash,
       from: payment.from,
       to: payment.to,
@@ -76,10 +76,9 @@ async function handleIncomingPayment(
     });
   }
 
-  // Resolve the receiver to a platform user (could be a mentor payout)
   const receiverWallet = await WalletModel.findByStellarPublicKey(payment.to);
   if (receiverWallet && receiverWallet.user_id !== senderWallet?.user_id) {
-    await WsService.publish(receiverWallet.user_id, 'payment:confirmed', {
+    SocketService.emitToUser(receiverWallet.user_id, 'payment:confirmed', {
       transactionHash: payment.transactionHash,
       from: payment.from,
       to: payment.to,

@@ -31,7 +31,7 @@ export const API_VERSIONS: Record<string, VersionConfig> = {
   },
   v2: {
     version: 'v2',
-    active: false, // scaffold only — not yet implemented
+    active: true,
   },
 };
 

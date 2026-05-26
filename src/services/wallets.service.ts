@@ -346,12 +346,16 @@ export const WalletsService = {
    */
   async updateWalletStatus(userId: string, status: Wallet['status']): Promise<Wallet | null> {
     try {
+      // Fetch current wallet to capture status before update
+      const currentWallet = await WalletModel.findByUserId(userId);
+      const previousStatus = currentWallet?.status;
+
       const wallet = await WalletModel.updateStatus(userId, status);
-      
+
       if (wallet) {
         await this.logWalletEvent(userId, {
-          eventType: 'wallet_created', // Reusing event type for status changes
-          metadata: { statusChange: status, previousStatus: wallet.status },
+          eventType: 'wallet_status_changed',
+          metadata: { statusChange: status, previousStatus },
         });
 
         logger.info('wallet.statusUpdated', { userId, status });

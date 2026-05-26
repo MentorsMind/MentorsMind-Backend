@@ -1,25 +1,11 @@
-# Health Monitoring & Metrics Implementation TODO
+# TODO
 
-## Current Progress: Step 5/12 (Health service & controller created)
+## Database Query Optimization
 
-### Steps:
-
-1. ✅ Install `prom-client` dependency
-2. ✅ `src/config/monitoring.config.ts`
-3. ✅ `src/services/health.service.ts`
-4. ✅ `src/controllers/health.controller.ts`
-5. ✅ `src/middleware/metrics.middleware.ts`
-6. ✅ `src/config/index.ts`
-7. Update `src/app.ts` - Add metrics middleware
-8. Update `src/routes/index.ts` - Route /health and /metrics to controller
-9. ✅ Tests updated
-10. ✅ Grafana dashboard created
-11. ✅ docs/monitoring.md created
-12. Test & Verify
-
-**Notes:**
-- Update TODO.md after each major step
-- Use prom-client for Prometheus metrics
-- Health checks: PostgreSQL (pool.query), Redis (ping), Stellar (ledgers.call), system (uptime/memory)
-- Metrics: request rates, durations (p50/95/99), errors, DB/Redis stats
-
+1. Inspect GraphQL DataLoader batch functions; identify ineffective batching.
+2. Implement bulk-fetch model methods for DataLoader (payments, reviews, bookings/users if needed) to avoid per-id queries.
+3. Update `src/graphql/dataloaders/index.ts` to use bulk-fetch methods and return results in input order.
+4. Add a new migration that creates missing indexes on foreign keys and frequently-filtered/sorted columns.
+5. Verify code compiles logically (no builds/tests executed per instruction).
+6. Document expected N+1 reductions and indexing impact.
+7. Update TODO as steps are completed.

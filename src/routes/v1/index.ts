@@ -16,6 +16,7 @@ import authRoutes from "../auth.routes";
 import usersRoutes from "../users.routes";
 import exportRoutes from "../export.routes";
 import adminRoutes from "../admin.routes";
+import moderationRoutes from "../moderation.routes";
 import bookingsRoutes from "../bookings.routes";
 import timezoneRoutes from "../timezone.routes";
 import analyticsRoutes from "../analytics.routes";
@@ -24,8 +25,8 @@ import escrowRoutes from "../escrow.routes";
 import walletRoutes from "../wallets.routes";
 import consentRoutes from "../consent.routes";
 import integrationsRoutes from "../integrations.routes";
-import recommendationsRoutes from "../recommendations.routes";
-import { AdminService } from "../../services/admin.service";
+import notesRoutes from "../notes.routes";
+import deepLinkRoutes from "../deepLink.routes";
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
 import { VerificationService } from "../../services/verification.service";
@@ -33,15 +34,11 @@ import { notificationCleanupService } from "../../services/notification-cleanup.
 
 const router = Router();
 
-// Lazy service initialization (non-blocking)
-AdminService.initialize().catch((err) => {
-  logger.error("Failed to initialize admin tables:", err);
-});
+// Service initialization (async, non-blocking)
+// Note: These services no longer create tables at runtime.
+// Table schema is managed exclusively by migration files.
 BookingsService.initialize().catch((err) => {
-  logger.error("Failed to initialize bookings tables:", err);
-});
-VerificationService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize verification tables:", err);
+  logger.error("Failed to initialize bookings service:", err);
 });
 notificationCleanupService.initialize().catch((err: unknown) => {
   logger.error("Failed to initialize notification cleanup service:", err);
@@ -49,6 +46,7 @@ notificationCleanupService.initialize().catch((err: unknown) => {
 
 import goalRoutes from "../goal.routes";
 import learnerRoutes from "../learner.routes";
+//import webhookRoutes from "../webhooks.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -57,6 +55,7 @@ router.use("/learners", learnerRoutes);
 router.use("/", exportRoutes);
 router.use("/consent", consentRoutes);
 router.use("/admin", adminRoutes);
+router.use("/admin/moderation", moderationRoutes);
 router.use("/bookings", bookingsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/analytics", analyticsRoutes);
@@ -64,6 +63,7 @@ router.use("/disputes", disputesRoutes);
 router.use("/escrow", escrowRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/integrations", integrationsRoutes);
-router.use("/recommendations", recommendationsRoutes);
+router.use("/dl", deepLinkRoutes);
+router.use("/", notesRoutes);
 
 export default router;

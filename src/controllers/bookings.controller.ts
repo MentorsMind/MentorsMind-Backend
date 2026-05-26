@@ -3,6 +3,7 @@ import { SessionModel } from "../models/session.model";
 import { UsersService } from "../services/users.service";
 import { MeetingService } from "../services/meeting.service";
 import { NotificationService } from "../services/notification.service";
+import { BookingsService } from "../services/bookings.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { logger } from "../utils/logger";
@@ -15,9 +16,26 @@ export const BookingsController = {
    * Create a new booking
    * POST /api/v1/bookings
    */
-  createBooking: asyncHandler(async (_req: Request, res: Response) => {
-    // TODO: implement booking creation logic
-    res.status(501).json({ success: false, error: "Not implemented" });
+  createBooking: asyncHandler(async (req: Request, res: Response) => {
+    const { mentorId, scheduledAt, durationMinutes, topic, notes } = req.body;
+    const menteeId = (req as any).user?.id || (req as any).user?.userId;
+
+    if (!menteeId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+
+    const bookingData = {
+      menteeId,
+      mentorId,
+      scheduledAt: new Date(scheduledAt),
+      durationMinutes,
+      topic,
+      notes,
+    };
+
+    const booking = await BookingsService.createBooking(bookingData);
+    
+    return ResponseUtil.created(res, { booking }, 'Booking created successfully');
   }),
 
   /**

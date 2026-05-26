@@ -1,5 +1,5 @@
-// @ts-nocheck
 import pool from "../config/database";
+import { env } from "../config/env";
 import {
   AuditLoggerService,
   AuditLogSearchParams,
@@ -19,50 +19,83 @@ export interface AdminStats {
   users: {
     total: number;
     active: number;
+    mentors: number;
+    mentees: number;
   };
   transactions: {
     total: number;
     volume: string;
+    fees: string;
+  };
+  bookings: {
+    total: number;
+    completed: number;
+    cancelled: number;
   };
   disputes: {
+    total: number;
     open: number;
   };
 }
 
 export const AdminService = {
-  /**
-   * Initialize all admin-related tables.
-   */
-  async initialize(): Promise<void> {
-    await Promise.all([
-      TransactionModel.initializeTable(),
-      DisputeModel.initializeTable(),
-      SystemConfigModel.initializeTable(),
-    ]);
-  },
-
   async getStats(): Promise<AdminStats> {
-    const [userCountResult, activeUserCountResult, txStats, openDisputes] =
-      await Promise.all([
-        pool.query("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL"),
-        pool.query(
-          "SELECT COUNT(*) FROM users WHERE is_active = true AND deleted_at IS NULL",
-        ),
-        TransactionModel.getStats(),
-        DisputeModel.countActive(),
-      ]);
+    const [
+      userStats,
+      txStats,
+      bookingStats,
+      disputeStats,
+    ] = await Promise.all([
+      pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE is_active = true) as active,
+          COUNT(*) FILTER (WHERE role = 'mentor') as mentors,
+          COUNT(*) FILTER (WHERE role = 'mentee') as mentees
+        FROM users WHERE deleted_at IS NULL
+      `),
+      pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COALESCE(SUM(amount), 0) as volume,
+          COALESCE(SUM(platform_fee), 0) as fees
+        FROM transactions WHERE status = 'completed'
+      `),
+      pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'completed') as completed,
+          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled
+        FROM bookings
+      `),
+      pool.query(`
+        SELECT 
+          COUNT(*) as total,
+          COUNT(*) FILTER (WHERE status = 'open' OR status = 'under_review') as open
+        FROM disputes
+      `),
+    ]);
 
     return {
       users: {
-        total: parseInt(userCountResult.rows[0].count, 10),
-        active: parseInt(activeUserCountResult.rows[0].count, 10),
+        total: parseInt(userStats.rows[0].total, 10),
+        active: parseInt(userStats.rows[0].active, 10),
+        mentors: parseInt(userStats.rows[0].mentors, 10),
+        mentees: parseInt(userStats.rows[0].mentees, 10),
       },
       transactions: {
-        total: txStats.count,
-        volume: txStats.total_volume,
+        total: parseInt(txStats.rows[0].total, 10),
+        volume: txStats.rows[0].volume.toString(),
+        fees: txStats.rows[0].fees.toString(),
+      },
+      bookings: {
+        total: parseInt(bookingStats.rows[0].total, 10),
+        completed: parseInt(bookingStats.rows[0].completed, 10),
+        cancelled: parseInt(bookingStats.rows[0].cancelled, 10),
       },
       disputes: {
-        open: openDisputes,
+        total: parseInt(disputeStats.rows[0].total, 10),
+        open: parseInt(disputeStats.rows[0].open, 10),
       },
     };
   },
@@ -72,7 +105,9 @@ export const AdminService = {
     offset = 0,
     role?: string,
   ): Promise<{ data: UserRecord[]; total: number }> {
-    let query = "SELECT * FROM users WHERE deleted_at IS NULL";
+    let query = `SELECT id, email, first_name, last_name, role, is_active, is_verified,
+                 average_rating, total_sessions_completed, created_at, updated_at
+                 FROM users WHERE deleted_at IS NULL`;
     const params: any[] = [];
     if (role) {
       query += " AND role = $1";
@@ -148,37 +183,38 @@ export const AdminService = {
     startDate?: string,
     endDate?: string,
   ): Promise<{ data: TransactionRecord[]; total: number }> {
-    let query =
-      "SELECT * FROM transactions WHERE type IN ('payment', 'mentor_payout')";
+    const baseWhere = "type IN ('payment', 'mentor_payout')";
+    const conditions: string[] = [];
     const params: any[] = [];
+    let idx = 1;
 
     if (startDate) {
-      query += ` AND created_at >= $${params.length + 1}`;
+      conditions.push(`created_at >= $${idx++}`);
       params.push(startDate);
     }
     if (endDate) {
-      query += ` AND created_at <= $${params.length + 1}`;
+      conditions.push(`created_at <= $${idx++}`);
       params.push(endDate);
     }
 
-    query += ` ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
-    params.push(limit, offset);
+    const where = conditions.length
+      ? `${baseWhere} AND ${conditions.join(" AND ")}`
+      : baseWhere;
 
-    const { rows } = await pool.query<TransactionRecord>(query, params);
+    // Count query uses the same filters (without limit / offset)
+    const countQuery = `SELECT COUNT(*) FROM transactions WHERE ${where}`;
+    const countParams = [...params];
 
-    let countQuery =
-      "SELECT COUNT(*) FROM transactions WHERE type IN ('payment', 'mentor_payout')";
-    const countParams: any[] = [];
-    if (startDate) {
-      countQuery += ` AND created_at >= $${countParams.length + 1}`;
-      countParams.push(startDate);
-    }
-    if (endDate) {
-      countQuery += ` AND created_at <= $${countParams.length + 1}`;
-      countParams.push(endDate);
-    }
+    // Data query adds ordering, limit and offset
+    const limitPlaceholder = `$${idx++}`;
+    const offsetPlaceholder = `$${idx++}`;
+    const dataQuery = `SELECT * FROM transactions WHERE ${where} ORDER BY created_at DESC LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`;
+    const dataParams = [...params, limit, offset];
 
-    const countResult = await pool.query(countQuery, countParams);
+    const [{ rows }, countResult] = await Promise.all([
+      pool.query<TransactionRecord>(dataQuery, dataParams),
+      pool.query(countQuery, countParams),
+    ]);
 
     return {
       data: rows,
@@ -214,7 +250,7 @@ export const AdminService = {
       .catch(() => "DOWN");
     let stellarCheck = "UP";
     try {
-      await stellarService.getAccount(process.env.PLATFORM_PUBLIC_KEY || "");
+      await stellarService.getAccount(env.PLATFORM_PUBLIC_KEY || "");
     } catch {
       stellarCheck = "DEGRADED";
     }

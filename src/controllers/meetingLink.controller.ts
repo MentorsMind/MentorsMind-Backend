@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import bookingsService from "../services/bookings.service";
-import videoSessionService from "../services/videoSession.service";
+import { MeetingService } from "../services/meeting.service";
 
 export const getMeetingLink = async (req: Request, res: Response) => {
   const booking = await bookingsService.getBookingById(req.params.id);
@@ -35,13 +35,19 @@ export const videoWebhook = async (req: Request, res: Response) => {
 export const regenerateMeetingLink = async (req: Request, res: Response) => {
   const booking = await bookingsService.getBookingById(req.params.id);
 
-  const room = await videoSessionService.createRoom(booking);
+  const room = await MeetingService.createMeetingRoom({
+    sessionId: booking.id,
+    scheduledAt: booking.scheduled_at,
+    durationMinutes: booking.duration_minutes,
+    mentorName: booking.mentor_name || 'Mentor',
+    menteeName: booking.mentee_name || 'Mentee',
+  });
 
   await bookingsService.updateBooking(booking.id, {
-    meeting_url: room.url,
+    meeting_url: room.meetingUrl,
   });
 
   return res.json({
-    meeting_url: room.url,
+    meeting_url: room.meetingUrl,
   });
 };

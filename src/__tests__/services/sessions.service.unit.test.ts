@@ -41,7 +41,7 @@ describe("SessionsService (BookingsService)", () => {
       };
 
       const mockUsers = [
-        { id: "mentee-123", role: "learner" },
+        { id: "mentee-123", role: "mentee" },
         { id: "mentor-123", role: "mentor" },
       ];
 
@@ -94,7 +94,7 @@ describe("SessionsService (BookingsService)", () => {
       };
 
       mockPool.query.mockResolvedValue({
-        rows: [{ id: "mentee-123", role: "learner" }],
+        rows: [{ id: "mentee-123", role: "mentee" }],
       });
 
       await expect(SessionsService.createBooking(data)).rejects.toThrow(
@@ -112,8 +112,8 @@ describe("SessionsService (BookingsService)", () => {
       };
 
       const mockUsers = [
-        { id: "mentee-123", role: "learner" },
-        { id: "user-123", role: "learner" },
+        { id: "mentee-123", role: "mentee" },
+        { id: "user-123", role: "mentee" },
       ];
 
       mockPool.query.mockResolvedValue({ rows: mockUsers });
@@ -133,7 +133,7 @@ describe("SessionsService (BookingsService)", () => {
       };
 
       const mockUsers = [
-        { id: "mentee-123", role: "learner" },
+        { id: "mentee-123", role: "mentee" },
         { id: "mentor-123", role: "mentor" },
       ];
 

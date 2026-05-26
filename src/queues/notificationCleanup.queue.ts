@@ -1,13 +1,11 @@
 import { Queue } from 'bullmq';
-import { redisConnection, defaultJobOptions } from './queue.config';
-
-export const NOTIFICATION_CLEANUP_QUEUE = 'notification-cleanup-queue';
+import { redisConnection, defaultJobOptions, QUEUE_NAMES } from './queue.config';
 
 export interface NotificationCleanupJobData {
   jobType: 'notification-cleanup';
 }
 
 export const notificationCleanupQueue = new Queue<NotificationCleanupJobData>(
-  NOTIFICATION_CLEANUP_QUEUE,
+  QUEUE_NAMES.NOTIFICATION_CLEANUP,
   { connection: redisConnection, defaultJobOptions },
 );

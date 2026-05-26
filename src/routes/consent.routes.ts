@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { ConsentController } from "../controllers/consent.controller";
 import { authenticate } from "../middleware/auth.middleware";
+import { requireRole } from "../middleware/rbac.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 
 const router = Router();
@@ -99,5 +100,12 @@ router.get("/", authenticate, asyncHandler(ConsentController.getConsent));
  *         description: Unauthorized
  */
 router.put("/", authenticate, asyncHandler(ConsentController.updateConsent));
+
+router.get(
+  "/stats",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ConsentController.getConsentStats),
+);
 
 export default router;

@@ -34,6 +34,7 @@ router.get("/zapier/triggers", asyncHandler(ZapierController.listTriggers));
 router.post("/zapier/subscribe", asyncHandler(ZapierController.subscribe));
 router.delete("/zapier/unsubscribe", asyncHandler(ZapierController.unsubscribe));
 router.get("/zapier/sample/:trigger", asyncHandler(ZapierController.sample));
+router.get("/zapier/actions/:action/sample", asyncHandler(ZapierController.sampleAction));
 router.post("/zapier/actions/:action", asyncHandler(ZapierController.executeAction));
 
 export default router;

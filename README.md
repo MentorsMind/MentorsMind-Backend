@@ -433,3 +433,11 @@ npm run docker:test
 ### Image size
 
 The final `runner` image uses Debian slim and `npm ci --omit=dev`. If the image exceeds ~200MB on your machine, prune unused images (`docker image prune`) and ensure you are measuring the `runner` stage, not the `builder` stage.
+
+## 💰 Bounty Contribution
+
+- **Task:** UsersService.update Builds Broken SQL (Missing $ on Parameter Placeholders)
+- **Reward:** $2
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+

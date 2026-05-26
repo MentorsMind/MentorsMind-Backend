@@ -139,9 +139,9 @@ CREATE INDEX idx_bookings_scheduled_start ON bookings(scheduled_start);
 CREATE INDEX idx_bookings_scheduled_end ON bookings(scheduled_end);
 CREATE INDEX idx_bookings_created_at ON bookings(created_at);
 CREATE INDEX idx_bookings_mentor_upcoming ON bookings(mentor_id, scheduled_start) 
-    WHERE status IN ('pending', 'confirmed') AND scheduled_start > NOW();
+    WHERE status IN ('pending', 'confirmed');
 CREATE INDEX idx_bookings_mentee_upcoming ON bookings(mentee_id, scheduled_start) 
-    WHERE status IN ('pending', 'confirmed') AND scheduled_start > NOW();
+    WHERE status IN ('pending', 'confirmed');
 
 -- Create indexes for booking_participants
 CREATE INDEX idx_booking_participants_booking_id ON booking_participants(booking_id);

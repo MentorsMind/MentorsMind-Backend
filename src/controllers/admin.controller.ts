@@ -262,6 +262,26 @@ export const AdminController = {
     );
   },
 
+  /** POST /admin/deletion-requests/retry */
+  async retryFailedDeletions(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const maxRetries = parseInt(req.body.maxRetries as string) || 3;
+    const result = await accountDeletionService.retryFailedDeletions(maxRetries);
+    
+    ResponseUtil.success(
+      res,
+      { 
+        total: result.total,
+        successful: result.successful,
+        failed: result.failed,
+        results: result.results
+      },
+      `Retry completed: ${result.successful} succeeded, ${result.failed} failed`,
+    );
+  },
+
   /** GET /admin/audit-log */
   async getAuditLogs(req: AuthenticatedRequest, res: Response): Promise<void> {
     const page = parseInt(req.query.page as string) || 1;

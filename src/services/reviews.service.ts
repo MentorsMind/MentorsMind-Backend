@@ -181,9 +181,14 @@ export const ReviewsService = {
   // -------------------------------------------------------------------------
   async getMentorReviews(
     mentorId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedReviews> {
+    params: {
+      page?: number;
+      limit?: number;
+      cursor?: string;
+    },
+  ): Promise<
+    PaginatedReviews & { next_cursor?: string | null; has_more?: boolean }
+  > {
     // Verify mentor exists
     const mentorCheck = await pool.query(`SELECT id FROM users WHERE id = $1`, [
       mentorId,
@@ -193,16 +198,70 @@ export const ReviewsService = {
       throw createError("Mentor not found", 404);
     }
 
-    const offset = (page - 1) * limit;
+    const limit = params.limit ?? 10;
+    const page = params.page ?? 1;
 
-    // Count total reviews for this mentor
+    // Count total reviews for this mentor (optional for cursor perf, but kept for backward compatibility)
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM reviews WHERE reviewee_id = $1`,
       [mentorId],
     );
     const total = parseInt(countResult.rows[0].count, 10);
 
-    // Fetch paginated reviews joined with users for reviewer display name
+    // Cursor-based (seek) pagination
+    if (params.cursor) {
+      const decoded =
+        require("../utils/pagination.utils").PaginationUtil.decodeCursor(
+          params.cursor,
+        );
+      // decoded: { id, created_at }
+      if (!decoded) {
+        throw createError("Invalid cursor", 400);
+      }
+
+      const { rows } = await pool.query<ReviewWithReviewer>(
+        `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
+                r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
+                (u.first_name || ' ' || u.last_name) AS reviewer_display_name
+         FROM reviews r
+         JOIN users u ON r.reviewer_id = u.id
+         WHERE r.reviewee_id = $1
+           AND (r.created_at, r.id) < ($2, $3)
+         ORDER BY r.created_at DESC, r.id DESC
+         LIMIT $4`,
+        [mentorId, decoded.created_at, decoded.id, limit + 1],
+      );
+
+      const has_more = rows.length > limit;
+      const data = has_more ? rows.slice(0, limit) : rows;
+
+      const lastItem = data[data.length - 1];
+      const next_cursor =
+        has_more && lastItem
+          ? require("../utils/pagination.utils").PaginationUtil.encodeCursor({
+              id: lastItem.id,
+              created_at: lastItem.created_at.toISOString(),
+            })
+          : null;
+
+      return {
+        reviews: data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNext: has_more,
+          hasPrev: false,
+        },
+        next_cursor,
+        has_more,
+      };
+    }
+
+    // Offset-based fallback when cursor is absent
+    const offset = (page - 1) * limit;
+
     const reviewsResult = await pool.query<ReviewWithReviewer>(
       `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
               r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
@@ -227,6 +286,8 @@ export const ReviewsService = {
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
+      next_cursor: null,
+      has_more: page < totalPages,
     };
   },
 
@@ -238,63 +299,81 @@ export const ReviewsService = {
     reviewerId: string,
     payload: UpdateReviewPayload,
   ): Promise<ReviewRecord> {
-    // Fetch review by ID
-    const reviewResult = await pool.query<ReviewRecord>(
-      `SELECT id, booking_id, reviewer_id, reviewee_id, rating, comment,
-              is_published, is_flagged, helpful_count, created_at, updated_at
-       FROM reviews WHERE id = $1`,
-      [reviewId],
-    );
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
 
-    if (reviewResult.rows.length === 0) {
-      throw createError("Review not found", 404);
-    }
-
-    const review = reviewResult.rows[0];
-
-    // Verify ownership
-    if (review.reviewer_id !== reviewerId) {
-      throw createError("You are not authorized to edit this review", 403);
-    }
-
-    // Check 48-hour edit window
-    const createdAt = new Date(review.created_at);
-    const now = new Date();
-    const diffMs = now.getTime() - createdAt.getTime();
-    const fortyEightHoursMs = 48 * 60 * 60 * 1000;
-
-    if (diffMs > fortyEightHoursMs) {
-      throw createError(
-        "The edit window for this review has expired (48 hours)",
-        403,
+      // Fetch review by ID
+      const reviewResult = await client.query<ReviewRecord>(
+        `SELECT id, booking_id, reviewer_id, reviewee_id, rating, comment,
+                is_published, is_flagged, helpful_count, created_at, updated_at
+         FROM reviews WHERE id = $1`,
+        [reviewId],
       );
+
+      if (reviewResult.rows.length === 0) {
+        throw createError("Review not found", 404);
+      }
+
+      const review = reviewResult.rows[0];
+
+      // Verify ownership
+      if (review.reviewer_id !== reviewerId) {
+        throw createError("You are not authorized to edit this review", 403);
+      }
+
+      // Check 48-hour edit window
+      const createdAt = new Date(review.created_at);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+
+      if (diffMs > fortyEightHoursMs) {
+        throw createError(
+          "The edit window for this review has expired (48 hours)",
+          403,
+        );
+      }
+
+      // Build update fields
+      const fields: string[] = [];
+      const values: unknown[] = [];
+      let idx = 1;
+
+      if (payload.rating !== undefined) {
+        fields.push(`rating = $${idx++}`);
+        values.push(payload.rating);
+      }
+      if (payload.comment !== undefined) {
+        fields.push(`comment = $${idx++}`);
+        values.push(payload.comment);
+      }
+
+      fields.push(`updated_at = NOW()`);
+      values.push(reviewId);
+
+      const updateResult = await client.query<ReviewRecord>(
+        `UPDATE reviews SET ${fields.join(", ")} WHERE id = $${idx}
+         RETURNING id, booking_id, reviewer_id, reviewee_id, rating, comment,
+                   is_published, is_flagged, helpful_count, created_at, updated_at`,
+        values,
+      );
+
+      const updatedReview = updateResult.rows[0];
+
+      // Recalculate mentor rating if rating was updated
+      if (payload.rating !== undefined) {
+        await recalculateMentorRating(review.reviewee_id, client);
+      }
+
+      await client.query("COMMIT");
+      return updatedReview;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // Build update fields
-    const fields: string[] = [];
-    const values: unknown[] = [];
-    let idx = 1;
-
-    if (payload.rating !== undefined) {
-      fields.push(`rating = $${idx++}`);
-      values.push(payload.rating);
-    }
-    if (payload.comment !== undefined) {
-      fields.push(`comment = $${idx++}`);
-      values.push(payload.comment);
-    }
-
-    fields.push(`updated_at = NOW()`);
-    values.push(reviewId);
-
-    const updateResult = await pool.query<ReviewRecord>(
-      `UPDATE reviews SET ${fields.join(", ")} WHERE id = $${idx}
-       RETURNING id, booking_id, reviewer_id, reviewee_id, rating, comment,
-                 is_published, is_flagged, helpful_count, created_at, updated_at`,
-      values,
-    );
-
-    return updateResult.rows[0];
   },
 
   // -------------------------------------------------------------------------

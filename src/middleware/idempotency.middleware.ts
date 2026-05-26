@@ -13,7 +13,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 
 const TTL_HOURS = 24;
 
@@ -78,7 +78,6 @@ export const idempotency = async (
         return;
       } else {
         // Valid cache hit — replay stored response
-        logger.info({ idempotencyKey, endpoint }, "Idempotency cache hit");
         logger.info("Idempotency cache hit", { idempotencyKey, endpoint });
         res.setHeader("X-Idempotency-Replayed", "true");
         res
@@ -105,23 +104,18 @@ export const idempotency = async (
               JSON.stringify({ __status: status, __body: body }),
             ],
           )
-          .catch((err) =>
-            logger.warn(
-              { err, idempotencyKey },
-              "Failed to persist idempotency key",
-            ),
+          .catch((err) => {
             logger.warn("Failed to persist idempotency key", {
               err,
               idempotencyKey,
-            }),
-          );
+            });
+          });
       }
       return originalJson(body);
     };
 
     next();
   } catch (err) {
-    logger.warn({ err }, "Idempotency middleware error — failing open");
     logger.warn("Idempotency middleware error — failing open", { err });
     next();
   }

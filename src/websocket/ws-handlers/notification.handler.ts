@@ -1,5 +1,5 @@
-import { WsService } from '../../services/ws.service';
-import { logger } from '../../utils/logger.utils';
+import { WsService } from "../../services/ws.service";
+import { logger } from "../../utils/logger.utils";
 
 export interface BookingNotificationPayload {
   bookingId: string;
@@ -26,12 +26,12 @@ export async function notifyBookingConfirmed(
   const { mentorId, menteeId, bookingId, scheduledAt, topic, status } = payload;
 
   const menteeMsg = {
-    event: 'booking:confirmed',
+    event: "booking:confirmed",
     data: { bookingId, scheduledAt, topic, status },
   };
 
   const mentorMsg = {
-    event: 'booking:new',
+    event: "booking:new",
     data: { bookingId, scheduledAt, topic, menteeId },
   };
 
@@ -40,7 +40,7 @@ export async function notifyBookingConfirmed(
     WsService.publish(mentorId, mentorMsg.event, mentorMsg.data),
   ]);
 
-  logger.info('WS notification: booking confirmed', {
+  logger.info("WS notification: booking confirmed", {
     bookingId,
     mentorId,
     menteeId,
@@ -56,11 +56,11 @@ export async function notifyBookingCancelled(
   const { mentorId, menteeId, bookingId } = payload;
 
   await Promise.all([
-    WsService.publish(menteeId, 'booking:cancelled', { bookingId }),
-    WsService.publish(mentorId, 'booking:cancelled', { bookingId, menteeId }),
+    WsService.publish(menteeId, "booking:cancelled", { bookingId }),
+    WsService.publish(mentorId, "booking:cancelled", { bookingId, menteeId }),
   ]);
 
-  logger.info('WS notification: booking cancelled', { bookingId });
+  logger.info("WS notification: booking cancelled", { bookingId });
 }
 
 /**
@@ -71,11 +71,11 @@ export async function notifySessionStatus(
 ): Promise<void> {
   const { userId, sessionId, status, meetingUrl } = payload;
 
-  await WsService.publish(userId, 'session:status', {
+  WsService.publish(userId, "session:status", {
     sessionId,
     status,
     meetingUrl,
   });
 
-  logger.info('WS notification: session status', { userId, sessionId, status });
+  logger.info("WS notification: session status", { userId, sessionId, status });
 }

@@ -97,6 +97,9 @@ configuration (`REDIS_URL`) must point every instance at the same Redis cluster.
 
 ## WebSocket Multi-Instance Pub/Sub
 
+The application uses **Socket.IO exclusively** as its real-time delivery system.
+The native `ws` server (`/ws`) and `WsService` have been removed.
+
 Socket.IO's default in-memory adapter only delivers events to sockets connected
 to the **same process**. In a multi-instance deployment, `io.to('user:abc').emit(…)`
 from instance A would silently drop the event if the user's socket is connected
@@ -121,6 +124,12 @@ emit('user:alice', event)
 The two pub/sub connections are **separate** from the main application `redis`
 client — pub/sub puts a connection into subscriber mode which prevents it from
 executing regular commands.
+
+### Emitting events
+
+All server-side code emits real-time events through `SocketService.emitToUser(userId, event, data)`.
+This routes to the Socket.IO room `user:{userId}`, which the Redis adapter fans
+out to all instances.
 
 ### Enabling the adapter
 

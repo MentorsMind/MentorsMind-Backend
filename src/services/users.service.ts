@@ -65,6 +65,14 @@ export const UsersService = {
     return rows[0] ?? null;
   },
 
+  async getNotificationPreferences(id: string): Promise<Record<string, Record<string, boolean>> | null> {
+    const { rows } = await pool.query<{ notification_preferences: Record<string, Record<string, boolean>> }>(
+      `SELECT notification_preferences FROM users WHERE id = $1 AND is_active = true`,
+      [id]
+    );
+    return rows[0]?.notification_preferences ?? null;
+  },
+
   async update(id: string, payload: UpdateUserPayload): Promise<UserRecord | null> {
     const fields: string[] = [];
     const values: unknown[] = [];

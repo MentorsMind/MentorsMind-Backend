@@ -1,8 +1,10 @@
 import { Request, Response } from 'express';
 import passport from '../config/passport';
-import { AuthService } from '../services/auth.service';
+import { env } from '../config/env';
+import { TokenService } from '../services/token.service';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 import { logger } from '../utils/logger';
+import pool from '../config/database';
 
 export const OAuthController = {
     /**
@@ -24,18 +26,24 @@ export const OAuthController = {
         passport.authenticate('google', { session: false }, async (err: any, user: any) => {
             if (err) {
                 logger.error('Google OAuth callback error', { error: err.message });
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
             }
 
             if (!user) {
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
             }
 
             try {
-                // Generate JWT tokens
-                const tokens = await AuthService.generateTokens(user.userId, 'mentee');
+                const userQuery = `SELECT email, role FROM users WHERE id = $1`;
+                const userResult = await pool.query(userQuery, [user.userId]);
+                
+                if (userResult.rows.length === 0) {
+                    return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
+                }
 
-                // Log the OAuth login
+                const userData = userResult.rows[0];
+                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role);
+
                 await AuditLogService.log({
                     userId: user.userId,
                     action: user.isNew ? 'USER_REGISTERED_OAUTH' : 'LOGIN_OAUTH',
@@ -46,8 +54,7 @@ export const OAuthController = {
                     metadata: { provider: 'google', isNew: user.isNew },
                 });
 
-                // Redirect to frontend with tokens
-                const redirectUrl = new URL(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
+                const redirectUrl = new URL(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
                 redirectUrl.searchParams.set('access_token', tokens.accessToken);
                 redirectUrl.searchParams.set('refresh_token', tokens.refreshToken);
                 redirectUrl.searchParams.set('provider', 'google');
@@ -55,7 +62,7 @@ export const OAuthController = {
                 return res.redirect(redirectUrl.toString());
             } catch (error) {
                 logger.error('Error generating tokens after Google OAuth', { error });
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=google`);
             }
         })(req, res);
     },
@@ -79,18 +86,24 @@ export const OAuthController = {
         passport.authenticate('github', { session: false }, async (err: any, user: any) => {
             if (err) {
                 logger.error('GitHub OAuth callback error', { error: err.message });
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
             }
 
             if (!user) {
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
             }
 
             try {
-                // Generate JWT tokens
-                const tokens = await AuthService.generateTokens(user.userId, 'mentee');
+                const userQuery = `SELECT email, role FROM users WHERE id = $1`;
+                const userResult = await pool.query(userQuery, [user.userId]);
+                
+                if (userResult.rows.length === 0) {
+                    return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
+                }
 
-                // Log the OAuth login
+                const userData = userResult.rows[0];
+                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role);
+
                 await AuditLogService.log({
                     userId: user.userId,
                     action: user.isNew ? 'USER_REGISTERED_OAUTH' : 'LOGIN_OAUTH',
@@ -101,8 +114,7 @@ export const OAuthController = {
                     metadata: { provider: 'github', isNew: user.isNew },
                 });
 
-                // Redirect to frontend with tokens
-                const redirectUrl = new URL(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
+                const redirectUrl = new URL(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
                 redirectUrl.searchParams.set('access_token', tokens.accessToken);
                 redirectUrl.searchParams.set('refresh_token', tokens.refreshToken);
                 redirectUrl.searchParams.set('provider', 'github');
@@ -110,7 +122,7 @@ export const OAuthController = {
                 return res.redirect(redirectUrl.toString());
             } catch (error) {
                 logger.error('Error generating tokens after GitHub OAuth', { error });
-                return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
+                return res.redirect(`${env.FRONTEND_URL || 'http://localhost:3000'}/auth/error?provider=github`);
             }
         })(req, res);
     },

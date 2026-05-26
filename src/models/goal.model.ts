@@ -12,6 +12,14 @@ export interface Goal {
   updated_at: string;
 }
 
+export interface GoalProgressLog {
+  id: string;
+  goal_id: string;
+  progress: number;
+  notes?: string;
+  created_at: string;
+}
+
 export class GoalModel {
   static async create(data: Partial<Goal>): Promise<Goal> {
     const { learner_id, title, description, target_date } = data;
@@ -88,7 +96,34 @@ export class GoalModel {
       `SELECT b.* FROM bookings b
        JOIN goal_bookings gb ON b.id = gb.booking_id
        WHERE gb.goal_id = $1
-       ORDER BY b.scheduled_start DESC`,
+       ORDER BY b.scheduled_at DESC`,
+      [goalId],
+    );
+    return result.rows;
+  }
+
+  static async logProgress(goalId: string, progress: number, notes?: string): Promise<GoalProgressLog> {
+    const result = await db.query(
+      `INSERT INTO goal_progress_logs (goal_id, progress, notes)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [goalId, progress, notes],
+    );
+
+    // Update the parent goal's progress and updated_at timestamp
+    await db.query(
+      'UPDATE learner_goals SET progress = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [progress, goalId],
+    );
+
+    return result.rows[0];
+  }
+
+  static async getProgressLogs(goalId: string): Promise<GoalProgressLog[]> {
+    const result = await db.query(
+      `SELECT * FROM goal_progress_logs
+       WHERE goal_id = $1
+       ORDER BY created_at DESC`,
       [goalId],
     );
     return result.rows;

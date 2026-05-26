@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { MfaService } from '../services/mfa.service';
 import { UsersService } from '../services/users.service';
-import { AuthService } from '../services/auth.service';
+import { TokenService } from '../services/token.service';
 import { SessionManagerService } from '../services/sessionManager.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import pool from '../config/database';
@@ -198,7 +198,7 @@ export const MfaController = {
 
       // MFA valid, generate full tokens
       const user = rows[0];
-      const tokens = await AuthService.generateTokens(userId, user.role);
+      const tokens = await TokenService.issueTokens(userId, user.email, user.role);
 
       await SessionManagerService.createSession({
         userId,
@@ -253,7 +253,7 @@ export const MfaController = {
 
       const { rows } = await pool.query(`SELECT role, email FROM users WHERE id = $1`, [userId]);
       const user = rows[0];
-      const tokens = await AuthService.generateTokens(userId, user.role);
+      const tokens = await TokenService.issueTokens(userId, user.email, user.role);
 
       await SessionManagerService.createSession({
         userId,

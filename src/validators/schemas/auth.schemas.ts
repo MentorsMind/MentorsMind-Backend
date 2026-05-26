@@ -22,7 +22,8 @@ export const registerSchema = z.object({
             .trim()
             .min(2, 'Last name must be at least 2 characters')
             .max(100, 'Last name must not exceed 100 characters'),
-        role: z.enum(['mentee', 'mentor']).default('mentee'),
+        role: z.enum(['mentee', 'mentor'])
+            .default('mentee'),
     }).strict(),
 });
 

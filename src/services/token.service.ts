@@ -2,6 +2,10 @@
 import pool from '../config/database';
 import { JwtUtils, TokenPayload, DecodedToken } from '../utils/jwt.utils';
 import crypto from 'crypto';
+import { SocketService } from './socket.service';
+import { EmailService } from './email.service';
+
+const emailService = new EmailService();
 
 export interface AuthTokens {
   accessToken: string;
@@ -18,11 +22,12 @@ export const TokenService = {
     email: string,
     role: string,
     fingerprint?: string,
+    newLoginContext?: { deviceName?: string; ipAddress?: string },
   ): Promise<AuthTokens> {
     const payload: TokenPayload = { userId, email, role };
 
     // Check concurrent sessions (max 5)
-    await this.enforceSessionLimit(userId, 5);
+    await this.enforceSessionLimit(userId, 5, email, newLoginContext);
 
     const accessToken = JwtUtils.generateAccessToken(payload, fingerprint);
     const refreshToken = JwtUtils.generateRefreshToken(payload, fingerprint);
@@ -204,8 +209,15 @@ export const TokenService = {
 
   /**
    * Enforce concurrent session limit
+   * Revokes the oldest sessions when the limit is exceeded, then notifies
+   * the affected user via WebSocket and email.
    */
-  async enforceSessionLimit(userId: string, limit: number): Promise<void> {
+  async enforceSessionLimit(
+    userId: string,
+    limit: number,
+    userEmail?: string,
+    newLoginContext?: { deviceName?: string; ipAddress?: string },
+  ): Promise<void> {
     const { rows } = await pool.query(
       `SELECT id FROM refresh_tokens 
        WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > NOW()
@@ -218,9 +230,50 @@ export const TokenService = {
       const toRevoke = rows.slice(0, rows.length - limit + 1);
       const ids = toRevoke.map((r) => r.id);
       await pool.query(
-        `UPDATE refresh_tokens SET revoked_at = NOW() WHERE id = ANY($1)`,
+        `UPDATE refresh_tokens
+         SET revoked_at = NOW(), revocation_reason = 'session_limit'
+         WHERE id = ANY($1)`,
         [ids],
       );
+
+      // Notify the user about the forced sign-out via WebSocket
+      const deviceName = newLoginContext?.deviceName ?? 'a new device';
+      const ipAddress = newLoginContext?.ipAddress ?? 'unknown';
+
+      SocketService.emitToUser(userId, 'session:revoked', {
+        reason: 'session_limit',
+        message:
+          'Your oldest session was signed out because a new login was detected.',
+        newLoginDevice: deviceName,
+        newLoginIp: ipAddress,
+        revokedCount: ids.length,
+      });
+
+      // Send email notification if the caller supplied the user's email
+      if (userEmail) {
+        await emailService
+          .sendEmail({
+            to: [userEmail],
+            subject: 'Security Alert: A new login signed out your oldest session',
+            htmlContent: `
+              <p>Hi,</p>
+              <p>A new login was detected on your account, and your oldest active session
+              was automatically signed out to keep you within the session limit.</p>
+              <ul>
+                <li><strong>New login device:</strong> ${deviceName}</li>
+                <li><strong>New login IP:</strong> ${ipAddress}</li>
+              </ul>
+              <p>If this wasn't you, please change your password immediately and
+              revoke all active sessions from your account settings.</p>
+            `,
+            textContent:
+              `A new login was detected (device: ${deviceName}, IP: ${ipAddress}). ` +
+              'Your oldest session was signed out. If this wasn\'t you, change your password immediately.',
+          })
+          .catch(() => {
+            // Non-critical — do not block token issuance on email failure
+          });
+      }
     }
   },
 };

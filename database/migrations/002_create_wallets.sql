@@ -4,7 +4,16 @@
 -- =============================================================================
 
 -- Create ENUM for wallet status
-CREATE TYPE wallet_status AS ENUM ('active', 'frozen', 'closed');
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_type
+        WHERE typname = 'wallet_status'
+    ) THEN
+        CREATE TYPE wallet_status AS ENUM ('active', 'frozen', 'closed');
+    END IF;
+END $$;
 
 -- Create wallets table
 CREATE TABLE IF NOT EXISTS wallets (
@@ -60,7 +69,7 @@ CREATE TABLE IF NOT EXISTS wallet_balances (
     
     -- Balance
     balance DECIMAL(20, 7) NOT NULL DEFAULT 0,
-    limit DECIMAL(20, 7), -- Trust line limit
+    "limit" DECIMAL(20, 7), -- Trust line limit
     
     -- Flags
     is_authorized BOOLEAN DEFAULT TRUE,

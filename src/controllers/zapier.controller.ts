@@ -57,6 +57,15 @@ export const ZapierController = {
     );
   },
 
+  async sampleAction(req: ZapierRequest, res: Response): Promise<void> {
+    const action = req.params.action as any;
+    ResponseUtil.success(
+      res,
+      ZapierService.getSampleActionPayload(action),
+      "Sample action payload retrieved successfully",
+    );
+  },
+
   async executeAction(req: ZapierRequest, res: Response): Promise<void> {
     const action = req.params.action as any;
     const result = await ZapierService.executeAction(action, req.body ?? {});

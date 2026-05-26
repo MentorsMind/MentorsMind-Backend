@@ -24,7 +24,7 @@ describe('Booking Confirmation Flow', () => {
 
     const mentee = await createUser({
       email: 'mentee@test.com',
-      role: 'learner',
+      role: 'mentee',
     });
 
     mentorId = mentor.id;

@@ -1,19 +1,22 @@
-import { Worker, Job } from 'bullmq';
-import pool from '../config/database';
+import { Worker, Job } from "bullmq";
+import pool from "../config/database";
 import {
   redisConnection,
   CONCURRENCY,
   QUEUE_NAMES,
-} from '../queues/queue.config';
-import { logger } from '../utils/logger.utils';
-import { AuditLoggerService } from '../services/audit-logger.service';
-import { LogLevel, AuditAction } from '../utils/log-formatter.utils';
-import type { PaymentPollJobData } from '../queues/payment-poll.queue';
+} from "../queues/queue.config";
+import { logger } from "../utils/logger.utils";
+import { AuditLoggerService } from "../services/audit-logger.service";
+import { LogLevel, AuditAction } from "../utils/log-formatter.utils";
+import type { PaymentPollJobData } from "../queues/payment-poll.queue";
+import { stellarService } from "../services/stellar.service";
 
-async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
+export async function pollPaymentStatus(
+  job: Job<PaymentPollJobData>,
+): Promise<void> {
   const { paymentId, userId, transactionHash } = job.data;
 
-  logger.info('Polling payment status', {
+  logger.info("Polling payment status", {
     jobId: job.id,
     paymentId,
     attempt: job.attemptsMade,
@@ -23,7 +26,7 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
   const { rows } = await pool.query<{
     status: string;
     transaction_hash: string | null;
-  }>('SELECT status, transaction_hash FROM payments WHERE id = $1', [
+  }>("SELECT status, transaction_hash FROM transactions WHERE id = $1", [
     paymentId,
   ]);
 
@@ -34,8 +37,8 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
   const payment = rows[0];
 
   // Already resolved — nothing to do
-  if (payment.status === 'completed' || payment.status === 'failed') {
-    logger.info('Payment already resolved, skipping poll', {
+  if (payment.status === "completed" || payment.status === "failed") {
+    logger.info("Payment already resolved, skipping poll", {
       paymentId,
       status: payment.status,
     });
@@ -43,22 +46,20 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
   }
 
   // If there's a transaction hash, verify on Stellar
-  const hash = transactionHash || payment.transaction_hash;
+  const hash = transactionHash || payment.stellar_tx_hash;
   if (hash) {
     try {
-      const { stellarService } = await import('../services/stellar.service');
       // submitTransaction will throw if the tx is not found/failed;
-      // we use getAccount as a proxy — a real implementation would query Horizon directly.
       // For now, treat any successful response as confirmation.
-      const account = await stellarService.getAccount(hash).catch(() => null);
-      const confirmed = account !== null;
+      const tx = await stellarService.getTransaction(hash).catch(() => null);
+      const confirmed = tx?.successful === true;
 
       if (confirmed) {
         await pool.query(
-          "UPDATE payments SET status = 'completed', updated_at = NOW() WHERE id = $1",
+          "UPDATE transactions SET status = 'completed', updated_at = NOW() WHERE id = $1",
           [paymentId],
         );
-        logger.info('Payment marked completed via Stellar', {
+        logger.info("Payment marked completed via Stellar", {
           paymentId,
           hash,
         });
@@ -68,14 +69,14 @@ async function pollPaymentStatus(job: Job<PaymentPollJobData>): Promise<void> {
           action: AuditAction.PAYMENT_PROCESSED,
           message: `Payment ${paymentId} confirmed on Stellar`,
           userId,
-          entityType: 'payment',
+          entityType: "payment",
           entityId: paymentId,
           metadata: { transactionHash: hash },
         });
         return;
       }
     } catch (err) {
-      logger.warn('Stellar tx lookup failed, will retry', {
+      logger.warn("Stellar tx lookup failed, will retry", {
         paymentId,
         hash,
         error: (err as Error).message,
@@ -98,18 +99,18 @@ export const paymentWorker = new Worker<PaymentPollJobData>(
   },
 );
 
-paymentWorker.on('completed', (job) => {
-  logger.info('Payment poll job completed', {
+paymentWorker.on("completed", (job) => {
+  logger.info("Payment poll job completed", {
     jobId: job.id,
     paymentId: job.data.paymentId,
   });
 });
 
-paymentWorker.on('failed', (job, err) => {
+paymentWorker.on("failed", (job, err) => {
   const isExhausted = (job?.attemptsMade ?? 0) >= (job?.opts?.attempts ?? 20);
-  const level = isExhausted ? 'error' : 'warn';
+  const level = isExhausted ? "error" : "warn";
 
-  logger[level]('Payment poll job failed', {
+  logger[level]("Payment poll job failed", {
     jobId: job?.id,
     paymentId: job?.data?.paymentId,
     attempt: job?.attemptsMade,
@@ -123,13 +124,13 @@ paymentWorker.on('failed', (job, err) => {
       action: AuditAction.PAYMENT_PROCESSED,
       message: `Payment poll exhausted (unresolved) for payment ${job?.data?.paymentId}`,
       userId: job?.data?.userId,
-      entityType: 'payment',
+      entityType: "payment",
       entityId: job?.data?.paymentId,
       metadata: { error: err.message },
     }).catch(() => {});
   }
 });
 
-paymentWorker.on('error', (err) => {
-  logger.error('Payment worker error', { error: err.message });
+paymentWorker.on("error", (err) => {
+  logger.error("Payment worker error", { error: err.message });
 });

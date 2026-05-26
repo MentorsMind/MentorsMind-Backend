@@ -6,6 +6,9 @@
 // API types
 export * from './api.types';
 
+// Auth types
+export * from './auth.types';
+
 // Stellar types
 export * from './stellar.types';
 

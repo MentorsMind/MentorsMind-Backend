@@ -17,11 +17,20 @@ router.get('/progress', LearnerController.getProgress);
 
 /**
  * @swagger
- * /api/v1/learners/timeline:
+ * /api/v1/learners/timeline/goals:
  *   get:
  *     summary: Get goal completion timeline over 12 months
  *     tags: [Learners]
  */
-router.get('/timeline', LearnerController.getTimeline);
+router.get('/timeline/goals', LearnerController.getGoalCompletionTimeline);
+
+/**
+ * @swagger
+ * /api/v1/learners/timeline/sessions:
+ *   get:
+ *     summary: Get session activity timeline over 12 months
+ *     tags: [Learners]
+ */
+router.get('/timeline/sessions', LearnerController.getSessionTimeline);
 
 export default router;

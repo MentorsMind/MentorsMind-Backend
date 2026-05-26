@@ -24,12 +24,11 @@ export const CacheKeys = {
   mentorProfile: (id: string) => `mm:mentor:${id}`,
   mentorList: (page: number, limit: number) => `mm:mentors:${page}:${limit}`,
   /**
-   * Cache key for mentor search results
+   * Cache key for mentor search results (used by MentorsService.list)
    * Uses hash of query parameters to create compact, unique keys
    * @example CacheKeys.mentorSearch({ search: 'John', expertise: 'React', minRate: 50 })
    */
-  mentorSearch: (params: Record<string, any>) =>
-    `mm:mentors:search:${hashParams(params)}`,
+  mentorSearch: (params: Record<string, any>) => `mm:mentors:list:v1:${hashParams(params)}`,
 
   // Session cache keys
   /**

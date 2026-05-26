@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const JWT_SECRET = env.JWT_SECRET;
 const LAST_ACTIVE_DEBOUNCE_MS = 60 * 1000; // 1 minute
 
 // In-memory debounce map: userId -> last update timestamp

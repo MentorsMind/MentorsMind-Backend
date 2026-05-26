@@ -24,6 +24,7 @@ jest.mock('../../models/push-tokens.model', () => ({
 jest.mock('../../services/users.service', () => ({
   UsersService: {
     findById: jest.fn(),
+    getNotificationPreferences: jest.fn(),
   },
 }));
 
@@ -60,8 +61,8 @@ describe('PushService - Unit Tests', () => {
 
   describe('sendToUser', () => {
     it('should send push notification successfully', async () => {
-      (NotificationPreferencesModel.getByUserId as jest.Mock).mockResolvedValue({
-        push_enabled: true,
+      (UsersService.getNotificationPreferences as jest.Mock).mockResolvedValue({
+        test_type: { push: true },
       });
 
       const mockTokens = [
@@ -94,11 +95,8 @@ describe('PushService - Unit Tests', () => {
     });
 
     it('should not send if user has disabled push notifications for the type', async () => {
-      (UsersService.findById as jest.Mock).mockResolvedValue({
-        id: mockUserId,
-        notification_preferences: {
-          test_type: { push: false },
-        },
+      (UsersService.getNotificationPreferences as jest.Mock).mockResolvedValue({
+        test_type: { push: false },
       });
 
       const result = await PushService.sendToUser(
@@ -114,8 +112,8 @@ describe('PushService - Unit Tests', () => {
     });
 
     it('should handle invalid tokens and mark them inactive', async () => {
-      (NotificationPreferencesModel.getByUserId as jest.Mock).mockResolvedValue({
-        push_enabled: true,
+      (UsersService.getNotificationPreferences as jest.Mock).mockResolvedValue({
+        test_type: { push: true },
       });
 
       const mockTokens = [

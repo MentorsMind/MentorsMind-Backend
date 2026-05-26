@@ -4,8 +4,8 @@ import {
   CONCURRENCY,
   QUEUE_NAMES,
 } from "../queues/queue.config";
-import { WsService } from "../services/ws.service";
-import { PushService } from "../services/push.service";
+import { SocketService } from '../services/socket.service';
+import { PushService } from '../services/push.service';
 import { logger } from "../utils/logger.utils";
 import type { NotificationJobData } from "../queues/notification.queue";
 
@@ -28,22 +28,19 @@ async function processNotification(
   // Fan-out to each requested channel concurrently
   await Promise.allSettled([
     channels.includes("websocket")
-      ? WsService.sendToUser(userId, {
-          event: type,
-          data: { title, message, ...data },
-        })
+      ? SocketService.emitToUser(userId, type, { title, message, ...data })
       : Promise.resolve(),
 
     channels.includes("push")
       ? PushService.sendToUser(userId, title, message, {
-          type,
-          notificationId: notificationId ?? "",
-          ...(data as Record<string, string> | undefined),
-        }).then((result) => {
-          if (!result.success) {
-            errors.push(`push: ${result.errors.join(", ")}`);
-          }
-        })
+        type,
+        notificationId: notificationId ?? "",
+        ...(data as Record<string, string> | undefined),
+      }).then((result) => {
+        if (!result.success) {
+          errors.push(`push: ${result.errors.join(", ")}`);
+        }
+      })
       : Promise.resolve(),
   ]);
 

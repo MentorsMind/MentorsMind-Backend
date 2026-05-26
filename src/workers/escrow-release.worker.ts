@@ -19,13 +19,15 @@ async function processEscrowRelease(
 
   logger.info('Processing escrow auto-release', { jobId: job.id, escrowId });
 
+  // Check current escrow status from DB (not cache) to handle race conditions
   const escrow = await EscrowApiService.getEscrowById(escrowId);
 
   if (!escrow) {
     throw new Error(`Escrow ${escrowId} not found`);
   }
 
-  // Skip if already released, disputed, or refunded
+  // Skip if already released, disputed, refunded, or cancelled
+  // This check prevents release if a dispute was raised while the job was active
   if (
     ['released', 'disputed', 'refunded', 'cancelled'].includes(escrow.status)
   ) {
