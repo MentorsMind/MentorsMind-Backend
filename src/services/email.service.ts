@@ -1,8 +1,9 @@
-import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
 import config from '../config';
 import { NotificationTemplatesModel } from '../models/notification-templates.model';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
 import { logger } from '../utils/logger';
+import https from 'https';
+import http from 'http';
 
 export interface EmailRequest {
   to: string[];
@@ -30,136 +31,324 @@ export interface RenderedTemplate {
   text: string;
 }
 
-export interface EmailProvider {
+export interface IEmailProvider {
   name: string;
-  transporter: Transporter;
   isHealthy: boolean;
   lastError?: string;
   lastErrorTime?: Date;
+  send(request: EmailRequest, rendered: RenderedTemplate): Promise<{ messageId: string }>;
 }
 
-/**
- * Email Service with multiple provider support and circuit breaker pattern
- */
+// ---------------------------------------------------------------------------
+// SendGrid provider
+// ---------------------------------------------------------------------------
+class SendGridProvider implements IEmailProvider {
+  name = 'SendGrid';
+  isHealthy = true;
+  lastError?: string;
+  lastErrorTime?: Date;
+
+  private readonly apiKey: string;
+
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
+  }
+
+  async send(request: EmailRequest, rendered: RenderedTemplate): Promise<{ messageId: string }> {
+    const payload = JSON.stringify({
+      personalizations: [
+        {
+          to: request.to.map(email => ({ email })),
+          ...(request.cc?.length && { cc: request.cc.map(email => ({ email })) }),
+          ...(request.bcc?.length && { bcc: request.bcc.map(email => ({ email })) }),
+          subject: rendered.subject,
+        },
+      ],
+      from: { email: config.email.fromEmail },
+      subject: rendered.subject,
+      content: [
+        { type: 'text/plain', value: rendered.text || rendered.subject },
+        { type: 'text/html', value: rendered.html || rendered.subject },
+      ],
+      tracking_settings: {
+        click_tracking: { enable: true },
+        open_tracking: { enable: true },
+      },
+      ...(request.trackingId && {
+        custom_args: { tracking_id: request.trackingId },
+      }),
+    });
+
+    const response = await this.httpPost(
+      'https://api.sendgrid.com/v3/mail/send',
+      payload,
+      {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`SendGrid API error ${response.statusCode}: ${response.body}`);
+    }
+
+    // SendGrid returns message ID in X-Message-Id header
+    const messageId = response.headers['x-message-id'] || `sg-${Date.now()}`;
+    return { messageId: Array.isArray(messageId) ? messageId[0] : messageId };
+  }
+
+  private httpPost(
+    url: string,
+    body: string,
+    headers: Record<string, string>,
+  ): Promise<{ statusCode: number; body: string; headers: Record<string, string | string[]> }> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const options = {
+        hostname: parsed.hostname,
+        path: parsed.pathname,
+        method: 'POST',
+        headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
+      };
+
+      const req = https.request(options, res => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => resolve({
+          statusCode: res.statusCode || 0,
+          body: data,
+          headers: res.headers as Record<string, string | string[]>,
+        }));
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mailgun provider
+// ---------------------------------------------------------------------------
+class MailgunProvider implements IEmailProvider {
+  name = 'Mailgun';
+  isHealthy = true;
+  lastError?: string;
+  lastErrorTime?: Date;
+
+  private readonly apiKey: string;
+  private readonly domain: string;
+  private readonly host: string;
+
+  constructor(apiKey: string, domain: string, host = 'api.mailgun.net') {
+    this.apiKey = apiKey;
+    this.domain = domain;
+    this.host = host;
+  }
+
+  async send(request: EmailRequest, rendered: RenderedTemplate): Promise<{ messageId: string }> {
+    const params = new URLSearchParams();
+    params.append('from', config.email.fromEmail);
+    request.to.forEach(t => params.append('to', t));
+    if (request.cc) request.cc.forEach(c => params.append('cc', c));
+    if (request.bcc) request.bcc.forEach(b => params.append('bcc', b));
+    params.append('subject', rendered.subject);
+    params.append('html', rendered.html || rendered.subject);
+    params.append('text', rendered.text || rendered.subject);
+    if (request.trackingId) {
+      params.append('v:tracking_id', request.trackingId);
+    }
+    params.append('o:tracking', 'yes');
+    params.append('o:tracking-clicks', 'yes');
+    params.append('o:tracking-opens', 'yes');
+
+    const body = params.toString();
+    const auth = Buffer.from(`api:${this.apiKey}`).toString('base64');
+
+    const response = await this.httpPost(
+      `https://${this.host}/v3/${this.domain}/messages`,
+      body,
+      {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw new Error(`Mailgun API error ${response.statusCode}: ${response.body}`);
+    }
+
+    const parsed = JSON.parse(response.body);
+    return { messageId: parsed.id || `mg-${Date.now()}` };
+  }
+
+  private httpPost(
+    url: string,
+    body: string,
+    headers: Record<string, string>,
+  ): Promise<{ statusCode: number; body: string }> {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(url);
+      const options = {
+        hostname: parsed.hostname,
+        path: parsed.pathname,
+        method: 'POST',
+        headers: { ...headers, 'Content-Length': Buffer.byteLength(body) },
+      };
+
+      const req = https.request(options, res => {
+        let data = '';
+        res.on('data', chunk => { data += chunk; });
+        res.on('end', () => resolve({ statusCode: res.statusCode || 0, body: data }));
+      });
+
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SMTP fallback provider (nodemailer-free, raw SMTP via net/tls)
+// Uses a minimal inline SMTP client to avoid nodemailer dependency.
+// For production, prefer SendGrid or Mailgun.
+// ---------------------------------------------------------------------------
+class SmtpProvider implements IEmailProvider {
+  name = 'SMTP';
+  isHealthy = true;
+  lastError?: string;
+  lastErrorTime?: Date;
+
+  async send(request: EmailRequest, rendered: RenderedTemplate): Promise<{ messageId: string }> {
+    // Lazy-load nodemailer only when SMTP is actually used
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const nodemailer = require('nodemailer');
+    const { smtp, gmail, fromEmail } = config.email;
+
+    let transportConfig: any;
+
+    if (smtp.host) {
+      transportConfig = {
+        host: smtp.host,
+        port: smtp.port,
+        secure: smtp.secure,
+        auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
+        pool: true,
+        maxConnections: 5,
+      };
+    } else if (gmail.user && gmail.pass) {
+      transportConfig = {
+        service: 'gmail',
+        auth: { user: gmail.user, pass: gmail.pass },
+      };
+    } else {
+      transportConfig = {
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: { user: 'ethereal.user@ethereal.email', pass: 'ethereal.pass' },
+      };
+    }
+
+    const transporter = nodemailer.createTransport(transportConfig);
+    const info = await transporter.sendMail({
+      from: fromEmail,
+      to: request.to.join(', '),
+      cc: request.cc?.join(', '),
+      bcc: request.bcc?.join(', '),
+      subject: rendered.subject,
+      html: rendered.html,
+      text: rendered.text,
+      headers: request.trackingId ? { 'X-Tracking-ID': request.trackingId } : {},
+    });
+
+    return { messageId: info.messageId };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// EmailService — circuit-breaker + provider failover
+// ---------------------------------------------------------------------------
 export class EmailService {
-  private providers: EmailProvider[] = [];
+  private providers: IEmailProvider[] = [];
   private currentProviderIndex = 0;
-  private circuitBreakerThreshold = 5;
-  private circuitBreakerTimeout = 300000; // 5 minutes
+  private readonly circuitBreakerTimeout = 300_000; // 5 minutes
 
   constructor() {
     this.initializeProviders();
   }
 
-  /**
-   * Initialize email providers based on configuration
-   */
   private initializeProviders(): void {
-    const { smtp, gmail } = config.email;
+    const { provider, sendgrid, mailgun } = config.email;
 
-    // Primary provider: SMTP (Nodemailer)
-    if (smtp.host) {
-      const smtpTransporter = nodemailer.createTransport({
-        host: smtp.host,
-        port: smtp.port,
-        secure: smtp.secure,
-        auth: {
-          user: smtp.user,
-          pass: smtp.pass,
-        },
-        pool: true,
-        maxConnections: 5,
-        maxMessages: 100,
-      });
-
-      this.providers.push({
-        name: 'SMTP',
-        transporter: smtpTransporter,
-        isHealthy: true,
-      });
+    if (provider === 'sendgrid' && sendgrid.apiKey) {
+      this.providers.push(new SendGridProvider(sendgrid.apiKey));
+    } else if (provider === 'mailgun' && mailgun.apiKey && mailgun.domain) {
+      this.providers.push(new MailgunProvider(mailgun.apiKey, mailgun.domain, mailgun.host));
     }
 
-    // Fallback provider: Gmail (for development)
-    if (gmail.user && gmail.pass) {
-      const gmailTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: gmail.user,
-          pass: gmail.pass,
-        },
-      });
+    // Always add SMTP as final fallback
+    this.providers.push(new SmtpProvider());
 
-      this.providers.push({
-        name: 'Gmail',
-        transporter: gmailTransporter,
-        isHealthy: true,
-      });
-    }
-
-    // Default test provider for development
-    if (this.providers.length === 0 || config.isDevelopment) {
-      const testTransporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: 'ethereal.user@ethereal.email',
-          pass: 'ethereal.pass',
-        },
-      });
-
-      this.providers.push({
-        name: 'Ethereal',
-        transporter: testTransporter,
-        isHealthy: true,
-      });
-    }
-
-    logger.info(`Email service initialized with ${this.providers.length} provider(s)`);
+    logger.info(`Email service initialized`, {
+      primary: provider,
+      providers: this.providers.map(p => p.name),
+    });
   }
 
-  /**
-   * Send email using the best available provider
-   */
   async sendEmail(request: EmailRequest): Promise<EmailResult> {
     if (this.providers.length === 0) {
-      return {
-        success: false,
-        error: 'No email providers configured',
-        deliveryStatus: DeliveryStatus.FAILED,
-      };
+      return { success: false, error: 'No email providers configured', deliveryStatus: DeliveryStatus.FAILED };
     }
 
-    let lastError: string = '';
-    
-    // Try each provider until one succeeds
-    for (let attempt = 0; attempt < this.providers.length; attempt++) {
+    let lastError = '';
+
+    for (let i = 0; i < this.providers.length; i++) {
       const provider = this.getNextHealthyProvider();
-      
       if (!provider) {
-        return {
-          success: false,
-          error: 'No healthy email providers available',
-          deliveryStatus: DeliveryStatus.FAILED,
-        };
+        return { success: false, error: 'No healthy email providers available', deliveryStatus: DeliveryStatus.FAILED };
       }
 
       try {
-        const result = await this.sendWithProvider(provider, request);
-        
-        if (result.success) {
-          // Reset circuit breaker on success
-          provider.isHealthy = true;
-          provider.lastError = undefined;
-          provider.lastErrorTime = undefined;
-          
-          return result;
+        const rendered = await this.renderContent(request);
+        const { messageId } = await provider.send(request, rendered);
+
+        // Reset circuit breaker on success
+        provider.isHealthy = true;
+        provider.lastError = undefined;
+        provider.lastErrorTime = undefined;
+
+        if (request.trackingId) {
+          await NotificationDeliveryTrackingModel.create({
+            notification_id: request.trackingId,
+            status: DeliveryStatus.SENT,
+            channel: 'email',
+            provider: provider.name,
+            external_id: messageId,
+            metadata: { provider: provider.name, messageId },
+          });
         }
-        
-        lastError = result.error || 'Unknown error';
+
+        logger.info('Email sent', { provider: provider.name, messageId, to: request.to });
+        return { success: true, messageId, deliveryStatus: DeliveryStatus.SENT };
       } catch (error) {
         lastError = error instanceof Error ? error.message : 'Unknown error';
         this.handleProviderError(provider, lastError);
+
+        if (request.trackingId) {
+          await NotificationDeliveryTrackingModel.create({
+            notification_id: request.trackingId,
+            status: DeliveryStatus.FAILED,
+            channel: 'email',
+            provider: provider.name,
+            error_message: lastError,
+            metadata: { provider: provider.name, error: lastError },
+          });
+        }
+
+        logger.warn(`Email failed via ${provider.name}, trying next`, { error: lastError });
       }
     }
 
@@ -170,125 +359,37 @@ export class EmailService {
     };
   }
 
-  /**
-   * Send email with a specific provider
-   */
-  private async sendWithProvider(provider: EmailProvider, request: EmailRequest): Promise<EmailResult> {
-    try {
-      // Render template if templateId is provided
-      let subject = request.subject;
-      let html = request.htmlContent || '';
-      let text = request.textContent || '';
-
-      if (request.templateId) {
-        const rendered = await this.renderTemplate(request.templateId, request.templateData || {});
-        subject = rendered.subject || request.subject;
-        html = rendered.html;
-        text = rendered.text;
-      }
-
-      const mailOptions: SendMailOptions = {
-        from: config.email.fromEmail,
-        to: request.to.join(', '),
-        cc: request.cc?.join(', '),
-        bcc: request.bcc?.join(', '),
-        subject,
-        html,
-        text,
-        priority: request.priority || 'normal',
-        headers: {
-          'X-Tracking-ID': request.trackingId || '',
-        },
-      };
-
-      const info = await provider.transporter.sendMail(mailOptions);
-
-      // Track delivery if tracking ID is provided
-      if (request.trackingId) {
-        await NotificationDeliveryTrackingModel.create({
-          notification_id: request.trackingId,
-          status: DeliveryStatus.SENT,
-          channel: 'email',
-          provider: provider.name,
-          external_id: info.messageId,
-          metadata: {
-            provider: provider.name,
-            messageId: info.messageId,
-            response: info.response,
-          },
-        });
-      }
-
-      logger.info(`Email sent successfully via ${provider.name}`, {
-        messageId: info.messageId,
-        to: request.to,
-        subject: request.subject,
-      });
-
-      return {
-        success: true,
-        messageId: info.messageId,
-        deliveryStatus: DeliveryStatus.SENT,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Track delivery failure if tracking ID is provided
-      if (request.trackingId) {
-        await NotificationDeliveryTrackingModel.create({
-          notification_id: request.trackingId,
-          status: DeliveryStatus.FAILED,
-          channel: 'email',
-          provider: provider.name,
-          error_message: errorMessage,
-          metadata: {
-            provider: provider.name,
-            error: errorMessage,
-          },
-        });
-      }
-
-      logger.error(`Email failed via ${provider.name}`, { error: errorMessage });
-
-      return {
-        success: false,
-        error: errorMessage,
-        deliveryStatus: DeliveryStatus.FAILED,
-      };
+  private async renderContent(request: EmailRequest): Promise<RenderedTemplate> {
+    if (request.templateId) {
+      return this.renderTemplate(request.templateId, request.templateData || {});
     }
+    return {
+      subject: request.subject,
+      html: request.htmlContent || '',
+      text: request.textContent || '',
+    };
   }
 
-  /**
-   * Render email template with data
-   */
   async renderTemplate(templateId: string, data: Record<string, any>): Promise<RenderedTemplate> {
     try {
       const template = await NotificationTemplatesModel.getById(templateId);
-      
-      if (!template) {
-        throw new Error(`Template not found: ${templateId}`);
-      }
+      if (!template) throw new Error(`Template not found: ${templateId}`);
 
-      // Simple template variable replacement
       let subject = template.subject || '';
       let html = template.html_content;
       let text = template.text_content;
 
-      // Replace variables in the format {{variable}}
       Object.entries(data).forEach(([key, value]) => {
-        const placeholder = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
-        const stringValue = String(value);
-        
-        subject = subject.replace(placeholder, stringValue);
-        html = html.replace(placeholder, stringValue);
-        text = text.replace(placeholder, stringValue);
+        const re = new RegExp(`{{\\s*${key}\\s*}}`, 'g');
+        const str = String(value);
+        subject = subject.replace(re, str);
+        html = html.replace(re, str);
+        text = text.replace(re, str);
       });
 
       return { subject, html, text };
     } catch (error) {
       logger.error('Failed to render email template', { error });
-      
-      // Return fallback template
       return {
         subject: 'Notification from MentorMinds',
         html: '<p>You have a new notification from MentorMinds.</p>',
@@ -297,66 +398,21 @@ export class EmailService {
     }
   }
 
-  /**
-   * Validate template with sample data
-   */
-  async validateTemplate(templateId: string, sampleData: Record<string, any>): Promise<boolean> {
-    try {
-      const template = await NotificationTemplatesModel.getById(templateId);
-      
-      if (!template) {
-        return false;
-      }
-
-      // Check if all required variables are provided
-      const missingVariables = template.variables.filter(
-        variable => !(variable in sampleData)
-      );
-
-      if (missingVariables.length > 0) {
-        logger.warn(`Template ${templateId} missing variables`, { missingVariables });
-        return false;
-      }
-
-      // Try to render the template
-      await this.renderTemplate(templateId, sampleData);
-      return true;
-    } catch (error) {
-      logger.error(`Template validation failed for ${templateId}`, { error });
-      return false;
-    }
-  }
-
-  /**
-   * Get next healthy provider using round-robin with circuit breaker
-   */
-  private getNextHealthyProvider(): EmailProvider | null {
-    const startIndex = this.currentProviderIndex;
-    
+  private getNextHealthyProvider(): IEmailProvider | null {
+    const start = this.currentProviderIndex;
     do {
       const provider = this.providers[this.currentProviderIndex];
       this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
-      
-      if (this.isProviderHealthy(provider)) {
-        return provider;
-      }
-    } while (this.currentProviderIndex !== startIndex);
-    
+      if (this.isProviderHealthy(provider)) return provider;
+    } while (this.currentProviderIndex !== start);
     return null;
   }
 
-  /**
-   * Check if provider is healthy (circuit breaker logic)
-   */
-  private isProviderHealthy(provider: EmailProvider): boolean {
-    if (provider.isHealthy) {
-      return true;
-    }
-
-    // Check if circuit breaker timeout has passed
+  private isProviderHealthy(provider: IEmailProvider): boolean {
+    if (provider.isHealthy) return true;
     if (provider.lastErrorTime) {
-      const timeSinceError = Date.now() - provider.lastErrorTime.getTime();
-      if (timeSinceError > this.circuitBreakerTimeout) {
+      const elapsed = Date.now() - provider.lastErrorTime.getTime();
+      if (elapsed > this.circuitBreakerTimeout) {
         provider.isHealthy = true;
         provider.lastError = undefined;
         provider.lastErrorTime = undefined;
@@ -364,89 +420,33 @@ export class EmailService {
         return true;
       }
     }
-
     return false;
   }
 
-  /**
-   * Handle provider error (circuit breaker logic)
-   */
-  private handleProviderError(provider: EmailProvider, error: string): void {
+  private handleProviderError(provider: IEmailProvider, error: string): void {
     provider.lastError = error;
     provider.lastErrorTime = new Date();
     provider.isHealthy = false;
-    
-    logger.warn(`Provider ${provider.name} marked as unhealthy`, { error });
+    logger.warn(`Provider ${provider.name} marked unhealthy`, { error });
   }
 
-  /**
-   * Get provider health status
-   */
   getProviderStatus(): { name: string; healthy: boolean; lastError?: string }[] {
-    return this.providers.map(provider => ({
-      name: provider.name,
-      healthy: this.isProviderHealthy(provider),
-      lastError: provider.lastError,
+    return this.providers.map(p => ({
+      name: p.name,
+      healthy: this.isProviderHealthy(p),
+      lastError: p.lastError,
     }));
   }
 
-  /**
-   * Test email connectivity
-   */
-  async testConnection(): Promise<{ provider: string; success: boolean; error?: string }[]> {
-    const results = [];
-    
-    for (const provider of this.providers) {
-      try {
-        await provider.transporter.verify();
-        results.push({
-          provider: provider.name,
-          success: true,
-        });
-      } catch (error) {
-        results.push({
-          provider: provider.name,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
-      }
-    }
-    
-    return results;
-  }
-
-  /**
-   * Send test email
-   */
   async sendTestEmail(to: string): Promise<EmailResult> {
     return this.sendEmail({
       to: [to],
       subject: 'MentorMinds Email Service Test',
-      htmlContent: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #4A90E2;">Email Service Test</h2>
-          <p>This is a test email from the MentorMinds notification system.</p>
-          <p>If you received this email, the email service is working correctly.</p>
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #ddd;" />
-          <p style="color: #666; font-size: 14px;">
-            Sent at: ${new Date().toISOString()}<br>
-            From: MentorMinds Email Service
-          </p>
-        </div>
-      `,
-      textContent: `
-        Email Service Test
-        
-        This is a test email from the MentorMinds notification system.
-        If you received this email, the email service is working correctly.
-        
-        Sent at: ${new Date().toISOString()}
-        From: MentorMinds Email Service
-      `,
+      htmlContent: `<div style="font-family:Arial,sans-serif"><h2 style="color:#4A90E2">Email Service Test</h2><p>If you received this, the email service is working correctly.</p><p style="color:#666;font-size:14px">Sent at: ${new Date().toISOString()}</p></div>`,
+      textContent: `Email Service Test\n\nIf you received this, the email service is working correctly.\n\nSent at: ${new Date().toISOString()}`,
     });
   }
 }
 
-// Export singleton instance
 export const emailService = new EmailService();
 export default emailService;

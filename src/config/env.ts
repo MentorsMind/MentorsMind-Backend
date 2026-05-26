@@ -81,6 +81,20 @@ const envSchema = z.object({
   GMAIL_PASS: z.string().optional(),
   FROM_EMAIL: z.string().email().default("noreply@mentorminds.com"),
 
+  // Email provider selection: sendgrid | mailgun | smtp (default: smtp)
+  EMAIL_PROVIDER: z.enum(["sendgrid", "mailgun", "smtp"]).default("smtp"),
+
+  // SendGrid
+  SENDGRID_API_KEY: z.string().optional(),
+
+  // Mailgun
+  MAILGUN_API_KEY: z.string().optional(),
+  MAILGUN_DOMAIN: z.string().optional(),
+  MAILGUN_HOST: z.string().default("api.mailgun.net"),
+
+  // Webhook secret for validating bounce/complaint callbacks
+  EMAIL_WEBHOOK_SECRET: z.string().optional(),
+
   // Redis
   REDIS_URL: z.string().url("REDIS_URL must be a valid URL").optional(),
 
@@ -152,6 +166,9 @@ const SENSITIVE_KEYS = new Set([
   "PLATFORM_SECRET_KEY",
   "SMTP_PASS",
   "GMAIL_PASS",
+  "SENDGRID_API_KEY",
+  "MAILGUN_API_KEY",
+  "EMAIL_WEBHOOK_SECRET",
   "FIREBASE_PRIVATE_KEY",
   "VAULT_TOKEN",
   "AWS_SECRET_ID",
