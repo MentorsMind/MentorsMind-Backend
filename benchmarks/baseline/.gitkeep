@@ -1,0 +1,2 @@
+# This directory stores the performance baseline
+# baseline.json will be created when you run: npm run benchmark:baseline
