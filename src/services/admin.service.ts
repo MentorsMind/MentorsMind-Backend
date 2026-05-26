@@ -129,13 +129,18 @@ export const AdminService = {
     };
   },
 
-  async updateUserStatus(
-    id: string,
-    isActive: boolean,
-  ): Promise<UserRecord | null> {
+  async updateUserStatus(id: string, isActive: boolean): Promise<UserRecord | null> {
     const { rows } = await pool.query<UserRecord>(
-      "UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+      `UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [isActive, id],
+    );
+    return rows[0] || null;
+  },
+
+  async updateUserTier(id: string, tier: string): Promise<UserRecord | null> {
+    const { rows } = await pool.query<UserRecord>(
+      `UPDATE users SET user_tier = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+      [tier, id],
     );
     return rows[0] || null;
   },

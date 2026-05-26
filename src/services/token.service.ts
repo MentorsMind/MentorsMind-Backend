@@ -21,10 +21,12 @@ export const TokenService = {
     userId: string,
     email: string,
     role: string,
+    userTier: string = 'free',
     fingerprint?: string,
     newLoginContext?: { deviceName?: string; ipAddress?: string },
+    mfaVerified = false,
   ): Promise<AuthTokens> {
-    const payload: TokenPayload = { userId, email, role };
+    const payload: TokenPayload = { userId, email, role, userTier, mfaVerified };
 
     // Check concurrent sessions (max 5)
     await this.enforceSessionLimit(userId, 5, email, newLoginContext);

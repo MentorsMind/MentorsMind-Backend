@@ -59,6 +59,36 @@ export const AdminController = {
     ResponseUtil.success(res, updated, "User status updated successfully");
   },
 
+  /** PUT /admin/users/:id/tier */
+  async updateUserTier(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const { tier } = req.body;
+
+    const validTiers = ['free', 'pro', 'enterprise'];
+    if (!validTiers.includes(tier)) {
+      ResponseUtil.error(res, "Invalid tier. Must be free, pro, or enterprise", 400);
+      return;
+    }
+
+    const updated = await AdminService.updateUserTier(id, tier);
+    if (!updated) {
+      ResponseUtil.notFound(res, "User not found");
+      return;
+    }
+
+    // Log the tier change
+    await AuditLogService.log({
+      userId: req.user!.userId,
+      action: 'USER_TIER_UPDATED',
+      resourceType: 'user',
+      resourceId: id,
+      newValue: { tier },
+      ipAddress: extractIpAddress(req),
+    });
+
+    ResponseUtil.success(res, updated, "User tier updated successfully");
+  },
+
   /** PUT /admin/users/:id/suspend */
   async suspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const id = req.params.id as string;

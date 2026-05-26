@@ -26,6 +26,8 @@ export interface RateLimitConfig {
   public: RateLimitProfile;
   /** Data export endpoints — very strict to prevent abuse */
   export: RateLimitProfile;
+  /** Webhook incoming requests — per API key */
+  webhook: RateLimitProfile;
 }
 
 const rateLimitsConfig: RateLimitConfig = {
@@ -70,6 +72,12 @@ const rateLimitsConfig: RateLimitConfig = {
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 3,
     message: 'Export rate limit exceeded. Maximum 3 export requests per hour.',
+  },
+
+  webhook: {
+    windowMs: 60 * 1000, // 1 min
+    max: 30,
+    message: 'Webhook rate limit exceeded for this API key.',
   },
 };
 

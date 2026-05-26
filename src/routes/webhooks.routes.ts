@@ -12,11 +12,15 @@
 
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { webhookAuth } from '../middleware/webhook-auth.middleware';
 import { WebhooksController } from '../controllers/webhooks.controller';
 
 const router = Router();
 
-// All webhook routes require authentication
+// Publicly accessible but API Key protected
+router.post('/incoming', webhookAuth, WebhooksController.receive);
+
+// All other webhook routes require JWT authentication
 router.use(authenticate);
 
 router.post('/', WebhooksController.create);
@@ -26,5 +30,6 @@ router.put('/:id', WebhooksController.update);
 router.delete('/:id', WebhooksController.remove);
 router.get('/:id/deliveries', WebhooksController.deliveries);
 router.post('/:id/test', WebhooksController.test);
+router.post('/:id/rotate-api-key', WebhooksController.rotateKey);
 
 export default router;

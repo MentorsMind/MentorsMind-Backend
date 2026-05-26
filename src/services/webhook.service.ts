@@ -40,6 +40,11 @@ export interface WebhookRecord {
   user_id: string;
   url: string;
   secret_plain: string;
+  api_key_hash?: string;
+  api_key_plain?: string;
+  api_key_last_used_at?: Date | null;
+  api_key_expires_at?: Date | null;
+  api_key_grace_period_end?: Date | null;
   event_types: string[];
   is_active: boolean;
   failure_count: number;
@@ -78,6 +83,12 @@ function generateSecret(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+function generateApiKey(): { plain: string; hashed: string } {
+  const plain = `whk_${crypto.randomBytes(24).toString('hex')}`;
+  const hashed = crypto.createHash('sha256').update(plain).digest('hex');
+  return { plain, hashed };
+}
+
 export function signPayload(secret: string, body: string): string {
   return 'sha256=' + crypto.createHmac('sha256', secret).update(body).digest('hex');
 }
@@ -95,13 +106,15 @@ export const WebhookService = {
     eventTypes: string[],
     description?: string,
   ): Promise<WebhookRecord> {
-    const secret = generateSecret();
+    const secretPlain = generateSecret();
+    const secretHash = crypto.createHash('sha256').update(secretPlain).digest('hex');
+    const { plain: apiKeyPlain, hashed: apiKeyHash } = generateApiKey();
 
     const { rows } = await pool.query<WebhookRecord>(
-      `INSERT INTO webhooks (user_id, url, secret, secret_plain, event_types, description)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO webhooks (user_id, url, secret, secret_plain, event_types, description, api_key_hash, api_key_plain)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [userId, url, secret, secret, eventTypes, description ?? null],
+      [userId, url, secretHash, secretPlain, eventTypes, description ?? null, apiKeyHash, apiKeyPlain],
     );
 
     return rows[0];
@@ -167,6 +180,58 @@ export const WebhookService = {
       [id, userId],
     );
     return (rowCount ?? 0) > 0;
+  },
+
+  // ── API Key Management ────────────────────────────────────────────────────
+
+  async rotateApiKey(id: string, userId: string, gracePeriodHours = 24): Promise<WebhookRecord | null> {
+    const { plain: newPlain, hashed: newHash } = generateApiKey();
+    const gracePeriodEnd = new Date(Date.now() + gracePeriodHours * 60 * 60 * 1000);
+
+    const { rows } = await pool.query<WebhookRecord>(
+      `UPDATE webhooks
+       SET api_key_hash = $1,
+           api_key_plain = $2,
+           api_key_grace_period_end = $3,
+           updated_at = NOW()
+       WHERE id = $4 AND user_id = $5
+       RETURNING *`,
+      [newHash, newPlain, gracePeriodEnd, id, userId],
+    );
+
+    return rows[0] ?? null;
+  },
+
+  async validateApiKey(plainKey: string): Promise<WebhookRecord | null> {
+    const hash = crypto.createHash('sha256').update(plainKey).digest('hex');
+
+    const { rows } = await pool.query<WebhookRecord>(
+      `SELECT * FROM webhooks
+       WHERE api_key_hash = $1
+         AND is_active = TRUE
+         AND (api_key_expires_at IS NULL OR api_key_expires_at > NOW())`,
+      [hash],
+    );
+
+    const webhook = rows[0];
+    if (webhook) {
+      // Update last used
+      await pool.query(
+        `UPDATE webhooks SET api_key_last_used_at = NOW() WHERE id = $1`,
+        [webhook.id],
+      );
+    }
+
+    return webhook ?? null;
+  },
+
+  async logAuthFailure(webhookId: string | null, ip: string, userAgent: string, error: string): Promise<void> {
+    await pool.query(
+      `INSERT INTO webhook_auth_failures (webhook_id, ip_address, user_agent, error_message)
+       VALUES ($1, $2, $3, $4)`,
+      [webhookId, ip, userAgent, error],
+    );
+    logger.warn('Webhook auth failure logged', { webhookId, ip, error });
   },
 
   // ── Delivery history ──────────────────────────────────────────────────────

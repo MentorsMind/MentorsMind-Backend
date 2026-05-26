@@ -22,7 +22,7 @@ const router = Router();
 
 router.use(authenticate);
 router.use(requireAdmin);
-router.use(asyncHandler(adminAllowlistMiddleware));
+// adminAllowlistMiddleware is now applied globally in v1/index.ts for /admin/*
 
 /**
  * @swagger
@@ -143,6 +143,39 @@ router.put(
     getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
   }),
   asyncHandler(AdminController.updateUserStatus),
+);
+
+/**
+ * @swagger
+ * /admin/users/{id}/tier:
+ *   put:
+ *     summary: Update user tier
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/schemas/UUIDParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tier:
+ *                 type: string
+ *                 enum: [free, pro, enterprise]
+ *     responses:
+ *       200:
+ *         description: User tier updated
+ */
+router.put(
+  "/users/:id/tier",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.updateUserTier),
 );
 
 /**

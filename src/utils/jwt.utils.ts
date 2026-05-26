@@ -7,7 +7,9 @@ export interface TokenPayload {
   userId: string;
   email: string;
   role: string;
+  userTier?: string;
   fingerprint?: string;
+  mfaVerified?: boolean;
 }
 
 export interface DecodedToken extends TokenPayload {

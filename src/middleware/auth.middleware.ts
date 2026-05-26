@@ -51,10 +51,10 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
         return;
       }
 
-      decoded = jwt.verify(token, keyPair.publicKeyPem, { algorithms: ['RS256'] }) as { sub: string; role: string };
+      decoded = jwt.verify(token, keyPair.publicKeyPem, { algorithms: ['RS256'] }) as { sub: string; role: string; mfaVerified?: boolean };
     } else {
       // ── HMAC fallback: handles tokens issued before RSA migration ──
-      decoded = jwt.verify(token, JWT_SECRET) as { sub: string; role: string };
+      decoded = jwt.verify(token, JWT_SECRET) as { sub: string; role: string; mfaVerified?: boolean };
     }
 
     const userId = decoded.sub;
@@ -73,6 +73,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: Response, nex
       id: userId,
       userId,
       role: decoded.role,
+      mfaVerified: !!decoded.mfaVerified,
     } as any;
 
     // Debounced last_active_at update — max once per minute per user
