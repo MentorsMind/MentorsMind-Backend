@@ -19,9 +19,12 @@ const config = {
     name: env.DB_NAME,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
-    poolMax: 20,
-    idleTimeoutMs: 30000,
-    connectionTimeoutMs: 2000,
+    poolMax: parseInt(env.DB_POOL_MAX, 10),
+    poolMin: parseInt(env.DB_POOL_MIN, 10),
+    idleTimeoutMs: parseInt(env.DB_IDLE_TIMEOUT_MS, 10),
+    connectionTimeoutMs: parseInt(env.DB_CONNECTION_TIMEOUT_MS, 10),
+    statementTimeoutMs: parseInt(env.DB_STATEMENT_TIMEOUT_MS, 10),
+    poolExhaustionThreshold: parseInt(env.DB_POOL_EXHAUSTION_THRESHOLD, 10),
   },
 
   jwt: {

@@ -21,9 +21,11 @@ const config: Config = {
     "**/middleware/__tests__/idempotency.middleware.test.ts",
     // Database unit tests (no live DB — all mocked)
     "**/utils/__tests__/database.utils.test.ts",
+    "**/utils/__tests__/pool-monitor.utils.test.ts",
     "**/services/__tests__/database.service.test.ts",
     // Environment config unit tests
     "**/config/__tests__/env.test.ts",
+    "**/config/__tests__/database-pool.config.test.ts",
     // Session reminder and verification unit tests
     "**/__tests__/jobs/**/*.unit.test.ts",
     "**/__tests__/services/**/*.unit.test.ts",

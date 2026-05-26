@@ -36,6 +36,12 @@ const envSchema = z.object({
   DB_NAME: z.string().default("mentorminds"),
   DB_USER: z.string().default("postgres"),
   DB_PASSWORD: z.string().min(1, "DB_PASSWORD is required"),
+  DB_POOL_MAX: z.string().regex(/^\d+$/).default("20"),
+  DB_POOL_MIN: z.string().regex(/^\d+$/).default("4"),
+  DB_IDLE_TIMEOUT_MS: z.string().regex(/^\d+$/).default("30000"),
+  DB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).default("2000"),
+  DB_STATEMENT_TIMEOUT_MS: z.string().regex(/^\d+$/).default("10000"),
+  DB_POOL_EXHAUSTION_THRESHOLD: z.string().regex(/^\d+$/).default("90"),
 
   // JWT — supports dual secrets for zero-downtime rotation
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
@@ -117,7 +123,9 @@ const envSchema = z.object({
 
   // Security
   BCRYPT_ROUNDS: z.string().regex(/^\d+$/).default("10"),
-  ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY must be at least 32 characters"),
+  ENCRYPTION_KEY: z
+    .string()
+    .min(32, "ENCRYPTION_KEY must be at least 32 characters"),
   MFA_TOTP_ISSUER: z.string().default("MentorMinds"),
 
   // Platform
