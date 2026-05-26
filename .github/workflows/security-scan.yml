@@ -1,0 +1,366 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run security scans weekly on Monday at 3 AM UTC
+    - cron: '0 3 * * 1'
+
+jobs:
+  security-tests:
+    name: Run Security Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-security-tests
+      STELLAR_NETWORK: testnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Run OWASP Top 10 security tests
+        run: npm test -- --testPathPattern=security
+
+      - name: Upload security test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-test-results
+          path: |
+            coverage/
+            test-results/
+          retention-days: 30
+
+  zap-baseline-scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    needs: security-tests
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-zap
+      STELLAR_NETWORK: testnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Seed test data
+        run: npm run seed:test
+
+      - name: Start server in background
+        run: |
+          npm run build
+          npm start &
+          echo $! > server.pid
+          
+          # Wait for server to be ready
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:3000'
+          rules_file_name: '.zap/zap-baseline.conf'
+          cmd_options: '-a -j -l WARN -z "-config api.disablekey=true"'
+          fail_action: true
+          allow_issue_writing: false
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+
+      - name: Upload ZAP scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-baseline-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
+
+      - name: Create ZAP summary
+        if: always()
+        run: |
+          if [ -f report_md.md ]; then
+            echo "## 🔒 OWASP ZAP Baseline Scan Results" >> $GITHUB_STEP_SUMMARY
+            cat report_md.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+  zap-api-scan:
+    name: OWASP ZAP API Scan
+    runs-on: ubuntu-latest
+    needs: zap-baseline-scan
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-zap
+      STELLAR_NETWORK: testnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Seed test data
+        run: npm run seed:test
+
+      - name: Start server in background
+        run: |
+          npm run build
+          npm start &
+          echo $! > server.pid
+          
+          # Wait for server to be ready
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Run OWASP ZAP API Scan
+        uses: zaproxy/action-api-scan@v0.7.0
+        with:
+          target: 'http://localhost:3000'
+          format: 'openapi'
+          api_spec: 'openapi.json'
+          cmd_options: '-a -j -l WARN -z "-config api.disablekey=true"'
+          fail_action: false  # Don't fail on API scan (informational)
+          allow_issue_writing: false
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+
+      - name: Upload ZAP API scan results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-api-scan-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
+
+      - name: Create ZAP API summary
+        if: always()
+        run: |
+          if [ -f report_md.md ]; then
+            echo "## 🔒 OWASP ZAP API Scan Results" >> $GITHUB_STEP_SUMMARY
+            cat report_md.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+  dependency-check:
+    name: Dependency Security Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level=moderate || true
+          npm audit --json > npm-audit.json || true
+
+      - name: Upload npm audit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-report
+          path: npm-audit.json
+          retention-days: 30
+
+      - name: Check for critical vulnerabilities
+        run: |
+          CRITICAL=$(npm audit --json | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH=$(npm audit --json | jq '.metadata.vulnerabilities.high // 0')
+          
+          echo "Critical vulnerabilities: $CRITICAL"
+          echo "High vulnerabilities: $HIGH"
+          
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "::error::Found $CRITICAL critical vulnerabilities"
+            exit 1
+          fi
+          
+          if [ "$HIGH" -gt 5 ]; then
+            echo "::warning::Found $HIGH high vulnerabilities (threshold: 5)"
+          fi
+
+  security-summary:
+    name: Security Summary
+    runs-on: ubuntu-latest
+    needs: [security-tests, zap-baseline-scan, dependency-check]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create security summary
+        run: |
+          echo "# 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan Type | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Tests | ${{ needs.security-tests.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ZAP Baseline | ${{ needs.zap-baseline-scan.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Check | ${{ needs.dependency-check.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed reports in the workflow artifacts." >> $GITHUB_STEP_SUMMARY
