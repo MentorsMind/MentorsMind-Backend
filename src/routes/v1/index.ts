@@ -45,7 +45,7 @@ notificationCleanupService.initialize().catch((err: unknown) => {
 
 import goalRoutes from "../goal.routes";
 import learnerRoutes from "../learner.routes";
-//import webhookRoutes from "../webhooks.routes";
+import webhookRoutes from "../webhooks.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -62,6 +62,7 @@ router.use("/disputes", disputesRoutes);
 router.use("/escrow", escrowRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/integrations", integrationsRoutes);
+router.use("/webhooks", webhookRoutes);
 router.use("/", notesRoutes);
 
 export default router;
