@@ -1,4 +1,4 @@
-import pool from '../config/database';
+import pool from "../config/database";
 
 export interface Review {
   id: string;
@@ -27,8 +27,21 @@ export const ReviewModel = {
   },
 
   async findByUserId(userId: string): Promise<Review[]> {
-    const query = 'SELECT * FROM reviews WHERE reviewer_id = $1 OR reviewee_id = $1 ORDER BY created_at DESC;';
+    const query =
+      "SELECT * FROM reviews WHERE reviewer_id = $1 OR reviewee_id = $1 ORDER BY created_at DESC;";
     const { rows } = await pool.query<Review>(query, [userId]);
+    return rows;
+  },
+
+  /**
+   * Bulk fetch reviews for multiple users.
+   * A review can belong to a user as either reviewer or reviewee.
+   */
+  async findByUserIds(userIds: string[]): Promise<Review[]> {
+    if (userIds.length === 0) return [];
+    const query =
+      "SELECT * FROM reviews WHERE reviewer_id = ANY($1) OR reviewee_id = ANY($1) ORDER BY created_at DESC;";
+    const { rows } = await pool.query<Review>(query, [userIds]);
     return rows;
   },
 };

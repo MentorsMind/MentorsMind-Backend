@@ -1,4 +1,4 @@
-import { GoalModel, Goal } from '../models/goal.model';
+import { GoalModel, Goal, GoalProgressLog } from '../models/goal.model';
 import { createError } from '../middleware/errorHandler';
 
 import { LearnerService } from './learners.service';
@@ -31,6 +31,7 @@ export class GoalService {
     if (updateData.progress !== undefined) {
       if (updateData.progress >= 100) {
         updateData.status = 'completed';
+        updateData.progress = 100;
       } else if (updateData.progress < 100 && goal.status === 'completed') {
         updateData.status = 'active';
       }
@@ -43,12 +44,27 @@ export class GoalService {
     return updated;
   }
 
-  static async updateProgress(id: string, learnerId: string, progress: number): Promise<Goal> {
-    const data: Partial<Goal> = { progress };
+  static async updateProgress(id: string, learnerId: string, progress: number, notes?: string): Promise<Goal> {
+    const goal = await this.getGoal(id, learnerId);
+    
+    // Log progress history (this also updates the goal.progress in DB)
+    await GoalModel.logProgress(id, progress, notes);
+
+    // Update status if needed (auto-complete logic)
+    const updateData: Partial<Goal> = { progress };
     if (progress >= 100) {
-      data.status = 'completed';
+      updateData.status = 'completed';
+      updateData.progress = 100;
+    } else if (goal.status === 'completed' && progress < 100) {
+      updateData.status = 'active';
     }
-    return await this.updateGoal(id, learnerId, data);
+
+    return await this.updateGoal(id, learnerId, updateData);
+  }
+
+  static async getProgressLogs(id: string, learnerId: string): Promise<GoalProgressLog[]> {
+    await this.getGoal(id, learnerId);
+    return await GoalModel.getProgressLogs(id);
   }
 
   static async deleteGoal(id: string, learnerId: string): Promise<void> {

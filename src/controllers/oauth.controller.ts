@@ -34,7 +34,7 @@ export const OAuthController = {
             }
 
             try {
-                const userQuery = `SELECT email, role FROM users WHERE id = $1`;
+                const userQuery = `SELECT email, role, user_tier FROM users WHERE id = $1`;
                 const userResult = await pool.query(userQuery, [user.userId]);
                 
                 if (userResult.rows.length === 0) {
@@ -42,7 +42,7 @@ export const OAuthController = {
                 }
 
                 const userData = userResult.rows[0];
-                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role);
+                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role, userData.user_tier);
 
                 await AuditLogService.log({
                     userId: user.userId,
@@ -94,7 +94,7 @@ export const OAuthController = {
             }
 
             try {
-                const userQuery = `SELECT email, role FROM users WHERE id = $1`;
+                const userQuery = `SELECT email, role, user_tier FROM users WHERE id = $1`;
                 const userResult = await pool.query(userQuery, [user.userId]);
                 
                 if (userResult.rows.length === 0) {
@@ -102,7 +102,7 @@ export const OAuthController = {
                 }
 
                 const userData = userResult.rows[0];
-                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role);
+                const tokens = await TokenService.issueTokens(user.userId, userData.email, userData.role, userData.user_tier);
 
                 await AuditLogService.log({
                     userId: user.userId,

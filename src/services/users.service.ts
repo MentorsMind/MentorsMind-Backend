@@ -1,10 +1,13 @@
 import pool from '../config/database';
 import { EncryptionUtil } from '../utils/encryption.utils';
 
+export type UserTier = 'free' | 'pro' | 'enterprise';
+
 export interface UserRecord {
   id: string;
   email: string;
   role: string;
+  user_tier: UserTier;
   first_name: string;
   last_name: string;
   bio: string | null;
@@ -41,7 +44,7 @@ export interface UpdateUserPayload {
 }
 
 const PRIVATE_COLUMNS =
-  `id, email, role, first_name, last_name, bio, avatar_url, is_active,
+  `id, email, role, user_tier, first_name, last_name, bio, avatar_url, is_active,
    notification_preferences, phone_number_encrypted, date_of_birth_encrypted,
    government_id_number_encrypted, bank_account_details_encrypted,
    pii_encryption_version, created_at, updated_at`;

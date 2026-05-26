@@ -9,6 +9,8 @@ import { requireAdmin } from "../middleware/admin-auth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { adminAllowlistMiddleware } from "../middleware/ipFilter.middleware";
+import { auditLogMiddleware } from "../middleware/audit-log.middleware";
+import { AuditAction } from "../utils/log-formatter.utils";
 import {
   rejectVerificationSchema,
   requestMoreInfoSchema,
@@ -20,7 +22,7 @@ const router = Router();
 
 router.use(authenticate);
 router.use(requireAdmin);
-router.use(asyncHandler(adminAllowlistMiddleware));
+// adminAllowlistMiddleware is now applied globally in v1/index.ts for /admin/*
 
 /**
  * @swagger
@@ -134,7 +136,47 @@ router.get("/users", asyncHandler(AdminController.listUsers));
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.put("/users/:id/status", asyncHandler(AdminController.updateUserStatus));
+router.put(
+  "/users/:id/status",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.updateUserStatus),
+);
+
+/**
+ * @swagger
+ * /admin/users/{id}/tier:
+ *   put:
+ *     summary: Update user tier
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/schemas/UUIDParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tier:
+ *                 type: string
+ *                 enum: [free, pro, enterprise]
+ *     responses:
+ *       200:
+ *         description: User tier updated
+ */
+router.put(
+  "/users/:id/tier",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.updateUserTier),
+);
 
 /**
  * @swagger
@@ -152,7 +194,14 @@ router.put("/users/:id/status", asyncHandler(AdminController.updateUserStatus));
  *       404:
  *         description: User not found
  */
-router.put("/users/:id/suspend", asyncHandler(AdminController.suspendUser));
+router.put(
+  "/users/:id/suspend",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.suspendUser),
+);
 
 /**
  * @swagger
@@ -170,7 +219,14 @@ router.put("/users/:id/suspend", asyncHandler(AdminController.suspendUser));
  *       404:
  *         description: User not found
  */
-router.put("/users/:id/unsuspend", asyncHandler(AdminController.unsuspendUser));
+router.put(
+  "/users/:id/unsuspend",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.unsuspendUser),
+);
 
 /**
  * @swagger
@@ -188,7 +244,14 @@ router.put("/users/:id/unsuspend", asyncHandler(AdminController.unsuspendUser));
  *       404:
  *         description: User not found
  */
-router.post("/users/:id/unlock", asyncHandler(AdminController.unlockUser));
+router.post(
+  "/users/:id/unlock",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.unlockUser),
+);
 
 /**
  * @swagger
@@ -208,9 +271,20 @@ router.post("/users/:id/unlock", asyncHandler(AdminController.unlockUser));
  *       403:
  *         description: Admin role required
  */
-router.post("/auth/rotate-keys", asyncHandler(JwksController.rotateKeys));
+router.post(
+  "/auth/rotate-keys",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: () => ({ type: "AUTH", id: "JWKS" }),
+  }),
+  asyncHandler(JwksController.rotateKeys),
+);
 router.post(
   "/security/rotate-encryption-key",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: () => ({ type: "SECURITY", id: "ENCRYPTION" }),
+  }),
   asyncHandler(AdminController.rotateEncryptionKey),
 );
 router.get(
@@ -219,6 +293,10 @@ router.get(
 );
 router.post(
   "/deletion-requests/retry",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: () => ({ type: "SYSTEM", id: "DELETION_RETRY" }),
+  }),
   asyncHandler(AdminController.retryFailedDeletions),
 );
 
@@ -370,6 +448,10 @@ router.get("/disputes", asyncHandler(AdminController.listDisputes));
  */
 router.post(
   "/disputes/:id/resolve",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "DISPUTE", id: req.params.id }),
+  }),
   asyncHandler(AdminController.resolveDispute),
 );
 

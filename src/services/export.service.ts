@@ -1,16 +1,20 @@
 import fs from "fs";
 import path from "path";
 import archiver from "archiver";
+import pool from "../config/database";
 import { ExportJobModel } from "../models/export-job.model";
 import { SessionModel } from "../models/session.model";
 import { PaymentModel } from "../models/payment.model";
 import { ReviewModel } from "../models/review.model";
 import { UsersService } from "./users.service";
 import { exportQueue } from "../queues/export.queue";
+import { enqueueEmail } from "../queues/email.queue";
 import { AuditLoggerService } from "./audit-logger.service";
 import { LogLevel } from "../utils/log-formatter.utils";
 import { StorageService } from "./storage.service";
 import { createError } from "../middleware/errorHandler";
+
+const EXPORT_LINK_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 function toExportSafeRecord(user: any): any {
   const safeUser = { ...user };
@@ -32,7 +36,8 @@ export const ExportService = {
     }
 
     // Check cooldown: prevent new requests within 24 hours of last completed export
-    const lastCompleted = await ExportJobModel.findLastCompletedByUserId(userId);
+    const lastCompleted =
+      await ExportJobModel.findLastCompletedByUserId(userId);
     if (lastCompleted && lastCompleted.created_at) {
       const hoursSinceLastExport =
         (Date.now() - new Date(lastCompleted.created_at).getTime()) /
@@ -71,6 +76,13 @@ export const ExportService = {
       const sessions = await SessionModel.findByUserId(userId);
       const payments = await PaymentModel.findByUserId(userId);
       const reviews = await ReviewModel.findByUserId(userId);
+      const { rows: messages } = await pool.query(
+        `SELECT m.*
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+         WHERE c.participant_one_id = $1 OR c.participant_two_id = $1`,
+        [userId],
+      );
 
       const fileName = `export_${userId}_${Date.now()}.zip`;
       const timestamp = Date.now();
@@ -111,6 +123,11 @@ export const ExportService = {
       });
       archive.append(this.jsonToCsv(reviews), { name: "reviews.csv" });
 
+      archive.append(JSON.stringify(messages, null, 2), {
+        name: "messages.json",
+      });
+      archive.append(this.jsonToCsv(messages), { name: "messages.csv" });
+
       await archive.finalize();
 
       // Wait for the write stream to finish
@@ -133,7 +150,7 @@ export const ExportService = {
 
       // Store the S3 key (not local path) in the database
       const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
+      expiresAt.setDate(expiresAt.getDate() + 7);
 
       await ExportJobModel.updateStatus(
         jobId,
@@ -142,6 +159,51 @@ export const ExportService = {
         undefined,
         expiresAt,
       );
+
+      const downloadUrl = await StorageService.generatePresignedUrl(
+        result.key,
+        EXPORT_LINK_TTL_SECONDS,
+      );
+
+      const exportUser = await UsersService.findById(userId);
+      const recipientEmail = exportUser?.email;
+      if (recipientEmail) {
+        try {
+          await enqueueEmail({
+            to: [recipientEmail],
+            subject: "Your MentorMinds data export is ready",
+            templateId: "data_export_ready",
+            templateData: {
+              userName: exportUser?.first_name
+                ? `${exportUser.first_name} ${exportUser.last_name || ""}`.trim()
+                : "there",
+              downloadUrl,
+              expiresAt: expiresAt.toISOString(),
+              platformUrl:
+                process.env.APP_CLIENT_URL ||
+                process.env.APP_BASE_URL ||
+                "https://mentorsmind.com",
+              supportUrl:
+                process.env.SUPPORT_URL || "https://mentorsmind.com/support",
+            },
+          });
+        } catch (emailError) {
+          await AuditLoggerService.logEvent({
+            level: LogLevel.WARN,
+            action: "DATA_EXPORT_EMAIL_FAILED",
+            message: `Failed to queue export ready email for user ${userId}`,
+            userId,
+            entityType: "export_job",
+            entityId: jobId,
+            metadata: {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          });
+        }
+      }
 
       // Delete the local temp file after successful S3 upload
       if (tempFilePath && fs.existsSync(tempFilePath)) {
@@ -155,7 +217,12 @@ export const ExportService = {
         userId: userId,
         entityType: "export_job",
         entityId: jobId,
-        metadata: { fileName, s3Key: result.key, expiresAt, s3Url: result.url },
+        metadata: {
+          fileName,
+          s3Key: result.key,
+          expiresAt,
+          downloadUrlSent: Boolean(recipientEmail),
+        },
       });
     } catch (error: any) {
       // Cleanup: delete the local temp file on failure

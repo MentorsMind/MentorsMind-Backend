@@ -51,8 +51,9 @@ export const WebhooksController = {
         created_at: webhook.created_at,
         // Shown once — store it securely
         secret: webhook.secret_plain,
+        api_key: webhook.api_key_plain,
       },
-    }, 'Webhook registered. Store the secret securely — it will not be shown again.');
+    }, 'Webhook registered. Store the secret and API key securely — they will not be shown again.');
   }),
 
   /**
@@ -172,5 +173,45 @@ export const WebhooksController = {
       const status = err.statusCode ?? 500;
       return ResponseUtil.error(res, err.message, status);
     }
+  }),
+
+  /**
+   * POST /api/v1/webhooks/:id/rotate-api-key
+   * Rotate the API key for a webhook.
+   */
+  rotateKey: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { grace_period_hours } = req.body;
+
+    const webhook = await WebhookService.rotateApiKey(
+      req.params.id,
+      userId,
+      grace_period_hours ? parseInt(grace_period_hours, 10) : 24
+    );
+
+    if (!webhook) return ResponseUtil.notFound(res, 'Webhook not found');
+
+    return ResponseUtil.success(res, {
+      api_key: webhook.api_key_plain,
+      grace_period_end: webhook.api_key_grace_period_end,
+    }, 'API key rotated. The new key is shown above. Store it securely.');
+  }),
+
+  /**
+   * POST /api/v1/webhooks/incoming
+   * Generic receiver for incoming webhooks (requires API key).
+   */
+  receive: asyncHandler(async (req: Request, res: Response) => {
+    // This endpoint is protected by webhookAuth middleware
+    const webhook = (req as any).webhook as WebhookRecord;
+    
+    logger.info('Incoming webhook received', {
+      webhookId: webhook.id,
+      payload: req.body
+    });
+
+    // In a real system, we might enqueue this for processing
+    // For now, we just acknowledge receipt
+    return ResponseUtil.success(res, { received: true }, 'Webhook received and authenticated');
   }),
 };

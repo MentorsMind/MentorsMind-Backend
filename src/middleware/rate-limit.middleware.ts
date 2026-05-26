@@ -86,11 +86,61 @@ export const authLimiter = createLimiter({
   keyStrategy: 'ip',
 });
 
-/** Authenticated API routes — per-user sliding window */
-export const apiLimiter = createLimiter({
-  profile: rateLimitsConfig.api,
-  keyStrategy: 'user',
-});
+/** Authenticated API routes — per-user tiered rate limiting */
+export const apiLimiter = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  // Admin bypass
+  if (isAdminRequest(req)) {
+    res.setHeader('X-RateLimit-Bypass', 'admin');
+    return next();
+  }
+
+  const user = (req as any).user;
+  const tier = (user?.userTier || 'free').toLowerCase();
+  
+  // Enterprise bypass
+  if (tier === 'enterprise') {
+    res.setHeader('X-RateLimit-Tier', 'enterprise');
+    res.setHeader('X-RateLimit-Bypass', 'tier');
+    return next();
+  }
+
+  // Tiered limits: free 100 req/min, pro 1000 req/min
+  const limits: Record<string, number> = {
+    free: 100,
+    pro: 1000,
+  };
+
+  const maxRequests = limits[tier] || 100;
+  const windowMs = 60 * 1000; // 1 minute
+  const key = userKey(req);
+
+  const result = await RateLimiterService.check(key, windowMs, maxRequests);
+
+  res.setHeader('X-RateLimit-Tier', tier);
+  setRateLimitHeaders(res, {
+    limit: result.limit,
+    current: result.current,
+    remaining: result.remaining,
+    resetTime: result.resetTime,
+  });
+
+  const event = buildRateLimitEvent(req, key, !result.allowed, result.remaining);
+  logRateLimitEvent(event);
+
+  if (!result.allowed) {
+    res.setHeader('Retry-After', Math.ceil((result.resetTime.getTime() - Date.now()) / 1000));
+    res.status(429).json({
+      status: 'error',
+      message: `API rate limit exceeded for ${tier} tier.`,
+      tier,
+      retryAfter: result.resetTime.toISOString(),
+      timestamp: new Date().toISOString(),
+    });
+    return;
+  }
+
+  next();
+};
 
 /** Sensitive flows (password reset, email verify) — very strict */
 export const sensitiveLimiter = createLimiter({

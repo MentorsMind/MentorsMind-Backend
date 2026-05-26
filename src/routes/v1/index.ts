@@ -27,9 +27,12 @@ import consentRoutes from "../consent.routes";
 import bulkRoutes from "../bulk.routes";
 import integrationsRoutes from "../integrations.routes";
 import notesRoutes from "../notes.routes";
+import deepLinkRoutes from "../deepLink.routes";
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
 import { notificationCleanupService } from "../../services/notification-cleanup.service";
+import { adminAllowlistMiddleware } from "../middleware/ipFilter.middleware";
+import { asyncHandler } from "../../utils/asyncHandler.utils";
 
 const router = Router();
 
@@ -45,7 +48,7 @@ notificationCleanupService.initialize().catch((err: unknown) => {
 
 import goalRoutes from "../goal.routes";
 import learnerRoutes from "../learner.routes";
-//import webhookRoutes from "../webhooks.routes";
+import webhookRoutes from "../webhooks.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -54,8 +57,12 @@ router.use("/learners", learnerRoutes);
 router.use("/", exportRoutes);
 router.use("/consent", consentRoutes);
 router.use("/bulk", bulkRoutes);
+
+// Apply IP whitelisting to all admin routes
+router.use("/admin", asyncHandler(adminAllowlistMiddleware));
 router.use("/admin", adminRoutes);
 router.use("/admin/moderation", moderationRoutes);
+
 router.use("/bookings", bookingsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/analytics", analyticsRoutes);
@@ -63,6 +70,8 @@ router.use("/disputes", disputesRoutes);
 router.use("/escrow", escrowRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/integrations", integrationsRoutes);
+router.use("/dl", deepLinkRoutes);
 router.use("/", notesRoutes);
+router.use("/webhooks", webhookRoutes);
 
 export default router;

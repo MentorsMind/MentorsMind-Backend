@@ -1,4 +1,9 @@
 import pool from "../config/database";
+import NodeCache from "node-cache";
+import { WebhookService } from "./webhook.service";
+
+// Simple in-memory cache with 5‑minute TTL
+const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 import { logger } from "../utils/logger";
 import { emailService } from "./email.service";
 
@@ -28,9 +33,20 @@ export interface ModerationStats {
   avg_resolution_time_hours: number;
   pending_count: number;
   escalated_count: number;
+  approved_count: number;
+  rejected_count: number;
+  avg_resolution_time_approved: number;
+  avg_resolution_time_rejected: number;
+  avg_resolution_time_escalated: number;
+  total_processed: number;
+  deletion_count: number;
 }
 
 export const ModerationService = {
+  // Helper to clear all moderation-related cache entries
+  clearCache() {
+    cache.flushAll();
+  },
   /**
    * Initialize flags table
    */
@@ -91,6 +107,7 @@ export const ModerationService = {
       entityId,
     });
 
+    this.clearCache();
     return flag;
   },
 
@@ -166,14 +183,20 @@ export const ModerationService = {
     limit = 50,
     offset = 0,
   ): Promise<{ data: FlagWithDetails[]; total: number }> {
+    const cacheKey = `moderation_queue:${limit}:${offset}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached as { data: FlagWithDetails[]; total: number };
+    }
+
     const query = `
-      SELECT 
+      SELECT
         f.*,
         u.email as flagger_email,
         CONCAT(u.first_name, ' ', u.last_name) AS flagger_name,
-        (SELECT COUNT(*) FROM flags f2 
-         WHERE f2.entity_type = f.entity_type 
-         AND f2.entity_id = f.entity_id 
+        (SELECT COUNT(*) FROM flags f2
+         WHERE f2.entity_type = f.entity_type
+         AND f2.entity_id = f.entity_id
          AND f2.status = 'pending') as flag_count
       FROM flags f
       JOIN users u ON f.flagger_id = u.id
@@ -191,10 +214,12 @@ export const ModerationService = {
       pool.query(countQuery),
     ]);
 
-    return {
+    const result = {
       data: dataResult.rows,
       total: parseInt(countResult.rows[0].count, 10),
     };
+    cache.set(cacheKey, result, 300); // cache for 5 minutes
+    return result;
   },
 
   /**
@@ -230,6 +255,8 @@ export const ModerationService = {
         flagId,
         reviewerId,
       });
+      // Clear cache after mutation
+      this.clearCache();
     }
 
     return rows[0] || null;
@@ -271,6 +298,8 @@ export const ModerationService = {
         flagId,
         reviewerId,
       });
+      // Clear cache after mutation
+      this.clearCache();
     }
 
     return rows[0] || null;
@@ -383,27 +412,64 @@ The MentorMinds Team
   },
 
   /**
-   * Get moderation statistics
+   * Delete a flag (usually after resolution)
+   */
+  async deleteFlag(flagId: string, reviewerId: string): Promise<FlagRecord | null> {
+    const query = `
+      DELETE FROM flags
+      WHERE id = $1
+      RETURNING *
+    `;
+    const { rows } = await pool.query<FlagRecord>(query, [flagId]);
+    if (rows[0]) {
+      logger.info('Flag deleted by moderator', { flagId, reviewerId });
+      // Clear cache after deletion
+      this.clearCache();
+    }
+    return rows[0] || null;
+  },
+
+/**
+   * Get moderation statistics (cached)
    */
   async getStats(): Promise<ModerationStats> {
+    const cacheKey = `moderation_stats`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return cached as ModerationStats;
+    }
+
     const query = `
-      SELECT 
+      SELECT
         COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
+        COUNT(*) FILTER (WHERE status = 'approved') as approved_count,
+        COUNT(*) FILTER (WHERE status = 'rejected') as rejected_count,
         COUNT(*) FILTER (WHERE status = 'escalated') as escalated_count,
+        COUNT(*) FILTER (WHERE status = 'deleted') as deletion_count,
+        COUNT(*) as total_processed,
+        AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/3600) FILTER (WHERE status = 'approved' AND reviewed_at IS NOT NULL) as avg_resolution_time_approved,
+        AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/3600) FILTER (WHERE status = 'rejected' AND reviewed_at IS NOT NULL) as avg_resolution_time_rejected,
+        AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/3600) FILTER (WHERE status = 'escalated' AND reviewed_at IS NOT NULL) as avg_resolution_time_escalated,
         AVG(EXTRACT(EPOCH FROM (reviewed_at - created_at))/3600) FILTER (WHERE reviewed_at IS NOT NULL) as avg_resolution_time_hours
       FROM flags
     `;
 
     const { rows } = await pool.query(query);
     const stats = rows[0];
-
-    return {
+    const result: ModerationStats = {
       queue_size: parseInt(stats.pending_count, 10),
-      avg_resolution_time_hours: parseFloat(
-        stats.avg_resolution_time_hours || "0",
-      ),
+      avg_resolution_time_hours: parseFloat(stats.avg_resolution_time_hours || "0"),
       pending_count: parseInt(stats.pending_count, 10),
       escalated_count: parseInt(stats.escalated_count, 10),
+      approved_count: parseInt(stats.approved_count, 10),
+      rejected_count: parseInt(stats.rejected_count, 10),
+      deletion_count: parseInt(stats.deletion_count, 10),
+      total_processed: parseInt(stats.total_processed, 10),
+      avg_resolution_time_approved: parseFloat(stats.avg_resolution_time_approved || "0"),
+      avg_resolution_time_rejected: parseFloat(stats.avg_resolution_time_rejected || "0"),
+      avg_resolution_time_escalated: parseFloat(stats.avg_resolution_time_escalated || "0"),
     };
+    cache.set(cacheKey, result, 300);
+    return result;
   },
 };

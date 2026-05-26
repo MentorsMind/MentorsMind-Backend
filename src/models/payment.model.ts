@@ -34,6 +34,18 @@ export const PaymentModel = {
     return rows;
   },
 
+  /**
+   * Bulk fetch payments for multiple users.
+   * Returns one array per requested userId.
+   */
+  async findByUserIds(userIds: string[]): Promise<Payment[]> {
+    if (userIds.length === 0) return [];
+    const query =
+      "SELECT * FROM transactions WHERE user_id = ANY($1) ORDER BY user_id, created_at DESC;";
+    const { rows } = await pool.query<Payment>(query, [userIds]);
+    return rows;
+  },
+
   async findEarningsByMentorId(
     mentorId: string,
     from?: string,

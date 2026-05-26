@@ -183,7 +183,7 @@ export const MfaController = {
       }
 
       const userId = decoded.sub;
-      const { rows } = await pool.query(`SELECT mfa_secret, role, email FROM users WHERE id = $1`, [userId]);
+      const { rows } = await pool.query(`SELECT mfa_secret, role, email, user_tier FROM users WHERE id = $1`, [userId]);
       
       if (!rows.length || !rows[0].mfa_secret) {
         return res.status(400).json({ success: false, error: 'MFA not configured' });
@@ -198,7 +198,7 @@ export const MfaController = {
 
       // MFA valid, generate full tokens
       const user = rows[0];
-      const tokens = await TokenService.issueTokens(userId, user.email, user.role);
+      const tokens = await TokenService.issueTokens(userId, user.email, user.role, user.user_tier, undefined, undefined, true);
 
       await SessionManagerService.createSession({
         userId,
@@ -251,9 +251,9 @@ export const MfaController = {
         return res.status(401).json({ success: false, error: 'Invalid backup code' });
       }
 
-      const { rows } = await pool.query(`SELECT role, email FROM users WHERE id = $1`, [userId]);
+      const { rows } = await pool.query(`SELECT role, email, user_tier FROM users WHERE id = $1`, [userId]);
       const user = rows[0];
-      const tokens = await TokenService.issueTokens(userId, user.email, user.role);
+      const tokens = await TokenService.issueTokens(userId, user.email, user.role, user.user_tier, undefined, undefined, true);
 
       await SessionManagerService.createSession({
         userId,
