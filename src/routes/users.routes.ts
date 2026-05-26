@@ -9,9 +9,9 @@ import {
   updateUserSchema,
   updateMeSchema,
   avatarUploadSchema,
-} from '../validators/schemas/users.schemas';
-import { idParamSchema } from '../validators/schemas/common.schemas';
-import { RecommendationController } from '../controllers/recommendation.controller';
+} from "../validators/schemas/users.schemas";
+import { idParamSchema } from "../validators/schemas/common.schemas";
+import { RecommendationController } from "../controllers/recommendation.controller";
 
 const router = Router();
 
@@ -96,6 +96,10 @@ router.put(
 );
 
 router.delete("/me", asyncHandler(UsersController.requestAccountDeletion));
+router.post(
+  "/me/delete-request",
+  asyncHandler(UsersController.requestAccountDeletion),
+);
 router.post(
   "/me/cancel-deletion",
   asyncHandler(UsersController.cancelAccountDeletion),
@@ -319,17 +323,17 @@ router.delete(
 );
 
 router.get(
-  '/recommendations/mentors',
+  "/recommendations/mentors",
   asyncHandler(RecommendationController.getMentorRecommendations),
 );
 
 router.post(
-  '/recommendations/dismiss/:mentorId',
+  "/recommendations/dismiss/:mentorId",
   asyncHandler(RecommendationController.dismissMentor),
 );
 
 router.post(
-  '/recommendations/click/:mentorId',
+  "/recommendations/click/:mentorId",
   asyncHandler(RecommendationController.logRecommendationClick),
 );
 

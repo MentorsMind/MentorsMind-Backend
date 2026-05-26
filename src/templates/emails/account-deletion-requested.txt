@@ -1,0 +1,7 @@
+Hi {{userName}},
+
+We received your request to delete your MentorMinds account. Your personal data will be erased after a {{gracePeriodDays}}-day grace period on {{scheduledFor}}.
+
+You can cancel this request anytime before that date. Transaction records required for compliance will be retained in anonymized form.
+
+If you did not request account deletion, contact support: {{supportUrl}}

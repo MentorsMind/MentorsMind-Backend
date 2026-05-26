@@ -1,0 +1,5 @@
+Hi {{userName}},
+
+Your account deletion request has been cancelled. Your MentorMinds account remains active.
+
+If you did not cancel this request, contact support: {{supportUrl}}

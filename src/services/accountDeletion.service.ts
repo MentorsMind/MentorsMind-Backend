@@ -1,8 +1,9 @@
 import crypto from "crypto";
 import pool from "../config/database";
 import { EmailService } from "./email.service";
+import { enqueueEmail } from "../queues/email.queue";
 import { logger } from "../utils/logger.utils";
-import { PoolClient } from 'pg';
+import { PoolClient } from "pg";
 
 const GRACE_PERIOD_DAYS = 30;
 
@@ -16,25 +17,25 @@ interface WhitelistEntry {
 }
 
 const DELETION_WHITELIST: WhitelistEntry[] = [
-  { tableName: 'users', whereColumn: 'id' },
-  { tableName: 'profiles', whereColumn: 'user_id' },
-  { tableName: 'sessions', whereColumn: 'user_id' },
-  { tableName: 'refresh_tokens', whereColumn: 'user_id' },
-  { tableName: 'bookings', whereColumn: 'mentee_id' },
-  { tableName: 'bookings', whereColumn: 'mentor_id' },
-  { tableName: 'reviews', whereColumn: 'reviewer_id' },
-  { tableName: 'payments', whereColumn: 'user_id' },
-  { tableName: 'notifications', whereColumn: 'user_id' },
-  { tableName: 'user_preferences', whereColumn: 'user_id' },
-  { tableName: 'escrow_transactions', whereColumn: 'buyer_id' },
-  { tableName: 'escrow_transactions', whereColumn: 'seller_id' },
-  { tableName: 'disputes', whereColumn: 'initiator_id' },
-  { tableName: 'meeting_participants', whereColumn: 'user_id' },
-  { tableName: 'audit_logs', whereColumn: 'user_id' },
-  { tableName: 'oauth_tokens', whereColumn: 'user_id' },
-  { tableName: 'push_tokens', whereColumn: 'user_id' },
-  { tableName: 'messages', whereColumn: 'sender_id' },
-  { tableName: 'booking_notes', whereColumn: 'author_id' },
+  { tableName: "users", whereColumn: "id" },
+  { tableName: "profiles", whereColumn: "user_id" },
+  { tableName: "sessions", whereColumn: "user_id" },
+  { tableName: "refresh_tokens", whereColumn: "user_id" },
+  { tableName: "bookings", whereColumn: "mentee_id" },
+  { tableName: "bookings", whereColumn: "mentor_id" },
+  { tableName: "reviews", whereColumn: "reviewer_id" },
+  { tableName: "payments", whereColumn: "user_id" },
+  { tableName: "notifications", whereColumn: "user_id" },
+  { tableName: "user_preferences", whereColumn: "user_id" },
+  { tableName: "escrow_transactions", whereColumn: "buyer_id" },
+  { tableName: "escrow_transactions", whereColumn: "seller_id" },
+  { tableName: "disputes", whereColumn: "initiator_id" },
+  { tableName: "meeting_participants", whereColumn: "user_id" },
+  { tableName: "audit_logs", whereColumn: "user_id" },
+  { tableName: "oauth_tokens", whereColumn: "user_id" },
+  { tableName: "push_tokens", whereColumn: "user_id" },
+  { tableName: "messages", whereColumn: "sender_id" },
+  { tableName: "booking_notes", whereColumn: "author_id" },
 ];
 
 interface DeletionRequestRow {
@@ -55,9 +56,71 @@ interface DeletionResult {
   error?: string;
 }
 
-function isValidDeletionTarget(tableName: string, whereColumn: string): boolean {
+function formatDeletionDate(date: Date | null): string {
+  if (!date) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+async function sendDeletionRequestedEmail(
+  row: DeletionRequestRow,
+): Promise<void> {
+  try {
+    await enqueueEmail({
+      to: [row.email],
+      subject: "Your MentorMinds account deletion is scheduled",
+      templateId: "account_deletion_requested",
+      templateData: {
+        userName: row.full_name || "there",
+        gracePeriodDays: GRACE_PERIOD_DAYS,
+        scheduledFor: formatDeletionDate(row.deletion_scheduled_for),
+        platformUrl: process.env.APP_URL || "https://mentorsmind.com",
+        supportUrl:
+          process.env.SUPPORT_URL || "https://mentorsmind.com/support",
+      },
+    });
+  } catch (error) {
+    logger.warn("Failed to enqueue account deletion request email", {
+      userId: row.id,
+      error,
+    });
+  }
+}
+
+async function sendDeletionCancelledEmail(
+  row: DeletionRequestRow,
+): Promise<void> {
+  try {
+    await enqueueEmail({
+      to: [row.email],
+      subject: "Your MentorMinds account deletion was cancelled",
+      templateId: "account_deletion_cancelled",
+      templateData: {
+        userName: row.full_name || "there",
+        platformUrl: process.env.APP_URL || "https://mentorsmind.com",
+        supportUrl:
+          process.env.SUPPORT_URL || "https://mentorsmind.com/support",
+      },
+    });
+  } catch (error) {
+    logger.warn("Failed to enqueue account deletion cancellation email", {
+      userId: row.id,
+      error,
+    });
+  }
+}
+
+function isValidDeletionTarget(
+  tableName: string,
+  whereColumn: string,
+): boolean {
   return DELETION_WHITELIST.some(
-    (entry) => entry.tableName === tableName && entry.whereColumn === whereColumn
+    (entry) =>
+      entry.tableName === tableName && entry.whereColumn === whereColumn,
   );
 }
 
@@ -105,10 +168,16 @@ export const accountDeletionService = {
     if (!rows[0]) throw new Error("User not found");
 
     await Promise.all([
-      pool.query(`UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1`, [userId]),
-      pool.query(`UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1`, [userId]),
+      pool.query(
+        `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1`,
+        [userId],
+      ),
+      pool.query(`UPDATE sessions SET revoked_at = NOW() WHERE user_id = $1`, [
+        userId,
+      ]),
     ]);
 
+    await sendDeletionRequestedEmail(rows[0]);
     return rows[0];
   },
 
@@ -124,6 +193,9 @@ export const accountDeletionService = {
                   deletion_scheduled_for, deletion_completed_at`,
       [userId],
     );
+    if (rows[0]) {
+      await sendDeletionCancelledEmail(rows[0]);
+    }
     return rows[0] ?? null;
   },
 
@@ -132,7 +204,12 @@ export const accountDeletionService = {
    * Each user's deletion is wrapped in try-catch to prevent one failure from stopping the batch.
    * @returns Object containing total processed, successful, and failed counts
    */
-  async processDueDeletions(): Promise<{ total: number; successful: number; failed: number; results: DeletionResult[] }> {
+  async processDueDeletions(): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+    results: DeletionResult[];
+  }> {
     const { rows } = await pool.query<DeletionRequestRow>(
       `SELECT id, email, full_name, deletion_requested_at, deletion_scheduled_for, 
               deletion_failed_at, deletion_error, deletion_retry_count
@@ -154,14 +231,15 @@ export const accountDeletionService = {
         logger.info("User deletion completed successfully", { userId: row.id });
       } catch (error) {
         failed++;
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         results.push({ userId: row.id, success: false, error: errorMessage });
-        
-        logger.error("User deletion failed", { 
-          userId: row.id, 
+
+        logger.error("User deletion failed", {
+          userId: row.id,
           email: row.email,
           retryCount: row.deletion_retry_count || 0,
-          error: errorMessage 
+          error: errorMessage,
         });
 
         // Mark the deletion as failed in the database
@@ -176,11 +254,11 @@ export const accountDeletionService = {
    * Erase a user's data from the system.
    * This performs a complete deletion of user data across all tables,
    * followed by anonymization of the user record.
-   * 
+   *
    * Note: The deletion confirmation email is sent to the user's original email
    * (captured before anonymization) after the database transaction commits.
    * If email sending fails, it's logged but doesn't roll back the deletion.
-   * 
+   *
    * @param row - The user deletion request row
    * @throws Error if the database transaction fails
    */
@@ -193,25 +271,65 @@ export const accountDeletionService = {
       await client.query("BEGIN");
 
       // Apply your whitelist-protected cleanup for all mapped tables
-      await deleteFromTableIfPresent(client, 'audit_logs', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'meeting_participants', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'disputes', 'initiator_id', row.id);
-      await deleteFromTableIfPresent(client, 'escrow_transactions', 'buyer_id', row.id);
-      await deleteFromTableIfPresent(client, 'escrow_transactions', 'seller_id', row.id);
-      await deleteFromTableIfPresent(client, 'reviews', 'reviewer_id', row.id);
-      await deleteFromTableIfPresent(client, 'bookings', 'mentee_id', row.id);
-      await deleteFromTableIfPresent(client, 'bookings', 'mentor_id', row.id);
-      await deleteFromTableIfPresent(client, 'notifications', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'payments', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'user_preferences', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'profiles', 'user_id', row.id);
-      
+      await deleteFromTableIfPresent(client, "audit_logs", "user_id", row.id);
+      await deleteFromTableIfPresent(
+        client,
+        "meeting_participants",
+        "user_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(
+        client,
+        "disputes",
+        "initiator_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(
+        client,
+        "escrow_transactions",
+        "buyer_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(
+        client,
+        "escrow_transactions",
+        "seller_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(client, "reviews", "reviewer_id", row.id);
+      await deleteFromTableIfPresent(client, "bookings", "mentee_id", row.id);
+      await deleteFromTableIfPresent(client, "bookings", "mentor_id", row.id);
+      await deleteFromTableIfPresent(
+        client,
+        "notifications",
+        "user_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(client, "payments", "user_id", row.id);
+      await deleteFromTableIfPresent(
+        client,
+        "user_preferences",
+        "user_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(client, "profiles", "user_id", row.id);
+
       // Core infrastructure cleanup
-      await deleteFromTableIfPresent(client, 'messages', 'sender_id', row.id);
-      await deleteFromTableIfPresent(client, 'booking_notes', 'author_id', row.id);
-      await deleteFromTableIfPresent(client, 'push_tokens', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'refresh_tokens', 'user_id', row.id);
-      await deleteFromTableIfPresent(client, 'sessions', 'user_id', row.id);
+      await deleteFromTableIfPresent(client, "messages", "sender_id", row.id);
+      await deleteFromTableIfPresent(
+        client,
+        "booking_notes",
+        "author_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(client, "push_tokens", "user_id", row.id);
+      await deleteFromTableIfPresent(
+        client,
+        "refresh_tokens",
+        "user_id",
+        row.id,
+      );
+      await deleteFromTableIfPresent(client, "sessions", "user_id", row.id);
       await deleteFromTableIfPresent(client, "oauth_tokens", "user_id", row.id);
 
       // Final Anonymization (PII Scrubbing) - anonymizedEmail is set here
@@ -248,21 +366,37 @@ export const accountDeletionService = {
       await emailService.sendEmail({
         to: [emailToNotify],
         subject: "Your MentorMinds account has been deleted",
-        textContent: "Your account deletion request has been completed and your personal data has been erased or anonymized.",
+        templateId: "account_deletion_completed",
+        templateData: {
+          userName: row.full_name || "there",
+          platformUrl: process.env.APP_URL || "https://mentorsmind.com",
+          supportUrl:
+            process.env.SUPPORT_URL || "https://mentorsmind.com/support",
+        },
+        textContent:
+          "Your account deletion request has been completed and your personal data has been erased or anonymized.",
       });
     } catch (error) {
       // Email failure is logged but doesn't fail the deletion
       // The user's data has been successfully erased at this point
-      logger.warn("Failed to send deletion confirmation email", { userId: row.id, error });
+      logger.warn("Failed to send deletion confirmation email", {
+        userId: row.id,
+        error,
+      });
     }
   },
 
-  getGracePeriodDays(): number { return GRACE_PERIOD_DAYS; },
+  getGracePeriodDays(): number {
+    return GRACE_PERIOD_DAYS;
+  },
 
   /**
    * Mark a deletion attempt as failed and increment retry count
    */
-  async markDeletionFailed(userId: string, errorMessage: string): Promise<void> {
+  async markDeletionFailed(
+    userId: string,
+    errorMessage: string,
+  ): Promise<void> {
     await pool.query(
       `UPDATE users 
        SET deletion_failed_at = NOW(),
@@ -270,7 +404,7 @@ export const accountDeletionService = {
            deletion_retry_count = COALESCE(deletion_retry_count, 0) + 1,
            updated_at = NOW()
        WHERE id = $1`,
-      [userId, errorMessage.substring(0, 1000)] // Limit error message length
+      [userId, errorMessage.substring(0, 1000)], // Limit error message length
     );
   },
 
@@ -279,7 +413,14 @@ export const accountDeletionService = {
    * @param maxRetries - Maximum number of retry attempts (default: 3)
    * @returns Object containing retry results
    */
-  async retryFailedDeletions(maxRetries: number = 3): Promise<{ total: number; successful: number; failed: number; results: DeletionResult[] }> {
+  async retryFailedDeletions(
+    maxRetries: number = 3,
+  ): Promise<{
+    total: number;
+    successful: number;
+    failed: number;
+    results: DeletionResult[];
+  }> {
     const { rows } = await pool.query<DeletionRequestRow>(
       `SELECT id, email, full_name, deletion_requested_at, deletion_scheduled_for,
               deletion_failed_at, deletion_error, deletion_retry_count
@@ -288,7 +429,7 @@ export const accountDeletionService = {
          AND deletion_completed_at IS NULL
          AND COALESCE(deletion_retry_count, 0) < $1
        ORDER BY deletion_failed_at ASC`,
-      [maxRetries]
+      [maxRetries],
     );
 
     const results: DeletionResult[] = [];
@@ -300,19 +441,20 @@ export const accountDeletionService = {
         await this.eraseUser(row);
         results.push({ userId: row.id, success: true });
         successful++;
-        logger.info("User deletion retry succeeded", { 
-          userId: row.id, 
-          retryCount: row.deletion_retry_count || 0 
+        logger.info("User deletion retry succeeded", {
+          userId: row.id,
+          retryCount: row.deletion_retry_count || 0,
         });
       } catch (error) {
         failed++;
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         results.push({ userId: row.id, success: false, error: errorMessage });
-        
-        logger.error("User deletion retry failed", { 
+
+        logger.error("User deletion retry failed", {
           userId: row.id,
           retryCount: (row.deletion_retry_count || 0) + 1,
-          error: errorMessage 
+          error: errorMessage,
         });
 
         await this.markDeletionFailed(row.id, errorMessage);
@@ -327,10 +469,12 @@ export const accountDeletionService = {
    * @param includeCompleted - Whether to include completed deletions
    * @returns Array of deletion request rows
    */
-  async listDeletionRequests(includeCompleted: boolean = false): Promise<DeletionRequestRow[]> {
-    const whereClause = includeCompleted 
-      ? '' 
-      : 'WHERE deletion_completed_at IS NULL';
+  async listDeletionRequests(
+    includeCompleted: boolean = false,
+  ): Promise<DeletionRequestRow[]> {
+    const whereClause = includeCompleted
+      ? ""
+      : "WHERE deletion_completed_at IS NULL";
 
     const { rows } = await pool.query<DeletionRequestRow>(
       `SELECT id, email, full_name, deletion_requested_at, deletion_scheduled_for,
@@ -343,7 +487,7 @@ export const accountDeletionService = {
            WHEN deletion_scheduled_for IS NOT NULL THEN 2
            ELSE 3
          END,
-         deletion_requested_at DESC`
+         deletion_requested_at DESC`,
     );
 
     return rows;
