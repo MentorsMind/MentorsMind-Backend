@@ -27,6 +27,7 @@ const config: Config = {
     // Session reminder and verification unit tests
     "**/__tests__/jobs/**/*.unit.test.ts",
     "**/__tests__/services/**/*.unit.test.ts",
+    "**/services/__tests__/unit/bulk.service.test.ts",
   ],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
   transform: {
