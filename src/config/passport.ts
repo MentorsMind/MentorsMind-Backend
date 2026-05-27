@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-g
 import { Strategy as GitHubStrategy, Profile as GitHubProfile } from 'passport-github2';
 import pool from './database';
 import { logger } from '../utils/logger';
+import { EncryptionUtil } from '../utils/encryption.utils';
 
 // Types for OAuth profile
 interface OAuthProfile {
@@ -159,13 +160,19 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
                     const oauthProfile = extractGoogleProfile(profile);
                     const result = await findOrCreateUser(oauthProfile);
 
-                    // Store tokens in oauth_accounts table
+                    // Store tokens in oauth_accounts table (encrypted at rest)
                     if (accessToken || refreshToken) {
+                        const [encAccess, encRefresh, version] = await Promise.all([
+                            EncryptionUtil.encrypt(accessToken),
+                            EncryptionUtil.encrypt(refreshToken),
+                            EncryptionUtil.getCurrentKeyVersion(),
+                        ]);
+
                         await pool.query(
                             `UPDATE oauth_accounts 
-               SET access_token = $1, refresh_token = $2, token_expires_at = $3, updated_at = NOW()
-               WHERE provider = $4 AND provider_account_id = $5`,
-                            [accessToken, refreshToken, profile._json?.exp ? new Date(profile._json.exp * 1000) : null, 'google', profile.id]
+               SET access_token = $1, refresh_token = $2, access_token_encrypted = $3, refresh_token_encrypted = $4, token_encryption_version = $5, token_expires_at = $6, updated_at = NOW()
+               WHERE provider = $7 AND provider_account_id = $8`,
+                            [accessToken, refreshToken, encAccess, encRefresh, version, profile._json?.exp ? new Date(profile._json.exp * 1000) : null, 'google', profile.id]
                         );
                     }
 
@@ -196,13 +203,19 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
                     const oauthProfile = extractGitHubProfile(profile);
                     const result = await findOrCreateUser(oauthProfile);
 
-                    // Store tokens in oauth_accounts table
+                    // Store tokens in oauth_accounts table (encrypted at rest)
                     if (accessToken || refreshToken) {
+                        const [encAccess, encRefresh, version] = await Promise.all([
+                            EncryptionUtil.encrypt(accessToken),
+                            EncryptionUtil.encrypt(refreshToken),
+                            EncryptionUtil.getCurrentKeyVersion(),
+                        ]);
+
                         await pool.query(
                             `UPDATE oauth_accounts 
-               SET access_token = $1, refresh_token = $2, updated_at = NOW()
-               WHERE provider = $3 AND provider_account_id = $4`,
-                            [accessToken, refreshToken, 'github', profile.id]
+               SET access_token = $1, refresh_token = $2, access_token_encrypted = $3, refresh_token_encrypted = $4, token_encryption_version = $5, updated_at = NOW()
+               WHERE provider = $6 AND provider_account_id = $7`,
+                            [accessToken, refreshToken, encAccess, encRefresh, version, 'github', profile.id]
                         );
                     }
 

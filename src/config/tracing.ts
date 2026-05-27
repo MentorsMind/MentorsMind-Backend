@@ -232,3 +232,5 @@ export function getTracer(): any | null {
     return null;
   }
 }
+
+// OpenTelemetry setup complete

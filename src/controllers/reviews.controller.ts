@@ -24,9 +24,21 @@ export const ReviewsController = {
   getMentorReviews: asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const mentorId = req.params.id as string;
-      const page = Number(req.query.page) || 1;
-      const limit = Number(req.query.limit) || 10;
-      const data = await ReviewsService.getMentorReviews(mentorId, page, limit);
+      const cursor =
+        typeof (req as any).query?.cursor === "string"
+          ? (req as any).query.cursor
+          : undefined;
+      const page =
+        (req as any).query?.page !== undefined
+          ? Number((req as any).query.page)
+          : undefined;
+      const limit = Number((req as any).query?.limit) || 10;
+
+      const data = await ReviewsService.getMentorReviews(mentorId, {
+        page,
+        limit,
+        cursor,
+      });
       return ResponseUtil.success(res, data);
     },
   ),

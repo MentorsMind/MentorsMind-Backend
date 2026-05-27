@@ -1,0 +1,102 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "datasource",
+          "uid": "grafana"
+        },
+        "enable": true,
+        "hide": true,
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Active Users & Sessions",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(mentorsmind_active_users)",
+          "legendFormat": "Active Users"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(mentorsmind_total_sessions)",
+          "legendFormat": "Total Sessions"
+        }
+      ]
+    },
+    {
+      "title": "Error Rates by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) by (route)",
+          "legendFormat": "{{route}} (5xx Errors)"
+        }
+      ]
+    },
+    {
+      "title": "Payment Success Rate",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(mentorsmind_payments_total{status=\"success\"}[1h])) / sum(rate(mentorsmind_payments_total}[1h])) * 100",
+          "legendFormat": "Success Rate %"
+        }
+      ]
+    },
+    {
+      "title": "Escrow State Distribution",
+      "type": "state-timeline",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(mentorsmind_escrow_balances) by (state)",
+          "legendFormat": "State: {{state}}"
+        }
+      ]
+    },
+    {
+      "title": "Average Session Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(mentorsmind_session_duration_seconds_sum[5m]) / rate(mentorsmind_session_duration_seconds_count[5m])",
+          "legendFormat": "Duration (Seconds)"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["business", "metrics", "production"],
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "MentorsMind Business Performance Metrics",
+  "version": 1
+}

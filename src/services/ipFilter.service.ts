@@ -1,5 +1,6 @@
 import ipaddr from 'ipaddr.js';
 import pool from '../config/database';
+import { env } from '../config/env';
 import { CacheService } from './cache.service';
 import { logger } from '../utils/logger.utils';
 import { AuditLogService } from './auditLog.service';
@@ -121,11 +122,18 @@ export class IpFilterService {
    */
   static async isIpAllowed(ip: string, context: 'admin'): Promise<boolean> {
     const rules = await this.getRules();
-    const allowlist = rules.filter(r => r.rule_type === 'allow' && r.context === context);
+    const dbAllowlist = rules.filter(r => r.rule_type === 'allow' && r.context === context).map(r => r.ip_range);
+    
+    // Merge with environment-based whitelist
+    const envWhitelist = env.ADMIN_IP_WHITELIST
+      ? env.ADMIN_IP_WHITELIST.split(',').map(s => s.trim()).filter(Boolean)
+      : [];
+    
+    const combinedAllowlist = [...dbAllowlist, ...envWhitelist];
 
-    if (allowlist.length === 0) return true;
+    if (combinedAllowlist.length === 0) return true;
 
-    return this.matchIp(ip, allowlist.map(r => r.ip_range));
+    return this.matchIp(ip, combinedAllowlist);
   }
 
   /**

@@ -46,12 +46,20 @@ export class GoalController {
   static async updateProgress(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const learnerId = (req as any).user.userId;
-      const { progress } = req.body;
+      const { progress, notes } = req.body;
       if (typeof progress !== 'number' || progress < 0 || progress > 100) {
         throw new Error('Invalid progress value (0-100)');
       }
-      const goal = await GoalService.updateProgress(req.params.id, learnerId, progress);
+      const goal = await GoalService.updateProgress(req.params.id, learnerId, progress, notes);
       res.json({ status: 'success', data: goal });
+    } catch (err) { next(err); }
+  }
+
+  static async getProgress(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const learnerId = (req as any).user.userId;
+      const logs = await GoalService.getProgressLogs(req.params.id, learnerId);
+      res.json({ status: 'success', data: logs });
     } catch (err) { next(err); }
   }
 

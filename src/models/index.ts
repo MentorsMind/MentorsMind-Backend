@@ -10,6 +10,7 @@
 export { AuditLogModel } from './audit-log.model';
 export { ExportJobModel } from './export-job.model';
 export { SessionModel } from './session.model';
+export { SessionRecordingModel } from './session-recording.model';
 export { PaymentModel } from './payment.model';
 export { ReviewModel } from './review.model';
 export { NotificationsModel } from './notifications.model';

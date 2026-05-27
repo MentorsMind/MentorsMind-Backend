@@ -51,9 +51,9 @@ export const AuthService = {
     };
 
     const insertQuery = `
-      INSERT INTO users (email, password_hash, first_name, last_name, role, notification_preferences)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, role
+      INSERT INTO users (email, password_hash, first_name, last_name, role, notification_preferences, user_tier)
+      VALUES ($1, $2, $3, $4, $5, $6, 'free')
+      RETURNING id, role, user_tier
     `;
     const { rows } = await pool.query(insertQuery, [
       email,
@@ -65,7 +65,7 @@ export const AuthService = {
     ]);
     const user = rows[0];
 
-    const tokens = await TokenService.issueTokens(user.id, email, user.role);
+    const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier);
     return { ...tokens, userId: user.id };
   },
 
@@ -73,9 +73,9 @@ export const AuthService = {
     const { email, password } = input;
 
     const query = `
-      SELECT id, role, password_hash, mfa_enabled 
+      SELECT id, role, password_hash, mfa_enabled, user_tier 
       FROM users 
-      WHERE email = $1 AND status = 'active' AND deleted_at IS NULL
+      WHERE email = $1 AND deleted_at IS NULL
     `;
     const { rows } = await pool.query(query, [email]);
 
@@ -84,6 +84,22 @@ export const AuthService = {
     }
 
     const user = rows[0];
+
+    // Banned users receive a specific error and cannot log in at all
+    if (user.status === 'banned') {
+      throw new Error('Your account has been permanently banned. Please contact support if you believe this is an error.');
+    }
+
+    // Suspended users cannot log in
+    if (user.status === 'suspended') {
+      throw new Error('Your account has been suspended. Please contact support for more information.');
+    }
+
+    // Any other non-active status (inactive, pending_verification)
+    if (user.status !== 'active') {
+      throw new Error('Invalid email or password.');
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
@@ -100,7 +116,7 @@ export const AuthService = {
     }
 
     const fingerprint = userAgent ? `${ipAddress}:${userAgent}` : undefined;
-    const tokens = await TokenService.issueTokens(user.id, email, user.role, fingerprint, {
+    const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier, fingerprint, {
       deviceName: userAgent ?? undefined,
       ipAddress: ipAddress ?? undefined,
     });

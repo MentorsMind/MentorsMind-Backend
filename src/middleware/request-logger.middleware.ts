@@ -1,6 +1,7 @@
 import pinoHttp from "pino-http";
 import type { Response } from "express";
 import { logger } from "../utils/logger";
+import { maskPII } from "../utils/pii-mask";
 
 /**
  * pino-http request logger middleware.
@@ -29,7 +30,7 @@ export const requestLoggerMiddleware = pinoHttp({
   serializers: {
     req: (req) => ({
       method: req.method,
-      path: req.url,
+      path: maskPII(req.url ?? ""),
     }),
     res: (res) => ({
       statusCode: res.statusCode,

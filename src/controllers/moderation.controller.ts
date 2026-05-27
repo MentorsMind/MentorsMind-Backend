@@ -177,6 +177,38 @@ export const ModerationController = {
   },
 
   /**
+   * DELETE /api/v1/admin/moderation/:id
+   * Delete a flag (usually after resolution)
+   */
+  async deleteFlag(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const flagId = req.params.id;
+    const reviewerId = req.user?.id;
+
+    if (!reviewerId) {
+      ResponseUtil.unauthorized(res, "Authentication required");
+      return;
+    }
+
+    const flag = await ModerationService.deleteFlag(flagId, reviewerId);
+
+    if (!flag) {
+      ResponseUtil.notFound(res, "Flag not found");
+      return;
+    }
+
+    await AuditLoggerService.logEvent({
+      level: LogLevel.INFO,
+      action: AuditAction.ADMIN_ACTION,
+      message: `Flag deleted by moderator`,
+      userId: reviewerId,
+      entityType: "FLAG",
+      entityId: flagId,
+    });
+
+    ResponseUtil.success(res, { message: "Flag deleted successfully", flagId });
+  },
+
+/**
    * GET /api/v1/admin/moderation/stats
    * Get moderation statistics
    */

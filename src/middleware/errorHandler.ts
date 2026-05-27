@@ -49,7 +49,14 @@ export const errorHandler = (
       Sentry.captureException(err);
     });
   }
+// paste these two lines right here:
+  res.setHeader('X-Request-ID', (req.headers['x-request-id'] as string) || '');
+  res.setHeader('X-Trace-ID', (req.headers['x-trace-id'] as string) || '');
 
+  res.status(statusCode).json({
+    success: false,
+    message: error.message,
+    // ... rest of the existing code
   res.status(statusCode).json({
     status: "error",
     message,

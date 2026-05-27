@@ -6,6 +6,10 @@ import { maintenanceQueue } from "../queues/maintenance.queue";
 import { VerificationService } from "../services/verification.service";
 import { accountDeletionJob } from "../jobs/accountDeletion.job";
 import { logger } from "../utils/logger.utils";
+import config from "../config";
+import { AuditLogModel } from "../models/audit-log.model";
+import { PaymentModel } from "../models/payment.model";
+import SessionModel from "../models/session.model";
 import { Queue, JobsOptions } from "bullmq";
 
 /**
@@ -144,5 +148,18 @@ export async function runMaintenanceTasks(): Promise<void> {
     }
   } catch (error) {
     logger.error("Maintenance: error processing account deletions", { error });
+  }
+
+  // Clean up old offline queue entries (completed/failed older than 7 days)
+  try {
+    const { OfflineQueueService } = await import("../services/offline-queue.service");
+    const cleaned = await OfflineQueueService.cleanup(7);
+    if (cleaned > 0) {
+      logger.info("Maintenance: offline queue entries cleaned up", {
+        count: cleaned,
+      });
+    }
+  } catch (error) {
+    logger.error("Maintenance: error cleaning up offline queue", { error });
   }
 }

@@ -84,4 +84,33 @@ export const AuditLogModel = {
             return null;
         }
     }
+        /**
+         * Delete audit logs older than the provided number of years.
+         * Returns number of records deleted.
+         */
+        async deleteOlderThanYears(years: number): Promise<number> {
+          const query = `
+          DELETE FROM audit_logs
+          WHERE created_at < NOW() - INTERVAL '$1 years'
+          RETURNING id;
+        `;
+
+          try {
+            // Use parameterized query by building interval via make_interval is safer,
+            // but here we will use a simple approach to avoid SQL injection via integer cast
+            const { rowCount } = await pool.query(
+              `DELETE FROM audit_logs WHERE created_at < NOW() - ($1::int * INTERVAL '1 year') RETURNING id;`,
+              [years],
+            );
+
+            const deleted = rowCount ?? 0;
+            if (deleted > 0) {
+              logger.info('AuditLogModel: deleted old audit logs', { years, deleted });
+            }
+            return deleted;
+          } catch (error) {
+            logger.error('Failed to delete old audit logs:', error);
+            return 0;
+          }
+        },
 };

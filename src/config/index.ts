@@ -1,5 +1,6 @@
 import { env } from "./env";
 import monitoringConfig from "./monitoring.config";
+import retentionConfig from "./retention.config";
 
 const config = {
   env: env.NODE_ENV,
@@ -19,9 +20,12 @@ const config = {
     name: env.DB_NAME,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
-    poolMax: 20,
-    idleTimeoutMs: 30000,
-    connectionTimeoutMs: 2000,
+    poolMax: parseInt(env.DB_POOL_MAX, 10),
+    poolMin: parseInt(env.DB_POOL_MIN, 10),
+    idleTimeoutMs: parseInt(env.DB_IDLE_TIMEOUT_MS, 10),
+    connectionTimeoutMs: parseInt(env.DB_CONNECTION_TIMEOUT_MS, 10),
+    statementTimeoutMs: parseInt(env.DB_STATEMENT_TIMEOUT_MS, 10),
+    poolExhaustionThreshold: parseInt(env.DB_POOL_EXHAUSTION_THRESHOLD, 10),
   },
 
   jwt: {
@@ -49,6 +53,7 @@ const config = {
   },
 
   email: {
+    provider: env.EMAIL_PROVIDER,
     smtp: {
       host: env.SMTP_HOST,
       port: parseInt(env.SMTP_PORT, 10),
@@ -60,7 +65,16 @@ const config = {
       user: env.GMAIL_USER,
       pass: env.GMAIL_PASS,
     },
+    sendgrid: {
+      apiKey: env.SENDGRID_API_KEY,
+    },
+    mailgun: {
+      apiKey: env.MAILGUN_API_KEY,
+      domain: env.MAILGUN_DOMAIN,
+      host: env.MAILGUN_HOST,
+    },
     fromEmail: env.FROM_EMAIL,
+    webhookSecret: env.EMAIL_WEBHOOK_SECRET,
   },
 
   redis: {
@@ -80,6 +94,7 @@ const config = {
   },
 
   monitoring: monitoringConfig,
+  retention: retentionConfig,
 } as const;
 
 export default config;

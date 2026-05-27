@@ -40,6 +40,11 @@ import {
 import { initializeEmailTemplates } from "./services/template-initializer.service";
 import { logger } from "./utils/logger.utils";
 import { validateRequiredTables } from "./utils/table-validator.utils";
+import "../queues/bulk.queue";
+import "../queues/export.queue";
+import "../queues/export.queue";
+import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
+
 
 // Validate that all required tables exist (from migrations)
 // This replaces the anti-pattern of creating tables at runtime via DDL
@@ -106,6 +111,8 @@ initializeGraphQL(app).catch((err) => {
 });
 
 // Start server
+startPoolMonitor();
+
 const server = app.listen(PORT, () => {
   logger.info("Server started", {
     port: PORT,
@@ -151,6 +158,7 @@ async function shutdown(signal: string) {
     notificationsWorker.close(),
     notificationCleanupWorker.close(),
     stopScheduler(),
+    Promise.resolve(stopPoolMonitor()),
   ]);
   server.close(() => {
     logger.info("HTTP server closed");

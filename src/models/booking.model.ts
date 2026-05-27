@@ -1,4 +1,4 @@
-import pool from '../config/database';
+import pool from "../config/database";
 
 export interface BookingRecord {
   id: string;
@@ -8,10 +8,10 @@ export interface BookingRecord {
   duration_minutes: number;
   topic: string;
   notes: string | null;
-  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'rescheduled';
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "rescheduled";
   amount: string;
   currency: string;
-  payment_status: 'pending' | 'paid' | 'refunded' | 'failed';
+  payment_status: "pending" | "paid" | "refunded" | "failed";
   stellar_tx_hash: string | null;
   transaction_id: string | null;
   cancellation_reason: string | null;
@@ -76,7 +76,7 @@ export const BookingModel = {
         data.notes || null,
         data.amount,
         data.currency,
-      ]
+      ],
     );
     return rows[0];
   },
@@ -84,21 +84,24 @@ export const BookingModel = {
   async findById(id: string): Promise<BookingRecord | null> {
     const { rows } = await pool.query<BookingRecord>(
       `SELECT * FROM bookings WHERE id = $1`,
-      [id]
+      [id],
     );
     return rows[0] || null;
   },
 
-  async findByUserId(userId: string, filters?: {
-    status?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ bookings: BookingRecord[]; total: number }> {
+  async findByUserId(
+    userId: string,
+    filters?: {
+      status?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{ bookings: BookingRecord[]; total: number }> {
     const page = filters?.page || 1;
     const limit = filters?.limit || 10;
     const offset = (page - 1) * limit;
 
-    let whereClause = '(mentee_id = $1 OR mentor_id = $1)';
+    let whereClause = "(mentee_id = $1 OR mentor_id = $1)";
     const params: any[] = [userId];
     let paramIndex = 2;
 
@@ -111,12 +114,9 @@ export const BookingModel = {
     const [dataResult, countResult] = await Promise.all([
       pool.query<BookingRecord>(
         `SELECT * FROM bookings WHERE ${whereClause} ORDER BY scheduled_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-        [...params, limit, offset]
+        [...params, limit, offset],
       ),
-      pool.query(
-        `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
-        params
-      ),
+      pool.query(`SELECT COUNT(*) FROM bookings WHERE ${whereClause}`, params),
     ]);
 
     return {
@@ -125,17 +125,20 @@ export const BookingModel = {
     };
   },
 
-  async update(id: string, data: Partial<{
-    scheduledAt: Date;
-    durationMinutes: number;
-    topic: string;
-    notes: string;
-    status: string;
-    paymentStatus: string;
-    stellarTxHash: string;
-    transactionId: string;
-    cancellationReason: string;
-  }>): Promise<BookingRecord | null> {
+  async update(
+    id: string,
+    data: Partial<{
+      scheduledAt: Date;
+      durationMinutes: number;
+      topic: string;
+      notes: string;
+      status: string;
+      paymentStatus: string;
+      stellarTxHash: string;
+      transactionId: string;
+      cancellationReason: string;
+    }>,
+  ): Promise<BookingRecord | null> {
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -183,15 +186,20 @@ export const BookingModel = {
     values.push(id);
 
     const { rows } = await pool.query<BookingRecord>(
-      `UPDATE bookings SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`,
-      values
+      `UPDATE bookings SET ${fields.join(", ")} WHERE id = $${idx} RETURNING *`,
+      values,
     );
     return rows[0] || null;
   },
 
-  async checkConflict(mentorId: string, scheduledAt: Date, durationMinutes: number, excludeBookingId?: string): Promise<boolean> {
+  async checkConflict(
+    mentorId: string,
+    scheduledAt: Date,
+    durationMinutes: number,
+    excludeBookingId?: string,
+  ): Promise<boolean> {
     const endTime = new Date(scheduledAt.getTime() + durationMinutes * 60000);
-    
+
     let query = `
       SELECT COUNT(*) FROM bookings
       WHERE mentor_id = $1
@@ -202,9 +210,9 @@ export const BookingModel = {
           OR (scheduled_at >= $2 AND scheduled_at < $3)
         )
     `;
-    
+
     const params: any[] = [mentorId, scheduledAt, endTime];
-    
+
     if (excludeBookingId) {
       query += ` AND id != $4`;
       params.push(excludeBookingId);

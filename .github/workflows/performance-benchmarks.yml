@@ -1,0 +1,269 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run benchmarks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-benchmarks
+      STELLAR_NETWORK: testnet
+      BENCHMARK_BASE_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for baseline comparison
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Seed test data
+        run: npm run seed:test
+
+      - name: Start server in background
+        run: |
+          npm run build
+          npm start &
+          echo $! > server.pid
+          
+          # Wait for server to be ready
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Download baseline from artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: performance-baseline
+          path: benchmarks/baseline/
+
+      - name: Run performance benchmarks
+        id: benchmark
+        run: npm run benchmark:ci
+        continue-on-error: true
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f server.pid ]; then
+            kill $(cat server.pid) || true
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            benchmarks/results/
+            benchmarks/baseline/
+          retention-days: 30
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main'
+        with:
+          name: performance-baseline
+          path: benchmarks/baseline/baseline.json
+          retention-days: 90
+
+      - name: Read comparison results
+        id: comparison
+        if: always()
+        run: |
+          if [ -f benchmarks/results/comparison.md ]; then
+            echo "COMPARISON_EXISTS=true" >> $GITHUB_OUTPUT
+            # Read first 2000 characters for PR comment
+            COMPARISON=$(head -c 2000 benchmarks/results/comparison.md)
+            echo "COMPARISON<<EOF" >> $GITHUB_OUTPUT
+            echo "$COMPARISON" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "COMPARISON_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment benchmark results on PR
+        if: github.event_name == 'pull_request' && steps.comparison.outputs.COMPARISON_EXISTS == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let comment = '## 📊 Performance Benchmark Results\n\n';
+            
+            if (fs.existsSync('benchmarks/results/comparison.md')) {
+              const comparison = fs.readFileSync('benchmarks/results/comparison.md', 'utf8');
+              comment += comparison;
+            } else {
+              comment += '⚠️ No baseline found for comparison. This is the first benchmark run.\n\n';
+              
+              if (fs.existsSync('benchmarks/results/benchmark-latest.json')) {
+                const results = JSON.parse(fs.readFileSync('benchmarks/results/benchmark-latest.json', 'utf8'));
+                comment += '### Current Results\n\n';
+                comment += '| Endpoint | P50 | P95 | P99 | Status |\n';
+                comment += '|----------|-----|-----|-----|--------|\n';
+                
+                results.results.forEach(result => {
+                  const status = result.passed ? '✅' : '❌';
+                  comment += `| ${result.name} | ${result.metrics.median.toFixed(0)}ms | ${result.metrics.p95.toFixed(0)}ms | ${result.metrics.p99.toFixed(0)}ms | ${status} |\n`;
+                });
+              }
+            }
+            
+            comment += '\n\n---\n';
+            comment += `**Commit**: ${context.sha.substring(0, 7)}\n`;
+            comment += `**Workflow**: [View Details](${context.payload.repository.html_url}/actions/runs/${context.runId})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Check for performance regressions
+        if: always()
+        run: |
+          if [ -f benchmarks/results/comparison.json ]; then
+            PASSED=$(jq -r '.passed' benchmarks/results/comparison.json)
+            REGRESSIONS=$(jq -r '.summary.regressions' benchmarks/results/comparison.json)
+            WARNINGS=$(jq -r '.summary.warnings' benchmarks/results/comparison.json)
+            
+            echo "Performance Check Results:"
+            echo "  Passed: $PASSED"
+            echo "  Regressions: $REGRESSIONS"
+            echo "  Warnings: $WARNINGS"
+            
+            if [ "$PASSED" = "false" ]; then
+              echo "❌ Performance regressions detected!"
+              echo "::error::Performance regressions detected. P95 latency increased by more than 10% for $REGRESSIONS endpoint(s)."
+              exit 1
+            elif [ "$WARNINGS" -gt 0 ]; then
+              echo "⚠️ Performance warnings detected!"
+              echo "::warning::Performance degradation detected. P95 latency increased by more than 5% for $WARNINGS endpoint(s)."
+            else
+              echo "✅ No performance regressions detected"
+            fi
+          else
+            echo "⚠️ No comparison results found. Skipping regression check."
+          fi
+
+      - name: Create performance report
+        if: always()
+        run: |
+          echo "# Performance Benchmark Report" > performance-report.md
+          echo "" >> performance-report.md
+          echo "**Date**: $(date)" >> performance-report.md
+          echo "**Commit**: ${{ github.sha }}" >> performance-report.md
+          echo "**Branch**: ${{ github.ref_name }}" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          if [ -f benchmarks/results/comparison.md ]; then
+            cat benchmarks/results/comparison.md >> performance-report.md
+          else
+            echo "No comparison available (first run or no baseline)" >> performance-report.md
+          fi
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report
+          path: performance-report.md
+          retention-days: 30
+
+  update-baseline:
+    name: Update Performance Baseline
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: benchmarks/results/
+
+      - name: Check if baseline should be updated
+        id: check
+        run: |
+          # Only update baseline if all benchmarks passed
+          if [ -f benchmarks/results/comparison.json ]; then
+            PASSED=$(jq -r '.passed' benchmarks/results/comparison.json)
+            if [ "$PASSED" = "true" ]; then
+              echo "UPDATE=true" >> $GITHUB_OUTPUT
+            else
+              echo "UPDATE=false" >> $GITHUB_OUTPUT
+              echo "⚠️ Skipping baseline update due to performance regressions"
+            fi
+          else
+            echo "UPDATE=true" >> $GITHUB_OUTPUT
+            echo "Creating initial baseline"
+          fi
+
+      - name: Update baseline artifact
+        if: steps.check.outputs.UPDATE == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline
+          path: benchmarks/baseline/baseline.json
+          retention-days: 90

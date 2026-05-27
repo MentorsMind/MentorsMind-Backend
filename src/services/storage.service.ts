@@ -80,4 +80,27 @@ export const StorageService = {
   buildExportKey(userId: string, jobId: string, timestamp: number): string {
     return `exports/${userId}/${jobId}/export_${userId}_${timestamp}.zip`;
   },
+
+  /**
+   * Build an S3 object key for session recordings
+   */
+  buildRecordingKey(sessionId: string, recordingId: string, extension: string = 'mp4'): string {
+    return `recordings/${sessionId}/${recordingId}.${extension}`;
+  },
+
+  /**
+   * Generate a presigned URL for video playback
+   */
+  async generatePlaybackUrl(
+    key: string,
+    expiresIn: number = 3600,
+  ): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ResponseContentType: 'video/mp4',
+    });
+
+    return await getSignedUrl(s3Client, command, { expiresIn });
+  },
 };

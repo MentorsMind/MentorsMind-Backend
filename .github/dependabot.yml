@@ -1,0 +1,62 @@
+version: 2
+updates:
+  # NPM dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "ReinaMaze"
+    assignees:
+      - "ReinaMaze"
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps):"
+      prefix-development: "chore(deps-dev):"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "/"
+    rebase-strategy: "auto"
+    allow:
+      - dependency-type: "all"
+    ignore:
+      # Add packages to ignore if needed
+      # - dependency-name: "package-name"
+    groups:
+      security:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+          - "minor"
+        patterns:
+          - "*security*"
+      development:
+        dependency-type: "development"
+        update-types:
+          - "patch"
+          - "minor"
+      major:
+        dependency-type: "production"
+        update-types:
+          - "major"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "ReinaMaze"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci:"

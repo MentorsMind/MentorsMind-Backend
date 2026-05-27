@@ -1,5 +1,6 @@
 import { CronJob } from 'cron';
 import { logger } from '../utils/logger';
+import config from '../config';
 import { NotificationService } from './notification.service';
 import pool from '../config/database';
 
@@ -38,13 +39,14 @@ export class NotificationCleanupService {
     try {
       logger.info('Starting notification cleanup job');
 
+      const days = config.retention.notificationsDays ?? 90;
       const query = `
         DELETE FROM notifications
-        WHERE created_at < NOW() - INTERVAL '90 days'
+        WHERE created_at < NOW() - ($1::int * INTERVAL '1 day')
         RETURNING id;
       `;
 
-      const result = await pool.query(query);
+      const result = await pool.query(query, [days]);
       const deletedCount = result.rowCount || 0;
 
       logger.info(`Notification cleanup completed: ${deletedCount} notifications deleted`);
@@ -65,13 +67,14 @@ export class NotificationCleanupService {
     logger.info('Manual notification cleanup triggered');
 
     try {
+      const days = config.retention.notificationsDays ?? 90;
       const query = `
         DELETE FROM notifications
-        WHERE created_at < NOW() - INTERVAL '90 days'
+        WHERE created_at < NOW() - ($1::int * INTERVAL '1 day')
         RETURNING id;
       `;
 
-      const result = await pool.query(query);
+      const result = await pool.query(query, [days]);
       const deleted = result.rowCount || 0;
 
       const expired = await NotificationService.cleanupExpiredNotifications();

@@ -36,6 +36,12 @@ const envSchema = z.object({
   DB_NAME: z.string().default("mentorminds"),
   DB_USER: z.string().default("postgres"),
   DB_PASSWORD: z.string().min(1, "DB_PASSWORD is required"),
+  DB_POOL_MAX: z.string().regex(/^\d+$/).default("20"),
+  DB_POOL_MIN: z.string().regex(/^\d+$/).default("4"),
+  DB_IDLE_TIMEOUT_MS: z.string().regex(/^\d+$/).default("30000"),
+  DB_CONNECTION_TIMEOUT_MS: z.string().regex(/^\d+$/).default("2000"),
+  DB_STATEMENT_TIMEOUT_MS: z.string().regex(/^\d+$/).default("10000"),
+  DB_POOL_EXHAUSTION_THRESHOLD: z.string().regex(/^\d+$/).default("90"),
 
   // JWT — supports dual secrets for zero-downtime rotation
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
@@ -81,6 +87,20 @@ const envSchema = z.object({
   GMAIL_PASS: z.string().optional(),
   FROM_EMAIL: z.string().email().default("noreply@mentorminds.com"),
 
+  // Email provider selection: sendgrid | mailgun | smtp (default: smtp)
+  EMAIL_PROVIDER: z.enum(["sendgrid", "mailgun", "smtp"]).default("smtp"),
+
+  // SendGrid
+  SENDGRID_API_KEY: z.string().optional(),
+
+  // Mailgun
+  MAILGUN_API_KEY: z.string().optional(),
+  MAILGUN_DOMAIN: z.string().optional(),
+  MAILGUN_HOST: z.string().default("api.mailgun.net"),
+
+  // Webhook secret for validating bounce/complaint callbacks
+  EMAIL_WEBHOOK_SECRET: z.string().optional(),
+
   // Redis
   REDIS_URL: z.string().url("REDIS_URL must be a valid URL").optional(),
 
@@ -105,6 +125,9 @@ const envSchema = z.object({
     .regex(/^\d+$/, "HEALTH_CHECK_TIMEOUT must be a number")
     .default("5000"),
 
+  // Admin IP Whitelist
+  ADMIN_IP_WHITELIST: z.string().default(""),
+
   // Instance identity (set by orchestrator, e.g. Kubernetes pod name or Docker --name)
   // Falls back to hostname at runtime when absent.
   INSTANCE_ID: z.string().optional(),
@@ -114,7 +137,9 @@ const envSchema = z.object({
 
   // Security
   BCRYPT_ROUNDS: z.string().regex(/^\d+$/).default("10"),
-  ENCRYPTION_KEY: z.string().min(32, "ENCRYPTION_KEY must be at least 32 characters"),
+  ENCRYPTION_KEY: z
+    .string()
+    .min(32, "ENCRYPTION_KEY must be at least 32 characters"),
   MFA_TOTP_ISSUER: z.string().default("MentorMinds"),
 
   // Platform
@@ -138,6 +163,17 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url().default("http://localhost:5000"),
   APP_CLIENT_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
+
+  // Stripe
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
+  // Deep Linking
+  DEEP_LINK_SCHEME: z.string().default("mentorminds"),
+  IOS_BUNDLE_ID: z.string().default("com.mentorminds.app"),
+  ANDROID_PACKAGE_NAME: z.string().default("com.mentorminds.app"),
+  IOS_APP_STORE_URL: z.string().url().optional(),
+  ANDROID_PLAY_STORE_URL: z.string().url().optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -153,6 +189,9 @@ const SENSITIVE_KEYS = new Set([
   "PLATFORM_SECRET_KEY",
   "SMTP_PASS",
   "GMAIL_PASS",
+  "SENDGRID_API_KEY",
+  "MAILGUN_API_KEY",
+  "EMAIL_WEBHOOK_SECRET",
   "FIREBASE_PRIVATE_KEY",
   "VAULT_TOKEN",
   "AWS_SECRET_ID",
