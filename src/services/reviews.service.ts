@@ -181,9 +181,14 @@ export const ReviewsService = {
   // -------------------------------------------------------------------------
   async getMentorReviews(
     mentorId: string,
-    page: number,
-    limit: number,
-  ): Promise<PaginatedReviews> {
+    params: {
+      page?: number;
+      limit?: number;
+      cursor?: string;
+    },
+  ): Promise<
+    PaginatedReviews & { next_cursor?: string | null; has_more?: boolean }
+  > {
     // Verify mentor exists
     const mentorCheck = await pool.query(`SELECT id FROM users WHERE id = $1`, [
       mentorId,
@@ -193,16 +198,70 @@ export const ReviewsService = {
       throw createError("Mentor not found", 404);
     }
 
-    const offset = (page - 1) * limit;
+    const limit = params.limit ?? 10;
+    const page = params.page ?? 1;
 
-    // Count total reviews for this mentor
+    // Count total reviews for this mentor (optional for cursor perf, but kept for backward compatibility)
     const countResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM reviews WHERE reviewee_id = $1`,
       [mentorId],
     );
     const total = parseInt(countResult.rows[0].count, 10);
 
-    // Fetch paginated reviews joined with users for reviewer display name
+    // Cursor-based (seek) pagination
+    if (params.cursor) {
+      const decoded =
+        require("../utils/pagination.utils").PaginationUtil.decodeCursor(
+          params.cursor,
+        );
+      // decoded: { id, created_at }
+      if (!decoded) {
+        throw createError("Invalid cursor", 400);
+      }
+
+      const { rows } = await pool.query<ReviewWithReviewer>(
+        `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
+                r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
+                (u.first_name || ' ' || u.last_name) AS reviewer_display_name
+         FROM reviews r
+         JOIN users u ON r.reviewer_id = u.id
+         WHERE r.reviewee_id = $1
+           AND (r.created_at, r.id) < ($2, $3)
+         ORDER BY r.created_at DESC, r.id DESC
+         LIMIT $4`,
+        [mentorId, decoded.created_at, decoded.id, limit + 1],
+      );
+
+      const has_more = rows.length > limit;
+      const data = has_more ? rows.slice(0, limit) : rows;
+
+      const lastItem = data[data.length - 1];
+      const next_cursor =
+        has_more && lastItem
+          ? require("../utils/pagination.utils").PaginationUtil.encodeCursor({
+              id: lastItem.id,
+              created_at: lastItem.created_at.toISOString(),
+            })
+          : null;
+
+      return {
+        reviews: data,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNext: has_more,
+          hasPrev: false,
+        },
+        next_cursor,
+        has_more,
+      };
+    }
+
+    // Offset-based fallback when cursor is absent
+    const offset = (page - 1) * limit;
+
     const reviewsResult = await pool.query<ReviewWithReviewer>(
       `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
               r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
@@ -227,6 +286,8 @@ export const ReviewsService = {
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
+      next_cursor: null,
+      has_more: page < totalPages,
     };
   },
 

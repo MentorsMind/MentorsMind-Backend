@@ -1,8 +1,9 @@
-import { Pool } from "pg";
+import { trackAndLogQuery } from '../middleware/queryLogger';
+import { Pool, PoolConfig } from "pg";
 import config from "./index";
 import { logger } from "../utils/logger";
 
-export const pool = new Pool({
+export const poolConfig: PoolConfig = {
   connectionString: config.db.url,
   host: config.db.host,
   port: config.db.port,
@@ -10,9 +11,32 @@ export const pool = new Pool({
   user: config.db.user,
   password: config.db.password,
   max: config.db.poolMax,
+  min: config.db.poolMin,
   idleTimeoutMillis: config.db.idleTimeoutMs,
   connectionTimeoutMillis: config.db.connectionTimeoutMs,
-});
+  statement_timeout: config.db.statementTimeoutMs,
+  query_timeout: config.db.statementTimeoutMs,
+  allowExitOnIdle: false,
+};
+
+export const pool = new Pool(poolConfig);
+
+export const createOptimizedPool = (): Pool => {
+  const optimized = new Pool(poolConfig);
+
+  optimized.on("error", (err) => {
+    logger.error({ error: err.message }, "Unexpected database pool error");
+  });
+
+  optimized.on("connect", (client) => {
+    client.query("SET join_collapse_limit = 8").catch(() => {});
+    client.on("error", (error) => {
+      logger.error({ error: error.message }, "Database client error");
+    });
+  });
+
+  return optimized;
+};
 
 export const testConnection = async (): Promise<boolean> => {
   try {
@@ -33,4 +57,16 @@ pool.on("error", (err) => {
   logger.error({ error: err.message }, "Unexpected database pool error");
 });
 
+pool.on("connect", (client) => {
+  client.query("SET join_collapse_limit = 8").catch(() => {});
+  client.on("error", (error) => {
+    logger.error({ error: error.message }, "Database client error");
+  });
+});
+
+export const db = {
+  query: async (text: string, params?: any[]) => {
+    return await trackAndLogQuery(pool, text, params || []);
+  },
+};
 export default pool;

@@ -11,6 +11,7 @@ import { IpFilterService } from "../services/ipFilter.service";
 import pool from "../config/database";
 import { keyRotationJob } from "../jobs/keyRotation.job";
 import { accountDeletionService } from "../services/accountDeletion.service";
+import { WebhookService } from "../services/webhook.service";
 
 export const AdminController = {
   /** GET /admin/stats */
@@ -59,11 +60,67 @@ export const AdminController = {
     ResponseUtil.success(res, updated, "User status updated successfully");
   },
 
+  /** PUT /admin/users/:id/tier */
+  async updateUserTier(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const { tier } = req.body;
+
+    const validTiers = ['free', 'pro', 'enterprise'];
+    if (!validTiers.includes(tier)) {
+      ResponseUtil.error(res, "Invalid tier. Must be free, pro, or enterprise", 400);
+      return;
+    }
+
+    const updated = await AdminService.updateUserTier(id, tier);
+    if (!updated) {
+      ResponseUtil.notFound(res, "User not found");
+      return;
+    }
+
+    // Log the tier change
+    await AuditLogService.log({
+      userId: req.user!.userId,
+      action: 'USER_TIER_UPDATED',
+      resourceType: 'user',
+      resourceId: id,
+      newValue: { tier },
+      ipAddress: extractIpAddress(req),
+    });
+
+    ResponseUtil.success(res, updated, "User tier updated successfully");
+  },
+
   /** PUT /admin/users/:id/suspend */
   async suspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const id = req.params.id as string;
+    const { reason, expiresAt } = req.body;
 
-    const updated = await AdminService.updateUserStatus(id, false);
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      ResponseUtil.error(res, "A suspension reason is required", 400);
+      return;
+    }
+
+    // Prevent admins from suspending themselves
+    if (req.user?.id === id) {
+      ResponseUtil.error(res, "You cannot suspend your own account", 400);
+      return;
+    }
+
+    const parsedExpiry = expiresAt ? new Date(expiresAt) : null;
+    if (parsedExpiry && isNaN(parsedExpiry.getTime())) {
+      ResponseUtil.error(res, "Invalid expiresAt date format", 400);
+      return;
+    }
+
+    const updated = await AdminService.suspendUser(
+      id,
+      req.user!.id,
+      reason.trim(),
+      parsedExpiry,
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
+
     if (!updated) {
       ResponseUtil.notFound(res, "User not found");
       return;
@@ -71,11 +128,47 @@ export const AdminController = {
     ResponseUtil.success(res, updated, "User suspended successfully");
   },
 
+  /** PUT /admin/users/:id/ban */
+  async banUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      ResponseUtil.error(res, "A ban reason is required", 400);
+      return;
+    }
+
+    // Prevent admins from banning themselves
+    if (req.user?.id === id) {
+      ResponseUtil.error(res, "You cannot ban your own account", 400);
+      return;
+    }
+
+    const updated = await AdminService.banUser(
+      id,
+      req.user!.id,
+      reason.trim(),
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
+
+    if (!updated) {
+      ResponseUtil.notFound(res, "User not found");
+      return;
+    }
+    ResponseUtil.success(res, updated, "User permanently banned successfully");
+  },
+
   /** PUT /admin/users/:id/unsuspend */
   async unsuspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const id = req.params.id as string;
 
-    const updated = await AdminService.updateUserStatus(id, true);
+    const updated = await AdminService.unsuspendUser(
+      id,
+      req.user!.id,
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
     if (!updated) {
       ResponseUtil.notFound(res, "User not found");
       return;
@@ -517,20 +610,35 @@ export const AdminController = {
     try {
       const rule = await IpFilterService.addRule({
         ipRange,
-        ruleType: "allow",
-        context: "admin",
+        rule_type: "allow",
+        context: "global",
         reason,
-        adminId: req.user!.id,
-        ipAddress: extractIpAddress(req),
+        created_by: req.user!.userId,
       });
-      ResponseUtil.success(
-        res,
-        rule,
-        "Admin allowlist rule added successfully",
-        201,
-      );
+      ResponseUtil.success(res, rule, "Allowlist rule added successfully");
     } catch (err: any) {
       ResponseUtil.error(res, err.message, 400);
+    }
+  },
+
+  /** POST /admin/webhooks/:deliveryId/retry */
+  async retryWebhookDelivery(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const { deliveryId } = req.params;
+    const userId = req.user!.userId;
+
+    try {
+      const result = await WebhookService.retryDelivery(deliveryId, userId);
+      
+      if (result.success) {
+        ResponseUtil.success(res, null, result.message);
+      } else {
+        ResponseUtil.error(res, result.message, 400);
+      }
+    } catch (err: any) {
+      ResponseUtil.error(res, err.message, 500);
     }
   },
 };

@@ -75,8 +75,6 @@ export const NotificationsModel = {
     const values = [
       input.user_id,
       input.type,
-      input.channel,
-      input.priority || "normal",
       input.title,
       input.message,
       JSON.stringify(input.data || {}),

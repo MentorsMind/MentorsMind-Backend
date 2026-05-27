@@ -1,0 +1,13 @@
+# Ignore benchmark results (too large for git)
+results/
+
+# Keep baseline (committed for CI comparison)
+!baseline/
+!baseline/baseline.json
+
+# Ignore node modules if any
+node_modules/
+
+# Ignore temporary files
+*.tmp
+*.log

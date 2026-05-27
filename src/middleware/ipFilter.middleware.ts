@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { IpFilterService } from '../services/ipFilter.service';
 import { logger } from '../utils/logger.utils';
 import { extractIpAddress, AuditLogService } from '../services/auditLog.service';
+import { AuthenticatedRequest } from './auth.middleware';
+import { env } from '../config/env';
 
 /**
  * Global blocklist middleware.
@@ -34,16 +36,23 @@ export async function blocklistMiddleware(req: Request, res: Response, next: Nex
 /**
  * Admin routes allowlist middleware.
  * Restricts access to admin routes to the allowlist (if non-empty).
+ * Allows bypass with admin MFA.
  */
 export async function adminAllowlistMiddleware(req: Request, res: Response, next: NextFunction) {
   const ip = extractIpAddress(req);
+  const authReq = req as AuthenticatedRequest;
   
+  // Allow bypass with admin MFA
+  if (authReq.user?.role === 'admin' && authReq.user?.mfaVerified) {
+    return next();
+  }
+
   const isAllowed = await IpFilterService.isIpAllowed(ip, 'admin');
   if (!isAllowed) {
-    logger.warn({ ip, path: req.path }, 'Rejected admin request - IP not in allowlist');
+    logger.warn({ ip, path: req.path, userId: authReq.user?.id }, 'Rejected admin request - IP not in allowlist');
     
     await AuditLogService.log({
-      userId: (req as any).user?.id || 'anonymous',
+      userId: authReq.user?.id || 'anonymous',
       action: 'ADMIN_ACCESS_DENIED_IP',
       resourceType: 'security',
       resourceId: ip,

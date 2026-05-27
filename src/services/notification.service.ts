@@ -12,6 +12,7 @@ import { NotificationAnalyticsModel } from "../models/notification-analytics.mod
 import { enqueueEmail } from "../queues/email.queue";
 import { SocketService } from "./socket.service";
 import { PushService } from "./push.service";
+import { DeepLinkService } from "./deepLink.service";
 import { logger } from "../utils/logger";
 
 export enum NotificationChannel {
@@ -118,6 +119,11 @@ export const NotificationService = {
       );
 
       // Create one notification record per allowed channel (for delivery tracking)
+      const actionUrl = DeepLinkService.generateActionUrlForType(
+        request.type,
+        request.data,
+      );
+
       for (const channel of allowedChannels) {
         try {
           const notification = await this.createNotification(channel, {
@@ -126,6 +132,7 @@ export const NotificationService = {
             title: request.title || this.getDefaultTitle(request.type),
             message: request.message || this.getDefaultMessage(request.type),
             data: request.data,
+            action_url: actionUrl || undefined,
             expires_at: request.expiresAt,
           });
 
@@ -204,6 +211,7 @@ export const NotificationService = {
                   ]),
                 )
               : undefined,
+            notification.action_url || undefined,
           );
         } catch (error) {
           logger.error("Failed to send push notification", {

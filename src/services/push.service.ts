@@ -71,6 +71,7 @@ export const PushService = {
     title: string,
     body: string,
     data?: Record<string, string>,
+    clickAction?: string,
   ): Promise<PushSendResult> {
     const result: PushSendResult = {
       success: false,
@@ -117,6 +118,7 @@ export const PushService = {
         title,
         body,
         data,
+        clickAction,
       };
 
       // Send to all user devices

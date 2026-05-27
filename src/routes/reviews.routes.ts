@@ -63,12 +63,14 @@ router.post(
  *         name: id
  *         required: true
  *         schema: { type: string, format: uuid }
- *       - in: query
- *         name: page
- *         schema: { type: integer, default: 1 }
+      - in: query
+ *         name: cursor
+ *         schema: { type: string }
+ *         description: Cursor for cursor-based pagination
  *       - in: query
  *         name: limit
  *         schema: { type: integer, default: 10 }
+
  *     responses:
  *       200:
  *         description: Paginated list of reviews

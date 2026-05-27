@@ -1,6 +1,7 @@
 import pino, { type Bindings, type ChildLoggerOptions } from "pino";
 import os from "os";
 import { env } from "../config/env";
+import { maskPIIDeep } from "./pii-mask";
 
 // ---------------------------------------------------------------------------
 // Sensitive-field redaction paths (pino built-in redaction)
@@ -86,7 +87,9 @@ function wrapStructuredLogger(baseLogger: pino.Logger): StructuredLogger {
         rest.length === 0 &&
         isStructuredLogPayload(second)
       ) {
-        return originalMethod.call(baseLogger, { msg: first, ...second });
+        const maskedMsg = maskPIIDeep(first) as string;
+        const maskedPayload = maskPIIDeep(second) as Record<string, unknown>;
+        return originalMethod.call(baseLogger, { msg: maskedMsg, ...maskedPayload });
       }
 
       if (
@@ -94,10 +97,12 @@ function wrapStructuredLogger(baseLogger: pino.Logger): StructuredLogger {
         rest.length === 0 &&
         second instanceof Error
       ) {
-        return originalMethod.call(baseLogger, { msg: first, err: second });
+        return originalMethod.call(baseLogger, { msg: maskPIIDeep(first) as string, err: second });
       }
 
-      return originalMethod.call(baseLogger, first, second, ...rest);
+      // Fallback: mask string messages
+      const maskedFirst = typeof first === "string" ? maskPIIDeep(first) : first;
+      return originalMethod.call(baseLogger, maskedFirst, second, ...rest);
     }) as StructuredLogMethod;
   };
 

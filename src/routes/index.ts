@@ -15,6 +15,7 @@ import messageSearchRoutes from "./messageSearch.routes";
 import integrationsRoutes from "./integrations.routes";
 import consentRoutes from "./consent.routes";
 import emailWebhookRoutes from "./emailWebhook.routes";
+import sessionRecordingRoutes from "./session-recording.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -58,6 +59,7 @@ router.use("/messages", messageSearchRoutes);
 router.use("/integrations", integrationsRoutes);
 router.use("/consent", consentRoutes);
 router.use("/webhooks/email", emailWebhookRoutes);
+router.use("/recordings", sessionRecordingRoutes);
 
 // JWKS public endpoint — no auth required
 router.get("/.well-known/jwks.json", asyncHandler(JwksController.getJwks));

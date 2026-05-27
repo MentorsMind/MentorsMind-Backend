@@ -13,7 +13,7 @@ export const redisConnection: ConnectionOptions = {
   maxRetriesPerRequest: null,
   enableOfflineQueue: false,
   // Enable TLS for rediss:// URLs
-  ...(url.protocol === 'rediss:' && { tls: {} }),
+  ...(url.protocol === "rediss:" && { tls: {} }),
 };
 
 /**
@@ -48,6 +48,7 @@ export const QUEUE_NAMES = {
   AUDIT_LOG: "audit-log-queue",
   NOTIFICATION_CLEANUP: "notification-cleanup-queue",
   MAINTENANCE: "maintenance-queue",
+  BULK: "bulk-queue",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];

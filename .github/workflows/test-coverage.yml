@@ -1,0 +1,264 @@
+name: Test Coverage
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-coverage:
+    name: Run Tests and Check Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-ci
+      STELLAR_NETWORK: testnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage:ci
+
+      - name: Run integration tests
+        run: npm run test:integration
+        continue-on-error: false
+
+      - name: Check coverage thresholds
+        run: |
+          echo "Checking coverage thresholds..."
+          
+          # Extract coverage percentages
+          LINES=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+          STATEMENTS=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+          FUNCTIONS=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+          BRANCHES=$(jq -r '.total.branches.pct' coverage/coverage-summary.json)
+          
+          echo "Coverage Results:"
+          echo "  Lines: ${LINES}%"
+          echo "  Statements: ${STATEMENTS}%"
+          echo "  Functions: ${FUNCTIONS}%"
+          echo "  Branches: ${BRANCHES}%"
+          
+          # Check if coverage meets 80% threshold
+          if (( $(echo "$LINES < 80" | bc -l) )); then
+            echo "❌ Line coverage ${LINES}% is below 80% threshold"
+            exit 1
+          fi
+          
+          if (( $(echo "$STATEMENTS < 80" | bc -l) )); then
+            echo "❌ Statement coverage ${STATEMENTS}% is below 80% threshold"
+            exit 1
+          fi
+          
+          if (( $(echo "$FUNCTIONS < 80" | bc -l) )); then
+            echo "❌ Function coverage ${FUNCTIONS}% is below 80% threshold"
+            exit 1
+          fi
+          
+          if (( $(echo "$BRANCHES < 80" | bc -l) )); then
+            echo "❌ Branch coverage ${BRANCHES}% is below 80% threshold"
+            exit 1
+          fi
+          
+          echo "✅ All coverage thresholds met!"
+
+      - name: Check critical service coverage
+        run: |
+          echo "Checking critical service coverage (90% threshold)..."
+          
+          # Check auth service
+          AUTH_LINES=$(jq -r '."src/services/auth.service.ts".lines.pct // 0' coverage/coverage-summary.json)
+          echo "Auth Service: ${AUTH_LINES}%"
+          if (( $(echo "$AUTH_LINES < 90" | bc -l) )); then
+            echo "❌ Auth service coverage ${AUTH_LINES}% is below 90% threshold"
+            exit 1
+          fi
+          
+          # Check payments service
+          PAYMENTS_LINES=$(jq -r '."src/services/payments.service.ts".lines.pct // 0' coverage/coverage-summary.json)
+          echo "Payments Service: ${PAYMENTS_LINES}%"
+          if (( $(echo "$PAYMENTS_LINES < 90" | bc -l) )); then
+            echo "❌ Payments service coverage ${PAYMENTS_LINES}% is below 90% threshold"
+            exit 1
+          fi
+          
+          # Check escrow service
+          ESCROW_LINES=$(jq -r '."src/services/sorobanEscrow.service.ts".lines.pct // 0' coverage/coverage-summary.json)
+          echo "Escrow Service: ${ESCROW_LINES}%"
+          if (( $(echo "$ESCROW_LINES < 90" | bc -l) )); then
+            echo "❌ Escrow service coverage ${ESCROW_LINES}% is below 90% threshold"
+            exit 1
+          fi
+          
+          echo "✅ All critical services meet 90% coverage threshold!"
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            coverage/
+            coverage/lcov-report/
+            coverage/coverage-summary.json
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const coverage = JSON.parse(fs.readFileSync('coverage/coverage-summary.json', 'utf8'));
+            
+            const lines = coverage.total.lines.pct.toFixed(2);
+            const statements = coverage.total.statements.pct.toFixed(2);
+            const functions = coverage.total.functions.pct.toFixed(2);
+            const branches = coverage.total.branches.pct.toFixed(2);
+            
+            const comment = `## 📊 Test Coverage Report
+            
+            | Metric | Coverage | Status |
+            |--------|----------|--------|
+            | Lines | ${lines}% | ${lines >= 80 ? '✅' : '❌'} |
+            | Statements | ${statements}% | ${statements >= 80 ? '✅' : '❌'} |
+            | Functions | ${functions}% | ${functions >= 80 ? '✅' : '❌'} |
+            | Branches | ${branches}% | ${branches >= 80 ? '✅' : '❌'} |
+            
+            ### Critical Services (90% threshold)
+            
+            | Service | Coverage | Status |
+            |---------|----------|--------|
+            | Auth | ${(coverage['src/services/auth.service.ts']?.lines.pct || 0).toFixed(2)}% | ${(coverage['src/services/auth.service.ts']?.lines.pct || 0) >= 90 ? '✅' : '❌'} |
+            | Payments | ${(coverage['src/services/payments.service.ts']?.lines.pct || 0).toFixed(2)}% | ${(coverage['src/services/payments.service.ts']?.lines.pct || 0) >= 90 ? '✅' : '❌'} |
+            | Escrow | ${(coverage['src/services/sorobanEscrow.service.ts']?.lines.pct || 0).toFixed(2)}% | ${(coverage['src/services/sorobanEscrow.service.ts']?.lines.pct || 0) >= 90 ? '✅' : '❌'} |
+            
+            ${lines >= 80 && statements >= 80 && functions >= 80 && branches >= 80 ? '✅ All coverage thresholds met!' : '❌ Some coverage thresholds not met. Please add more tests.'}
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Generate coverage badge
+        if: github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(jq -r '.total.lines.pct' coverage/coverage-summary.json | cut -d. -f1)
+          COLOR="red"
+          if [ "$COVERAGE" -ge 80 ]; then
+            COLOR="green"
+          elif [ "$COVERAGE" -ge 70 ]; then
+            COLOR="yellow"
+          fi
+          echo "Coverage: ${COVERAGE}% (${COLOR})"
+          # Badge generation can be added here using shields.io or similar
+
+  test-e2e:
+    name: Run E2E Tests
+    runs-on: ubuntu-latest
+    needs: test-coverage
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mentorminds_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/mentorminds_test
+      REDIS_URL: redis://localhost:6379
+      NODE_ENV: test
+      JWT_SECRET: test-secret-key-for-ci
+      STELLAR_NETWORK: testnet
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run database migrations
+        run: npm run migrate:up
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            test-results/
+            screenshots/

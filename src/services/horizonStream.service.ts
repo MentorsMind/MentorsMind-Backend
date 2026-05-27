@@ -1,4 +1,5 @@
 import pool from "../config/database";
+import { trackAndLogQuery } from '../middleware/queryLogger';
 import { stellarService } from "./stellar.service";
 import { WalletModel } from "../models/wallet.model";
 import { SocketService } from "./socket.service";
@@ -98,7 +99,8 @@ export class HorizonStreamService {
       return;
     }
 
-    await pool.query(
+    await trackAndLogQuery(
+      pool as any,
       `INSERT INTO stellar_operations
          (stellar_operation_id, transaction_hash, ledger_sequence, source_account,
           destination_account, amount, asset_type, asset_code, operation_type, payload)
@@ -115,7 +117,7 @@ export class HorizonStreamService {
         payment.assetCode ?? null,
         payment.type,
         JSON.stringify(payment),
-      ],
+      ]
     );
 
     const { rows } = await pool.query<any>(

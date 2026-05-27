@@ -1,9 +1,11 @@
-# Fix AdminService.listPayments Parameter Placeholder Bug
+# TODO
 
-## Steps
-1. [x] Refactor `src/services/admin.service.ts` — consolidate data/count query filter logic in `listPayments`
-2. [x] Add regression test in `src/__tests__/security_and_reliability.test.ts`
-3. [ ] Run tests to verify fix
-4. [ ] Verify TypeScript compilation
+## Database Query Optimization
 
-
+1. Inspect GraphQL DataLoader batch functions; identify ineffective batching.
+2. Implement bulk-fetch model methods for DataLoader (payments, reviews, bookings/users if needed) to avoid per-id queries.
+3. Update `src/graphql/dataloaders/index.ts` to use bulk-fetch methods and return results in input order.
+4. Add a new migration that creates missing indexes on foreign keys and frequently-filtered/sorted columns.
+5. Verify code compiles logically (no builds/tests executed per instruction).
+6. Document expected N+1 reductions and indexing impact.
+7. Update TODO as steps are completed.
