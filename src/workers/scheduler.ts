@@ -145,4 +145,17 @@ export async function runMaintenanceTasks(): Promise<void> {
   } catch (error) {
     logger.error("Maintenance: error processing account deletions", { error });
   }
+
+  // Clean up old offline queue entries (completed/failed older than 7 days)
+  try {
+    const { OfflineQueueService } = await import("../services/offline-queue.service");
+    const cleaned = await OfflineQueueService.cleanup(7);
+    if (cleaned > 0) {
+      logger.info("Maintenance: offline queue entries cleaned up", {
+        count: cleaned,
+      });
+    }
+  } catch (error) {
+    logger.error("Maintenance: error cleaning up offline queue", { error });
+  }
 }
