@@ -155,9 +155,28 @@ router.put(
  *       - bearerAuth: []
  *     parameters:
  *       - $ref: '#/components/schemas/UUIDParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Reason for the suspension
+ *                 example: "Repeated policy violations"
+ *               expiresAt:
+ *                 type: string
+ *                 format: date-time
+ *                 description: Optional expiry date (omit for indefinite suspension)
+ *                 example: "2026-06-30T00:00:00Z"
  *     responses:
  *       200:
  *         description: User suspended
+ *       400:
+ *         description: Reason is required
  *       404:
  *         description: User not found
  */
@@ -168,6 +187,45 @@ router.put(
     getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
   }),
   asyncHandler(AdminController.suspendUser),
+);
+
+/**
+ * @swagger
+ * /admin/users/{id}/ban:
+ *   put:
+ *     summary: Permanently ban a user account
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - $ref: '#/components/schemas/UUIDParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason:
+ *                 type: string
+ *                 description: Reason for the permanent ban
+ *                 example: "Fraud and abuse of platform"
+ *     responses:
+ *       200:
+ *         description: User permanently banned
+ *       400:
+ *         description: Reason is required
+ *       404:
+ *         description: User not found
+ */
+router.put(
+  "/users/:id/ban",
+  auditLogMiddleware({
+    action: AuditAction.ADMIN_ACTION,
+    getEntityDetails: (req) => ({ type: "USER", id: req.params.id }),
+  }),
+  asyncHandler(AdminController.banUser),
 );
 
 /**

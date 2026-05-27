@@ -62,8 +62,34 @@ export const AdminController = {
   /** PUT /admin/users/:id/suspend */
   async suspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const id = req.params.id as string;
+    const { reason, expiresAt } = req.body;
 
-    const updated = await AdminService.updateUserStatus(id, false);
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      ResponseUtil.error(res, "A suspension reason is required", 400);
+      return;
+    }
+
+    // Prevent admins from suspending themselves
+    if (req.user?.id === id) {
+      ResponseUtil.error(res, "You cannot suspend your own account", 400);
+      return;
+    }
+
+    const parsedExpiry = expiresAt ? new Date(expiresAt) : null;
+    if (parsedExpiry && isNaN(parsedExpiry.getTime())) {
+      ResponseUtil.error(res, "Invalid expiresAt date format", 400);
+      return;
+    }
+
+    const updated = await AdminService.suspendUser(
+      id,
+      req.user!.id,
+      reason.trim(),
+      parsedExpiry,
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
+
     if (!updated) {
       ResponseUtil.notFound(res, "User not found");
       return;
@@ -71,11 +97,47 @@ export const AdminController = {
     ResponseUtil.success(res, updated, "User suspended successfully");
   },
 
+  /** PUT /admin/users/:id/ban */
+  async banUser(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const id = req.params.id as string;
+    const { reason } = req.body;
+
+    if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
+      ResponseUtil.error(res, "A ban reason is required", 400);
+      return;
+    }
+
+    // Prevent admins from banning themselves
+    if (req.user?.id === id) {
+      ResponseUtil.error(res, "You cannot ban your own account", 400);
+      return;
+    }
+
+    const updated = await AdminService.banUser(
+      id,
+      req.user!.id,
+      reason.trim(),
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
+
+    if (!updated) {
+      ResponseUtil.notFound(res, "User not found");
+      return;
+    }
+    ResponseUtil.success(res, updated, "User permanently banned successfully");
+  },
+
   /** PUT /admin/users/:id/unsuspend */
   async unsuspendUser(req: AuthenticatedRequest, res: Response): Promise<void> {
     const id = req.params.id as string;
 
-    const updated = await AdminService.updateUserStatus(id, true);
+    const updated = await AdminService.unsuspendUser(
+      id,
+      req.user!.id,
+      extractIpAddress(req),
+      req.headers["user-agent"] ?? null,
+    );
     if (!updated) {
       ResponseUtil.notFound(res, "User not found");
       return;
