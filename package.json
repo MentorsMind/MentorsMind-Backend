@@ -26,6 +26,8 @@
     "migrate:up": "node-pg-migrate up --database-url-var DATABASE_URL --migrations-dir database/migrations",
     "migrate:down": "node-pg-migrate down --database-url-var DATABASE_URL --migrations-dir database/migrations",
     "migrate:create": "node-pg-migrate create --migrations-dir database/migrations",
+    "migrate:generate-down": "node ./scripts/generate-down-sql.js",
+    "migrate:rollback-test": "npm run migrate:generate-down && npm run migrate:up && node ./scripts/run-rollbacks.js",
     "docker:build": "docker compose build",
     "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "docker:test": "docker compose --env-file .env.docker.test -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-backend",
@@ -122,6 +124,9 @@
     "winston-daily-rotate-file": "^5.0.0",
     "ws": "^8.20.0",
     "zod": "^4.3.6"
+  },
+  "optionalDependencies": {
+    "stripe": "^12.7.0"
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",

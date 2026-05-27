@@ -389,6 +389,7 @@ export const PaymentsService = {
     amount?: string,
     reason?: string,
     stellarTxHash?: string,
+    stripeRefundChargeId?: string,
   ): Promise<PaymentRecord> {
     const payment = await this.getPaymentById(paymentId, userId);
 

@@ -6,6 +6,10 @@ import { maintenanceQueue } from "../queues/maintenance.queue";
 import { VerificationService } from "../services/verification.service";
 import { accountDeletionJob } from "../jobs/accountDeletion.job";
 import { logger } from "../utils/logger.utils";
+import config from "../config";
+import { AuditLogModel } from "../models/audit-log.model";
+import { PaymentModel } from "../models/payment.model";
+import SessionModel from "../models/session.model";
 import { Queue, JobsOptions } from "bullmq";
 
 /**

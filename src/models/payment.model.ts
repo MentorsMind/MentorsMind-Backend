@@ -1,4 +1,5 @@
 import pool from "../config/database";
+import { logger } from "../utils/logger";
 
 export interface Payment {
   id: string;
@@ -71,5 +72,26 @@ export const PaymentModel = {
     query += " ORDER BY p.created_at DESC;";
     const { rows } = await pool.query(query, params);
     return rows;
+  },
+  /**
+   * Delete payments (transactions) older than given number of years.
+   * Returns number of records deleted.
+   */
+  async deleteOlderThanYears(years: number): Promise<number> {
+    try {
+      const { rowCount } = await pool.query(
+        `DELETE FROM transactions WHERE created_at < NOW() - ($1::int * INTERVAL '1 year') RETURNING id;`,
+        [years],
+      );
+
+      const deleted = rowCount ?? 0;
+      if (deleted > 0) {
+        logger.info('PaymentModel: deleted old payments', { years, deleted });
+      }
+      return deleted;
+    } catch (error) {
+      logger.error('Failed to delete old payments:', error);
+      return 0;
+    }
   },
 };

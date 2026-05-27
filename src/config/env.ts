@@ -149,6 +149,10 @@ const envSchema = z.object({
   APP_CLIENT_URL: z.string().url().default("http://localhost:3000"),
   FRONTEND_URL: z.string().url().default("http://localhost:3000"),
 
+  // Stripe
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+
   // Deep Linking
   DEEP_LINK_SCHEME: z.string().default("mentorminds"),
   IOS_BUNDLE_ID: z.string().default("com.mentorminds.app"),

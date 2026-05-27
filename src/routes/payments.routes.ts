@@ -62,6 +62,11 @@ router.post(
   asyncHandler(PaymentsController.handleWebhook),
 );
 
+// Stripe webhook endpoint (raw body required for signature verification)
+import { StripeController } from '../controllers/stripe.controller';
+import bodyParser from 'body-parser';
+router.post('/stripe/webhook', bodyParser.raw({ type: '*/*' }), asyncHandler(StripeController.webhook));
+
 // All routes below require authentication
 router.use(authenticate);
 
@@ -346,5 +351,9 @@ router.post(
   validate(refundPaymentSchema),
   asyncHandler(PaymentsController.refundPayment),
 );
+
+// Stripe payment creation and refund endpoints (authenticated)
+router.post('/stripe/create-intent', asyncHandler(StripeController.createPaymentIntent));
+router.post('/stripe/refund', asyncHandler(StripeController.createRefund));
 
 export default router;

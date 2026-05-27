@@ -1,5 +1,6 @@
 import pool from "../config/database";
 import { PaginationUtil } from "../utils/pagination.utils";
+import { logger } from "../utils/logger";
 
 export interface SessionRecord {
   id: string;
@@ -316,6 +317,62 @@ export const SessionModel = {
     const query = "DELETE FROM sessions WHERE id = $1 RETURNING id";
     const { rowCount } = await pool.query(query, [id]);
     return (rowCount ?? 0) > 0;
+  },
+
+  /**
+   * Archive sessions older than the specified number of years.
+   * Moves rows into `sessions_archive` and deletes from `sessions` in a single CTE.
+   * Returns number of archived sessions.
+   */
+  async archiveOlderThanYears(years: number): Promise<number> {
+    // Ensure archive table exists (small, safe DDL guard)
+    const createArchiveTable = `
+      CREATE TABLE IF NOT EXISTS sessions_archive (
+        id UUID PRIMARY KEY,
+        mentor_id UUID NOT NULL,
+        mentee_id UUID NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 60,
+        status VARCHAR(20),
+        meeting_link VARCHAR(500),
+        meeting_url VARCHAR(500),
+        meeting_provider VARCHAR(50),
+        meeting_room_id VARCHAR(255),
+        meeting_expires_at TIMESTAMP WITH TIME ZONE,
+        needs_manual_intervention BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE,
+        updated_at TIMESTAMP WITH TIME ZONE,
+        archived_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+
+    const moveQuery = `
+      WITH moved AS (
+        DELETE FROM sessions
+        WHERE created_at < NOW() - ($1::int * INTERVAL '1 year')
+        RETURNING id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at
+      )
+      INSERT INTO sessions_archive (id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at, archived_at)
+      SELECT id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at, NOW()
+      FROM moved
+      RETURNING id;
+    `;
+
+    try {
+      await pool.query(createArchiveTable);
+      const { rowCount } = await pool.query(moveQuery, [years]);
+      const moved = rowCount ?? 0;
+      if (moved > 0) {
+        logger.info('SessionModel: archived old sessions', { years, moved });
+      }
+      return moved;
+    } catch (error) {
+      logger.error('Failed to archive old sessions:', error);
+      return 0;
+    }
   },
 };
 

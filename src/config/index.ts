@@ -1,5 +1,6 @@
 import { env } from "./env";
 import monitoringConfig from "./monitoring.config";
+import retentionConfig from "./retention.config";
 
 const config = {
   env: env.NODE_ENV,
@@ -83,6 +84,7 @@ const config = {
   },
 
   monitoring: monitoringConfig,
+  retention: retentionConfig,
 } as const;
 
 export default config;
