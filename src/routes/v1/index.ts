@@ -71,6 +71,7 @@ router.use("/escrow", escrowRoutes);
 router.use("/wallets", walletRoutes);
 router.use("/integrations", integrationsRoutes);
 router.use("/dl", deepLinkRoutes);
+router.use("/notifications", notificationsRoutes);
 router.use("/", notesRoutes);
 router.use("/webhooks", webhookRoutes);
 
