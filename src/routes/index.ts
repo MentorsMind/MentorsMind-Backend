@@ -14,6 +14,8 @@ import conversationsRoutes from "./conversations.routes";
 import messageSearchRoutes from "./messageSearch.routes";
 import integrationsRoutes from "./integrations.routes";
 import consentRoutes from "./consent.routes";
+import transcriptionSearchRoutes from "./transcriptionSearch.routes";
+import transcriptionRoutes from "./transcription.routes";
 import emailWebhookRoutes from "./emailWebhook.routes";
 import sessionRecordingRoutes from "./session-recording.routes";
 import { BookingsService } from "../services/bookings.service";
@@ -58,6 +60,8 @@ router.use("/conversations", conversationsRoutes);
 router.use("/messages", messageSearchRoutes);
 router.use("/integrations", integrationsRoutes);
 router.use("/consent", consentRoutes);
+router.use("/bookings/:id/transcription", transcriptionRoutes);
+router.use("/transcriptions", transcriptionSearchRoutes);
 router.use("/webhooks/email", emailWebhookRoutes);
 router.use("/recordings", sessionRecordingRoutes);
 

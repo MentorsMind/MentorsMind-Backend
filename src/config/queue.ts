@@ -48,6 +48,7 @@ export const QUEUE_NAMES = {
   AUDIT_LOG: "audit-log-queue",
   NOTIFICATION_CLEANUP: "notification-cleanup-queue",
   MAINTENANCE: "maintenance-queue",
+  TRANSCRIPTION: "transcription-queue",
   BULK: "bulk-queue",
 } as const;
 
@@ -64,4 +65,5 @@ export const CONCURRENCY = {
   REPORT: 2,
   SESSION_REMINDER: 1,
   MAINTENANCE: 1,
+  TRANSCRIPTION: 5,
 } as const;

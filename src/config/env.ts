@@ -152,6 +152,7 @@ const envSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().min(1, "AWS_ACCESS_KEY_ID is required"),
   AWS_SECRET_ACCESS_KEY: z.string().min(1, "AWS_SECRET_ACCESS_KEY is required"),
   AWS_SECRET_ID: z.string().optional(),
+  AWS_TRANSCRIBE_REGION: z.string().optional(), // defaults to AWS_REGION if not set
   VAULT_ADDR: z.string().url().optional(),
   VAULT_TOKEN: z.string().optional(),
   VAULT_SECRET_PATH: z.string().optional(),
