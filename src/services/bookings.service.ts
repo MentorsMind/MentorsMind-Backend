@@ -90,7 +90,7 @@ export const BookingsService = {
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
     // Batch-validate both users in a single query (avoids N+1)
     const { rows: users } = await pool.query(
-      `SELECT id, role FROM users WHERE id = ANY($1) AND is_active = true`,
+      `SELECT id, role, status FROM users WHERE id = ANY($1) AND is_active = true`,
       [[data.menteeId, data.mentorId]],
     );
 
@@ -103,6 +103,24 @@ export const BookingsService = {
     if (!mentor) {
       throw createError("Mentor not found", 404);
     }
+
+    // Prevent suspended or banned users from booking
+    if (mentee.status === "suspended") {
+      throw createError(
+        "Your account is suspended. You cannot create bookings at this time.",
+        403,
+      );
+    }
+    if (mentee.status === "banned") {
+      throw createError(
+        "Your account has been permanently banned.",
+        403,
+      );
+    }
+    if (mentor.status === "suspended" || mentor.status === "banned") {
+      throw createError("This mentor is not currently available for bookings.", 400);
+    }
+
     if (mentor.role !== "mentor") {
       throw createError("User is not a mentor", 400);
     }

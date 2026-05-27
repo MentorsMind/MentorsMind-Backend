@@ -75,7 +75,7 @@ export const AuthService = {
     const query = `
       SELECT id, role, password_hash, mfa_enabled, user_tier 
       FROM users 
-      WHERE email = $1 AND status = 'active' AND deleted_at IS NULL
+      WHERE email = $1 AND deleted_at IS NULL
     `;
     const { rows } = await pool.query(query, [email]);
 
@@ -84,6 +84,22 @@ export const AuthService = {
     }
 
     const user = rows[0];
+
+    // Banned users receive a specific error and cannot log in at all
+    if (user.status === 'banned') {
+      throw new Error('Your account has been permanently banned. Please contact support if you believe this is an error.');
+    }
+
+    // Suspended users cannot log in
+    if (user.status === 'suspended') {
+      throw new Error('Your account has been suspended. Please contact support for more information.');
+    }
+
+    // Any other non-active status (inactive, pending_verification)
+    if (user.status !== 'active') {
+      throw new Error('Invalid email or password.');
+    }
+
     const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
