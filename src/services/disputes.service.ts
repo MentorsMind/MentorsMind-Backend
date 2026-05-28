@@ -12,59 +12,57 @@ import { NotificationType } from "../models/notifications.model";
 import pool from "../config/database";
 
 export class DisputeService {
-  /**
-   * Opens a new dispute.
-   */
   static async openDispute(
-    transactionId: string,
-    reporterId: string,
+    sessionId: string,
+    filedById: string,
+    type: "payment" | "quality" | "conduct" | "cancellation",
     reason: string,
   ): Promise<DisputeRecord> {
+    const { rows: bookingRows } = await pool.query<{
+      mentor_id: string;
+      mentee_id: string;
+    }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
+      sessionId,
+    ]);
+    const booking = bookingRows[0];
+    if (!booking) throw new Error("Session not found");
+
+    const respondentId =
+      booking.mentor_id === filedById ? booking.mentee_id : booking.mentor_id;
+
     const dispute = await DisputeModel.create({
-      transaction_id: transactionId,
-      reporter_id: reporterId,
+      session_id: sessionId,
+      filed_by_id: filedById,
+      respondent_id: respondentId,
+      type,
       reason,
     });
 
     await AuditLogModel.create({
       level: "info",
       action: "dispute_opened",
-      message: `Dispute opened for transaction ${transactionId}`,
-      user_id: reporterId,
+      message: `Dispute opened for session ${sessionId}`,
+      user_id: filedById,
       entity_type: "dispute",
       entity_id: dispute.id,
-      metadata: { reason },
+      metadata: { reason, type },
       ip_address: null,
       user_agent: null,
     });
 
-    // Notify reporter and the other party (mentor or mentee)
-    const { rows: bookingRows } = await pool.query<{
-      mentor_id: string;
-      mentee_id: string;
-    }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
-      transactionId,
-    ]);
-    const booking = bookingRows[0];
-    const otherPartyId =
-      booking &&
-      (booking.mentor_id === reporterId
-        ? booking.mentee_id
-        : booking.mentor_id);
-
     const openedNotifications = [
       NotificationService.sendNotification({
-        userId: reporterId,
+        userId: filedById,
         type: NotificationType.DISPUTE_CREATED,
         channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
         priority: NotificationPriority.HIGH,
         data: { disputeId: dispute.id, event: "dispute_opened" },
       }),
     ];
-    if (otherPartyId) {
+    if (respondentId) {
       openedNotifications.push(
         NotificationService.sendNotification({
-          userId: otherPartyId,
+          userId: respondentId,
           type: NotificationType.DISPUTE_CREATED,
           channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
           priority: NotificationPriority.HIGH,
@@ -110,17 +108,17 @@ export class DisputeService {
   }
 
   /**
-   * Automatically escalate disputes older than 7 days to `under_review`.
+   * Automatically escalate disputes older than 7 days to `investigating`.
    */
   static async escalateOldDisputes(): Promise<number> {
     const oldDisputes = await DisputeModel.findUnresolvedOlderThanDays(7);
     let escalatedCount = 0;
 
     for (const dispute of oldDisputes) {
-      if (DisputeStateMachine.canTransition(dispute.status, "under_review")) {
+      if (DisputeStateMachine.canTransition(dispute.status, "investigating")) {
         await DisputeModel.updateStatus(
           dispute.id,
-          "under_review",
+          "investigating",
           "Auto-escalated after 7 days",
         );
 
@@ -141,18 +139,18 @@ export class DisputeService {
           mentor_id: string;
           mentee_id: string;
         }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
-          dispute.transaction_id,
+          dispute.session_id,
         ]);
         const escalateBooking = escalateBookingRows[0];
         const escalateOtherPartyId =
           escalateBooking &&
-          (escalateBooking.mentor_id === dispute.reporter_id
+          (escalateBooking.mentor_id === dispute.filed_by_id
             ? escalateBooking.mentee_id
             : escalateBooking.mentor_id);
 
         const escalateNotifications = [
           NotificationService.sendNotification({
-            userId: dispute.reporter_id,
+            userId: dispute.filed_by_id,
             type: NotificationType.DISPUTE_CREATED,
             channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
             priority: NotificationPriority.HIGH,
@@ -178,9 +176,43 @@ export class DisputeService {
   }
 
   /**
+   * Move dispute to mediation workflow.
+   */
+  static async mediateDispute(
+    disputeId: string,
+    adminId: string,
+    notes: string,
+  ): Promise<DisputeRecord> {
+    const dispute = await DisputeModel.findById(disputeId);
+    if (!dispute) throw new Error("Dispute not found");
+
+    DisputeStateMachine.assertTransition(dispute.status, "mediation");
+
+    const updated = await DisputeModel.updateStatus(
+      disputeId,
+      "mediation",
+      notes,
+    );
+
+    await AuditLogModel.create({
+      level: "info",
+      action: "dispute_mediated",
+      message: `Dispute ${disputeId} moved to mediation by admin ${adminId}`,
+      user_id: adminId,
+      entity_type: "dispute",
+      entity_id: disputeId,
+      metadata: { notes },
+      ip_address: null,
+      user_agent: null,
+    });
+
+    return updated!;
+  }
+
+  /**
    * Admins resolve a dispute.
    * Looks up the booking's escrow_id and escrow_contract_address via the dispute's
-   * transaction_id, calls the real SorobanEscrowService, and wraps the escrow call
+   * session_id, calls the real SorobanEscrowService, and wraps the escrow call
    * + DB status update in a single transaction so they succeed or fail together.
    */
   static async resolveDispute(
@@ -194,7 +226,7 @@ export class DisputeService {
 
     DisputeStateMachine.assertTransition(dispute.status, "resolved");
 
-    // Look up escrow details from the bookings table using the dispute's transaction_id
+    // Look up escrow details from the bookings table using the dispute's session_id
     const { rows } = await pool.query<{
       escrow_id: string | null;
       escrow_contract_address: string | null;
@@ -202,13 +234,11 @@ export class DisputeService {
       mentee_id: string;
     }>(
       `SELECT escrow_id, escrow_contract_address, mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`,
-      [dispute.transaction_id],
+      [dispute.session_id],
     );
     const booking = rows[0];
     if (!booking?.escrow_id) {
-      throw new Error(
-        `No escrow_id found for booking ${dispute.transaction_id}`,
-      );
+      throw new Error(`No escrow_id found for booking ${dispute.session_id}`);
     }
 
     // Execute escrow action + DB status update atomically
@@ -253,7 +283,7 @@ export class DisputeService {
     });
 
     await NotificationService.sendNotification({
-      userId: dispute.reporter_id,
+      userId: dispute.filed_by_id,
       type: NotificationType.SYSTEM_ALERT,
       channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
       priority: NotificationPriority.HIGH,
@@ -262,7 +292,7 @@ export class DisputeService {
 
     // Notify the other party (mentor or mentee)
     const resolveOtherPartyId =
-      booking.mentor_id === dispute.reporter_id
+      booking.mentor_id === dispute.filed_by_id
         ? booking.mentee_id
         : booking.mentor_id;
     if (resolveOtherPartyId) {
