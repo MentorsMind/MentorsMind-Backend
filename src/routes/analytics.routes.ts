@@ -1,108 +1,87 @@
-// @ts-nocheck
-import { Router } from 'express';
-import { AnalyticsController } from '../controllers/analytics.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { requireRole } from '../middleware/rbac.middleware';
-import { validate } from '../middleware/validation.middleware';
-import { asyncHandler } from '../utils/asyncHandler.utils';
-import { z } from 'zod';
+import { Router } from "express";
+import { AnalyticsController } from "../controllers/analytics.controller";
+import { authenticate } from "../middleware/auth";
+import { authorize } from "../middleware/authorize";
 
 const router = Router();
 
-// All analytics routes require admin privileges
+// All analytics routes require authentication
 router.use(authenticate);
-router.use(requireRole('admin'));
-
-const periodQuerySchema = z.object({
-  query: z.object({
-    period: z.enum(['7d', '30d', '90d', '1y']).optional().default('30d'),
-  }),
-});
 
 /**
- * @swagger
- * /admin/analytics/overview:
- *   get:
- *     summary: Platform KPI summary
- *     tags: [Admin Analytics]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Platform KPI summary
+ * Learning Path Analytics Routes
  */
-router.get('/overview', asyncHandler(AnalyticsController.getOverview));
+
+// Get comprehensive analytics for a learning path
+// GET /api/v1/analytics/paths/:pathId
+router.get(
+  "/paths/:pathId",
+  authorize(["mentor", "admin"]),
+  AnalyticsController.getPathAnalytics
+);
+
+// Get milestone analytics for a learning path
+// GET /api/v1/analytics/paths/:pathId/milestones
+router.get(
+  "/paths/:pathId/milestones",
+  authorize(["mentor", "admin"]),
+  AnalyticsController.getMilestoneAnalytics
+);
+
+// Get trend data for a learning path
+// GET /api/v1/analytics/paths/:pathId/trends
+router.get(
+  "/paths/:pathId/trends",
+  authorize(["mentor", "admin"]),
+  AnalyticsController.getTrendData
+);
+
+// Get bottlenecks for a learning path
+// GET /api/v1/analytics/paths/:pathId/bottlenecks
+router.get(
+  "/paths/:pathId/bottlenecks",
+  authorize(["mentor", "admin"]),
+  AnalyticsController.getBottlenecks
+);
 
 /**
- * @swagger
- * /admin/analytics/revenue:
- *   get:
- *     summary: Revenue breakdown
- *     tags: [Admin Analytics]
- *     parameters:
- *       - in: query
- *         name: period
- *         schema:
- *           type: string
- *           enum: [7d, 30d, 90d, 1y]
- *     responses:
- *       200:
- *         description: Revenue breakdown
+ * Student Analytics Routes
  */
-router.get('/revenue', validate(periodQuerySchema), asyncHandler(AnalyticsController.getRevenue));
+
+// Get student learning profile
+// GET /api/v1/analytics/students/:studentId/profile
+router.get(
+  "/students/:studentId/profile",
+  authorize(["student", "mentor", "admin"]),
+  AnalyticsController.getStudentProfile
+);
+
+// Get predictive insights for a student in a specific path
+// GET /api/v1/analytics/students/:studentId/paths/:pathId/insights
+router.get(
+  "/students/:studentId/paths/:pathId/insights",
+  authorize(["student", "mentor", "admin"]),
+  AnalyticsController.getPredictiveInsights
+);
+
+// Get comparison analytics (student vs peers)
+// GET /api/v1/analytics/students/:studentId/paths/:pathId/comparison
+router.get(
+  "/students/:studentId/paths/:pathId/comparison",
+  authorize(["student", "mentor", "admin"]),
+  AnalyticsController.getComparisonAnalytics
+);
 
 /**
- * @swagger
- * /admin/analytics/users:
- *   get:
- *     summary: User growth and retention
- *     tags: [Admin Analytics]
- *     parameters:
- *       - in: query
- *         name: period
- *         schema:
- *           type: string
- *           enum: [7d, 30d, 90d, 1y]
- *     responses:
- *       200:
- *         description: User growth and retention
+ * Mentor Analytics Routes
  */
-router.get('/users', validate(periodQuerySchema), asyncHandler(AnalyticsController.getUsers));
 
-/**
- * @swagger
- * /admin/analytics/sessions:
- *   get:
- *     summary: Session completion rates
- *     tags: [Admin Analytics]
- *     parameters:
- *       - in: query
- *         name: period
- *         schema:
- *           type: string
- *           enum: [7d, 30d, 90d, 1y]
- *     responses:
- *       200:
- *         description: Session completion rates
- */
-router.get('/sessions', validate(periodQuerySchema), asyncHandler(AnalyticsController.getSessions));
-
-/**
- * @swagger
- * /admin/analytics/payments:
- *   get:
- *     summary: Payment volume and method breakdown
- *     tags: [Admin Analytics]
- *     parameters:
- *       - in: query
- *         name: period
- *         schema:
- *           type: string
- *           enum: [7d, 30d, 90d, 1y]
- *     responses:
- *       200:
- *         description: Payment volume and method breakdown
- */
-router.get('/payments', validate(periodQuerySchema), asyncHandler(AnalyticsController.getPayments));
+// Get mentor dashboard analytics
+// GET /api/v1/analytics/mentors/:mentorId/dashboard
+router.get(
+  "/mentors/:mentorId/dashboard",
+  authorize(["mentor", "admin"]),
+  AnalyticsController.getMentorDashboard
+);
 
 export default router;

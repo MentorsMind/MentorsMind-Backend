@@ -49,6 +49,12 @@ notificationCleanupService.initialize().catch((err: unknown) => {
 import goalRoutes from "../goal.routes";
 import learnerRoutes from "../learner.routes";
 import webhookRoutes from "../webhooks.routes";
+import learningPathRoutes from "../learning-path.routes";
+import progressRoutes from "../progress.routes";
+import sessionMilestoneRoutes from "../session-milestone.routes";
+import notificationsRoutes from "../notifications.routes";
+import certificationRoutes from "../certification.routes";
+import referralRoutes from "../referral.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -74,6 +80,16 @@ router.use("/webhooks", webhookRoutes);
 router.use("/dl", deepLinkRoutes);
 router.use("/notifications", notificationsRoutes);
 router.use("/", notesRoutes);
-router.use("/webhooks", webhookRoutes);
+
+// Learning Path Builder routes
+router.use("/learning-paths", learningPathRoutes);
+router.use("/progress", progressRoutes);
+router.use("/session-milestones", sessionMilestoneRoutes);
+
+// Mentor Certification routes
+router.use("/certifications", certificationRoutes);
+
+// Referral and Affiliate Program routes
+router.use("/referrals", referralRoutes);
 
 export default router;

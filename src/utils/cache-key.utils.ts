@@ -62,6 +62,31 @@ export const CacheKeys = {
   // Admin cache keys
   adminStats: () => `mm:admin:stats`,
   systemHealth: () => `mm:admin:health`,
+
+  // Learning Path cache keys
+  learningPath: (pathId: string) => `mm:learning_path:${pathId}`,
+  mentorPaths: (mentorId: string) => `mm:mentor:${mentorId}:paths`,
+  publishedPaths: () => `mm:learning_paths:published`,
+  pathEnrollments: (pathId: string) => `mm:path:${pathId}:enrollments`,
+  studentEnrollments: (studentId: string) => `mm:student:${studentId}:enrollments`,
+  studentProgress: (studentId: string, pathId: string) => `mm:student:${studentId}:progress:${pathId}`,
+  enrollmentProgress: (enrollmentId: string) => `mm:enrollment:${enrollmentId}:progress`,
+  pathAnalytics: (pathId: string) => `mm:path:${pathId}:analytics`,
+  milestoneProgress: (enrollmentId: string, milestoneId: string) => `mm:milestone:${enrollmentId}:${milestoneId}:progress`,
+  pathTemplates: () => `mm:learning_paths:templates`,
+  pathsByDifficulty: (difficulty: string) => `mm:learning_paths:difficulty:${difficulty}`,
+  pathsByTags: (tags: string) => `mm:learning_paths:tags:${hashParams({ tags })}`,
+  prerequisiteValidation: (studentId: string, milestoneId: string) => `mm:prerequisite:${studentId}:${milestoneId}`,
+  
+  // Session-Milestone Integration cache keys
+  sessionContext: (bookingId: string) => `mm:session:${bookingId}:context`,
+  learningPathContext: (mentorId: string, studentId: string) => `mm:context:${mentorId}:${studentId}`,
+  sessionOutcome: (bookingId: string) => `mm:session:${bookingId}:outcome`,
+  milestoneSessionOutcomes: (milestoneId: string) => `mm:milestone:${milestoneId}:outcomes`,
+  bookingRecommendations: (mentorId: string, studentId: string) => `mm:recommendations:${mentorId}:${studentId}`,
+  hybridModeConfig: (mentorId: string) => `mm:mentor:${mentorId}:hybrid_config`,
+  sessionMilestoneMapping: (bookingId: string) => `mm:session:${bookingId}:milestone`,
+  milestoneAvailableSessions: (milestoneId: string) => `mm:milestone:${milestoneId}:sessions`,
 } as const;
 
 /** TTL presets in seconds */
@@ -81,4 +106,17 @@ export const CacheTags = {
   sessions: (userId: string) => `tag:sessions:${userId}`,
   stellar: (publicKey: string) => `tag:stellar:${publicKey}`,
   admin: () => `tag:admin`,
+  
+  // Learning Path cache tags
+  learningPaths: () => `tag:learning_paths`,
+  learningPath: (pathId: string) => `tag:learning_path:${pathId}`,
+  mentorPaths: (mentorId: string) => `tag:mentor:${mentorId}:paths`,
+  studentEnrollments: (studentId: string) => `tag:student:${studentId}:enrollments`,
+  pathEnrollments: (pathId: string) => `tag:path:${pathId}:enrollments`,
+  
+  // Session-Milestone Integration cache tags
+  sessionMilestone: (bookingId: string) => `tag:session:${bookingId}:milestone`,
+  milestoneSession: (milestoneId: string) => `tag:milestone:${milestoneId}:sessions`,
+  sessionOutcomes: (milestoneId: string) => `tag:milestone:${milestoneId}:outcomes`,
+  hybridMode: (mentorId: string) => `tag:mentor:${mentorId}:hybrid`,
 } as const;
