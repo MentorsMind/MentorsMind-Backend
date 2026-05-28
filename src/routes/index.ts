@@ -5,6 +5,7 @@ import usersRoutes from "./users.routes";
 import exportRoutes from "./export.routes";
 import adminRoutes from "./admin.routes";
 import moderationRoutes from "./moderation.routes";
+import userModerationRoutes from "./user-moderation.routes";
 import bookingsRoutes from "./bookings.routes";
 import timezoneRoutes from "./timezone.routes";
 import mentorsRoutes from "./mentors.routes";
@@ -37,12 +38,12 @@ const router = Router();
 // Note: These services no longer create tables at runtime.
 // Table schema is managed exclusively by migration files.
 BookingsService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize bookings service:", err);
+  logger.error("Failed to initialize bookings service:", { err });
 });
 
 // Initialize notification cleanup service (async, don't block)
 notificationCleanupService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize notification cleanup service:", err);
+  logger.error("Failed to initialize notification cleanup service:", { err });
 });
 
 // Mount route modules
@@ -51,6 +52,7 @@ router.use("/users", usersRoutes);
 router.use("/", exportRoutes);
 router.use("/admin", adminRoutes);
 router.use("/admin/moderation", moderationRoutes);
+router.use("/user/moderation", userModerationRoutes);
 router.use("/bookings", bookingsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/mentors", mentorsRoutes);
@@ -101,8 +103,8 @@ router.get("/", (_req, res) => {
 
 // ── Health ───────────────────────────────────────────────────────────────────
 // Health routes moved to app.ts for global accessibility
-router.get("/health/live", asyncHandler(HealthController.getLive));
-router.get("/health/ready", asyncHandler(HealthController.getReady));
+router.get("/health/live", HealthController.getLive);
+router.get("/health/ready", HealthController.getReady);
 router.get("/health", (_req, res) => res.redirect("/health/ready"));
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
