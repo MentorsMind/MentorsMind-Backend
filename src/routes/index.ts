@@ -28,6 +28,7 @@ import { asyncHandler } from "../utils/asyncHandler.utils";
 import { HealthController } from "../controllers/health.controller";
 import sessionFeedbackRoutes from "./session-feedback.routes";
 import calendarSyncRoutes from "./calendar-sync.routes";
+import developerRoutes from "./developer.routes";
 import { logger } from "../utils/logger.utils";
 import { JwksController } from "../controllers/jwks.controller";
 import { metricsRegistry } from "../config/metrics";
@@ -68,6 +69,7 @@ router.use("/webhooks/email", emailWebhookRoutes);
 router.use("/recordings", sessionRecordingRoutes);
 router.use("/feedback", sessionFeedbackRoutes);
 router.use("/calendar/sync", calendarSyncRoutes);
+router.use("/developer", developerRoutes);
 
 // JWKS public endpoint — no auth required
 router.get("/.well-known/jwks.json", asyncHandler(JwksController.getJwks));
