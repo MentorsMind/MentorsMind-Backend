@@ -109,6 +109,11 @@ const envSchema = z.object({
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
 
+  // APNS (Apple Push Notification Service) — configured via FCM APNS bridge
+  APNS_KEY_ID: z.string().optional(),
+  APNS_TEAM_ID: z.string().optional(),
+  APNS_BUNDLE_ID: z.string().optional(),
+
   // Monitoring / Prometheus
   PROMETHEUS_ENABLED: z.enum(["true", "false"]).default("false"),
   PROMETHEUS_PORT: z

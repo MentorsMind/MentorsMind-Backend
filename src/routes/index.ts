@@ -19,6 +19,8 @@ import transcriptionSearchRoutes from "./transcriptionSearch.routes";
 import transcriptionRoutes from "./transcription.routes";
 import emailWebhookRoutes from "./emailWebhook.routes";
 import sessionRecordingRoutes from "./session-recording.routes";
+import subscriptionRoutes from "./subscriptions.routes";
+import taxRoutes from "./tax.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -65,6 +67,8 @@ router.use("/bookings/:id/transcription", transcriptionRoutes);
 router.use("/transcriptions", transcriptionSearchRoutes);
 router.use("/webhooks/email", emailWebhookRoutes);
 router.use("/recordings", sessionRecordingRoutes);
+router.use("/subscriptions", subscriptionRoutes);
+router.use("/tax", taxRoutes);
 router.use("/", exportRoutes);
 
 // JWKS public endpoint — no auth required
