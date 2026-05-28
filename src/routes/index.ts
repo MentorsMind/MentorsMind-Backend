@@ -6,6 +6,7 @@ import exportRoutes from "./export.routes";
 import adminRoutes from "./admin.routes";
 import moderationRoutes from "./moderation.routes";
 import bookingsRoutes from "./bookings.routes";
+import smartSchedulingRoutes from "./smart-scheduling.routes";
 import timezoneRoutes from "./timezone.routes";
 import mentorsRoutes from "./mentors.routes";
 import paymentsRoutes from "./payments.routes";
@@ -51,6 +52,7 @@ router.use("/users", usersRoutes);
 router.use("/", exportRoutes);
 router.use("/admin", adminRoutes);
 router.use("/admin/moderation", moderationRoutes);
+router.use("/bookings", smartSchedulingRoutes);
 router.use("/bookings", bookingsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/mentors", mentorsRoutes);
@@ -101,8 +103,8 @@ router.get("/", (_req, res) => {
 
 // ── Health ───────────────────────────────────────────────────────────────────
 // Health routes moved to app.ts for global accessibility
-router.get("/health/live", asyncHandler(HealthController.getLive));
-router.get("/health/ready", asyncHandler(HealthController.getReady));
+router.get("/health/live", HealthController.getLive);
+router.get("/health/ready", HealthController.getReady);
 router.get("/health", (_req, res) => res.redirect("/health/ready"));
 
 // ── Metrics ──────────────────────────────────────────────────────────────────
