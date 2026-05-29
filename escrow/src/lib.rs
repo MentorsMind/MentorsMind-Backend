@@ -193,7 +193,11 @@ const CACHE_TTL_BUMP: u32 = 500_000;
 
 // Cache statistics keys
 const CACHE_HITS_KEY: Symbol = symbol_short!("CACHE_HITS");
-const_CACHE_MISSES_KEY: Symbol = symbol_short!("CACHE_MISSES");
+const CACHE_MISSES_KEY: Symbol = symbol_short!("CACHE_MISSES");
+
+// Yield deployment storage keys
+const YIELD_CONTRACT: Symbol = symbol_short!("YIELD_CON");
+const YIELD_DEPLOY_DELAY: u64 = 24 * 60 * 60; // 24 hours in seconds
 
 // ---------------------------------------------------------------------------
 // Contract
@@ -452,6 +456,106 @@ impl EscrowContract {
         admin.require_auth();
 
         Self::_set_token_approved(&env, &token_address, approved);
+    }
+
+    /// Set the yield contract address (admin only).
+    ///
+    /// Auth: Only the admin can set the yield contract address.
+    ///
+    /// Panics if:
+    /// - Contract is not initialized
+    /// - Caller is not the admin
+    /// - Caller fails authorization check
+    pub fn set_yield_contract(env: Env, yield_contract: Address) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&ADMIN)
+            .expect("Not initialized");
+        env.storage()
+            .persistent()
+            .extend_ttl(&ADMIN, ESCROW_TTL_THRESHOLD, ESCROW_TTL_BUMP);
+        admin.require_auth();
+
+        env.storage().persistent().set(&YIELD_CONTRACT, &yield_contract);
+        env.storage()
+            .persistent()
+            .extend_ttl(&YIELD_CONTRACT, ESCROW_TTL_THRESHOLD, ESCROW_TTL_BUMP);
+    }
+
+    /// Deploy escrow funds to yield contract (admin only).
+    ///
+    /// This function allows the admin to deploy escrow funds to a yield-bearing contract
+    /// to generate interest. A 24-hour delay is enforced after escrow creation before
+    /// deployment is allowed to prevent immediate draining of funds.
+    ///
+    /// Auth: Only the admin can deploy funds to yield.
+    ///
+    /// Panics if:
+    /// - Contract is not initialized
+    /// - Caller is not the admin
+    /// - Caller fails authorization check
+    /// - Escrow does not exist
+    /// - Escrow is not in Active status
+    /// - 24-hour delay has not elapsed since escrow creation
+    /// - Yield contract address is not set
+    pub fn deploy_yield(env: Env, escrow_id: u64) {
+        let admin: Address = env
+            .storage()
+            .persistent()
+            .get(&ADMIN)
+            .expect("Not initialized");
+        env.storage()
+            .persistent()
+            .extend_ttl(&ADMIN, ESCROW_TTL_THRESHOLD, ESCROW_TTL_BUMP);
+        admin.require_auth();
+
+        let key = DataKey::Escrow(escrow_id);
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("Escrow not found");
+        env.storage()
+            .persistent()
+            .extend_ttl(&key, ESCROW_TTL_THRESHOLD, ESCROW_TTL_BUMP);
+
+        if escrow.status != EscrowStatus::Active {
+            panic!("Escrow not active");
+        }
+
+        // Enforce 24-hour delay before yield deployment
+        let now = env.ledger().timestamp();
+        let deploy_allowed_after = escrow.created_at.checked_add(YIELD_DEPLOY_DELAY).expect("Timestamp overflow");
+        if now < deploy_allowed_after {
+            panic!("Yield deployment delay not elapsed");
+        }
+
+        let yield_contract: Address = env
+            .storage()
+            .persistent()
+            .get(&YIELD_CONTRACT)
+            .expect("Yield contract not set");
+        env.storage()
+            .persistent()
+            .extend_ttl(&YIELD_CONTRACT, ESCROW_TTL_THRESHOLD, ESCROW_TTL_BUMP);
+
+        // Transfer funds to yield contract
+        let token_client = token::Client::new(&env, &escrow.token_address);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &yield_contract,
+            &escrow.amount,
+        );
+
+        // Mark escrow as having funds deployed to yield
+        escrow.status = EscrowStatus::Released; // Use Released status to indicate funds are deployed
+        env.storage().persistent().set(&key, &escrow);
+
+        env.events().publish(
+            (Symbol::new(&env, "Escrow"), Symbol::new(&env, "YieldDeployed"), escrow_id),
+            (escrow_id, yield_contract, escrow.amount, now),
+        );
     }
 
     // -----------------------------------------------------------------------
