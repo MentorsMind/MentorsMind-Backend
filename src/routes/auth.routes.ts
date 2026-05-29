@@ -1,3 +1,4 @@
+import { MfaOtpController } from "../controllers/mfa-otp.controller";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { AuthController } from "../controllers/auth.controller";
@@ -52,6 +53,23 @@ router.post(
   asyncHandler(MfaController.verifySetup),
 );
 router.post("/mfa/disable", authenticate, asyncHandler(MfaController.disable));
+
+// MFA OTP routes (SMS/email)
+router.post(
+  "/mfa/otp/send",
+  authenticate,
+  asyncHandler(MfaOtpController.sendOtp),
+);
+router.post(
+  "/mfa/otp/setup",
+  authenticate,
+  asyncHandler(MfaOtpController.setupOtp),
+);
+router.post(
+  "/mfa/otp/validate",
+  authLimiter,
+  asyncHandler(MfaOtpController.validateOtp),
+);
 
 // Session management routes
 router.get(

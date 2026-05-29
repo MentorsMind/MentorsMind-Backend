@@ -5,12 +5,26 @@ import { NotificationChannel } from "./notification.service";
 import { logger } from "../utils/logger";
 import { env } from "../config/env";
 
+export interface NotificationAction {
+  id: string;
+  title: string;
+  icon?: string;
+}
+
 export interface PushNotificationPayload {
   title: string;
   body: string;
   data?: Record<string, string>;
   imageUrl?: string;
   clickAction?: string;
+  /** Deep link URI (e.g. mentorminds://session/123) */
+  deepLink?: string;
+  priority?: "high" | "normal";
+  actions?: NotificationAction[];
+  /** APNS-specific sound */
+  sound?: string;
+  /** APNS badge count */
+  badge?: number;
 }
 
 export interface PushSendResult {
@@ -177,13 +191,44 @@ export const PushService = {
 
     try {
       const BATCH_SIZE = 500;
-      const baseMessage = {
+
+      // Build data payload — include deep link and actions if provided
+      const dataPayload: Record<string, string> = { ...(payload.data || {}) };
+      if (payload.deepLink) dataPayload["deepLink"] = payload.deepLink;
+      if (payload.actions?.length)
+        dataPayload["actions"] = JSON.stringify(payload.actions);
+
+      const baseMessage: Omit<admin.messaging.MulticastMessage, "tokens"> = {
         notification: {
           title: payload.title,
           body: payload.body,
           imageUrl: payload.imageUrl,
         },
-        data: payload.data || {},
+        data: dataPayload,
+        android: {
+          priority: payload.priority === "normal" ? "normal" : "high",
+          notification: {
+            imageUrl: payload.imageUrl,
+            clickAction: payload.clickAction ?? payload.deepLink,
+            channelId: dataPayload["type"] ?? "default",
+          },
+        },
+        apns: {
+          headers: {
+            "apns-priority": payload.priority === "normal" ? "5" : "10",
+          },
+          payload: {
+            aps: {
+              alert: { title: payload.title, body: payload.body },
+              sound: payload.sound ?? "default",
+              badge: payload.badge,
+              category: dataPayload["type"],
+            },
+          },
+          fcmOptions: payload.deepLink
+            ? { analyticsLabel: dataPayload["type"] }
+            : undefined,
+        },
         webpush: payload.clickAction
           ? { fcmOptions: { link: payload.clickAction } }
           : undefined,
@@ -316,7 +361,7 @@ export const PushService = {
   },
 
   /**
-   * Test push notification (for debugging)
+   * Send test push notification (for debugging)
    */
   async sendTestNotification(userId: string): Promise<PushSendResult> {
     return this.sendToUser(
@@ -325,6 +370,83 @@ export const PushService = {
       "This is a test push notification from MentorMinds",
       { type: "test" },
     );
+  },
+
+  /**
+   * Send a rich push notification with actions and deep link
+   */
+  async sendRich(
+    userId: string,
+    payload: PushNotificationPayload,
+  ): Promise<PushSendResult> {
+    const result: PushSendResult = {
+      success: false,
+      successCount: 0,
+      failureCount: 0,
+      invalidTokens: [],
+      errors: [],
+    };
+
+    try {
+      if (admin.apps.length === 0) {
+        result.errors.push("Firebase not initialized");
+        return result;
+      }
+
+      const tokens = await PushTokensModel.getActiveTokensByUserId(userId);
+      if (tokens.length === 0) {
+        result.errors.push("No active push tokens found for user");
+        return result;
+      }
+
+      const sendResult = await this.sendToTokens(
+        tokens.map((t) => t.token),
+        payload,
+      );
+
+      if (sendResult.invalidTokens.length > 0) {
+        await this.handleInvalidTokens(sendResult.invalidTokens);
+      }
+
+      return sendResult;
+    } catch (error) {
+      result.errors.push(
+        `Failed to send rich push notification: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+      return result;
+    }
+  },
+
+  /**
+   * Track push notification analytics (delivered/opened/clicked)
+   */
+  async trackAnalytics(
+    notificationType: string,
+    event: "sent" | "delivered" | "opened" | "clicked" | "failed",
+  ): Promise<void> {
+    try {
+      const pool = (await import("../config/database")).default;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const column = {
+        sent: "total_sent",
+        delivered: "total_delivered",
+        opened: "total_opened",
+        clicked: "total_clicked",
+        failed: "total_failed",
+      }[event];
+
+      await pool.query(
+        `INSERT INTO notification_analytics (date, notification_type, channel, ${column})
+         VALUES ($1, $2, 'push', 1)
+         ON CONFLICT (date, notification_type, channel)
+         DO UPDATE SET ${column} = notification_analytics.${column} + 1`,
+        [today, notificationType],
+      );
+    } catch (error) {
+      logger.warn("Failed to track push analytics:", error);
+    }
   },
 };
 
