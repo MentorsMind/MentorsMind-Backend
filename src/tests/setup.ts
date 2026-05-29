@@ -1,15 +1,19 @@
-import { Pool } from 'pg';
-import dotenv from 'dotenv';
-import path from 'path';
+import { Pool } from "pg";
+import dotenv from "dotenv";
+import path from "path";
+
+// Ensure NODE_ENV is 'test' before any app modules are loaded.
+// This triggers the .env.test branch in src/config/env.ts.
+process.env.NODE_ENV = "test";
 
 // Load test environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env.test') });
+dotenv.config({ path: path.resolve(process.cwd(), ".env.test") });
 
 // Create a separate test database connection pool
 export const testPool = new Pool({
   connectionString: process.env.DATABASE_URL_TEST || process.env.DATABASE_URL,
   host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || '5432'),
+  port: parseInt(process.env.DB_PORT || "5432"),
   database: process.env.DB_NAME,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
@@ -23,7 +27,10 @@ export const testPool = new Pool({
  */
 export async function initializeTestDatabase(): Promise<void> {
   try {
-    console.log('🔄 Initializing test database...');
+    console.log("🔄 Initializing test database...");
+
+    // Required for gen_random_uuid()
+    await testPool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
 
     // Create users table first (referenced by other tables)
     await testPool.query(`
@@ -43,6 +50,68 @@ export async function initializeTestDatabase(): Promise<void> {
       
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+    `);
+
+    // Create wallets table
+    await testPool.query(`
+      CREATE TABLE IF NOT EXISTS wallets (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        stellar_public_key VARCHAR(56) NOT NULL UNIQUE,
+        status VARCHAR(20) NOT NULL DEFAULT 'active',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        
+        CONSTRAINT wallets_status_check CHECK (status IN ('active', 'inactive', 'suspended')),
+        CONSTRAINT wallets_stellar_key_format CHECK (stellar_public_key ~ '^G[A-Z2-7]{55}$')
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
+      CREATE INDEX IF NOT EXISTS idx_wallets_stellar_key ON wallets(stellar_public_key);
+      CREATE INDEX IF NOT EXISTS idx_wallets_status ON wallets(status);
+    `);
+
+    // Create payout_requests table
+    await testPool.query(`
+      CREATE TABLE IF NOT EXISTS payout_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(20, 7) NOT NULL,
+        asset_code VARCHAR(12) NOT NULL DEFAULT 'XLM',
+        asset_issuer VARCHAR(56),
+        destination_address VARCHAR(56) NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        memo VARCHAR(28),
+        requested_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        processed_at TIMESTAMP WITH TIME ZONE,
+        transaction_hash VARCHAR(64),
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_payout_requests_user_id ON payout_requests(user_id);
+      CREATE INDEX IF NOT EXISTS idx_payout_requests_status ON payout_requests(status);
+      CREATE INDEX IF NOT EXISTS idx_payout_requests_requested_at ON payout_requests(requested_at);
+      CREATE INDEX IF NOT EXISTS idx_payout_requests_transaction_hash ON payout_requests(transaction_hash);
+    `);
+
+    // Create wallet_events table
+    await testPool.query(`
+      CREATE TABLE IF NOT EXISTS wallet_events (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        event_type VARCHAR(50) NOT NULL,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_wallet_events_user_id ON wallet_events(user_id);
+      CREATE INDEX IF NOT EXISTS idx_wallet_events_event_type ON wallet_events(event_type);
+      CREATE INDEX IF NOT EXISTS idx_wallet_events_created_at ON wallet_events(created_at);
+      CREATE INDEX IF NOT EXISTS idx_wallet_events_user_type ON wallet_events(user_id, event_type);
     `);
 
     // Create audit_logs table
@@ -157,9 +226,9 @@ export async function initializeTestDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(token_jti);
     `);
 
-    console.log('✅ Test database initialized successfully');
+    console.log("✅ Test database initialized successfully");
   } catch (error) {
-    console.error('❌ Failed to initialize test database:', error);
+    console.error("❌ Failed to initialize test database:", error);
     throw error;
   }
 }
@@ -170,6 +239,9 @@ export async function initializeTestDatabase(): Promise<void> {
 export async function truncateAllTables(): Promise<void> {
   try {
     await testPool.query(`
+      TRUNCATE TABLE wallet_events CASCADE;
+      TRUNCATE TABLE payout_requests CASCADE;
+      TRUNCATE TABLE wallets CASCADE;
       TRUNCATE TABLE sessions CASCADE;
       TRUNCATE TABLE disputes CASCADE;
       TRUNCATE TABLE transactions CASCADE;
@@ -179,7 +251,7 @@ export async function truncateAllTables(): Promise<void> {
       TRUNCATE TABLE users CASCADE;
     `);
   } catch (error) {
-    console.error('Failed to truncate tables:', error);
+    console.error("Failed to truncate tables:", error);
     throw error;
   }
 }
@@ -199,7 +271,7 @@ export async function dropAllTables(): Promise<void> {
       DROP TABLE IF EXISTS users CASCADE;
     `);
   } catch (error) {
-    console.error('Failed to drop tables:', error);
+    console.error("Failed to drop tables:", error);
     throw error;
   }
 }
@@ -210,9 +282,9 @@ export async function dropAllTables(): Promise<void> {
 export async function closeTestDatabase(): Promise<void> {
   try {
     await testPool.end();
-    console.log('✅ Test database connections closed');
+    console.log("✅ Test database connections closed");
   } catch (error) {
-    console.error('Failed to close test database:', error);
+    console.error("Failed to close test database:", error);
     throw error;
   }
 }
@@ -231,6 +303,3 @@ beforeEach(async () => {
 afterAll(async () => {
   await closeTestDatabase();
 }, 30000);
-// Ensure NODE_ENV is 'test' before any modules are loaded.
-// This triggers the .env.test branch in src/config/env.ts.
-process.env.NODE_ENV = 'test';

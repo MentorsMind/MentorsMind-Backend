@@ -1,290 +1,107 @@
-import { Router } from 'express';
-import { ResponseUtil } from '../utils/response.utils';
-import { authLimiter } from '../middleware/rate-limit.middleware';
-import { handleTokenRefresh } from '../middleware/token-refresh.middleware';
-import { authenticate } from '../middleware/auth.middleware';
-import { TokenService } from '../services/token.service';
-import { JwtUtils } from '../utils/jwt.utils';
-import { AuthenticatedRequest } from '../types/api.types';
+import { MfaOtpController } from "../controllers/mfa-otp.controller";
+import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { AuthController } from "../controllers/auth.controller";
+import { SessionsController } from "../controllers/sessions.controller";
+import { MfaController } from "../controllers/mfa.controller";
+import { OAuthController } from "../controllers/oauth.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { handleTokenRefresh } from "../middleware/token-refresh.middleware";
+import { asyncHandler } from "../utils/asyncHandler.utils";
+import { loginLockoutCheck } from "../middleware/rate-limit.middleware";
 
 const router = Router();
 
-router.use(authLimiter);
-
-/**
- * @swagger
- * /auth/register:
- *   post:
- *     summary: Register a new user
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RegisterRequest'
- *           example:
- *             email: jane.doe@example.com
- *             password: SecurePass1
- *             firstName: Jane
- *             lastName: Doe
- *             role: mentee
- *     responses:
- *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthTokens'
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       409:
- *         description: Email already in use
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/register', (_req, res) => {
-  ResponseUtil.success(res, null, 'Registration endpoint - to be implemented');
+// Apply stricter rate limiting for auth endpoints to prevent brute force attacks
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // Limit each IP to 10 requests per windowMs for auth routes
+  message: {
+    success: false,
+    error: "Too many requests, please try again later.",
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-/**
- * @swagger
- * /auth/login:
- *   post:
- *     summary: Login with email and password
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/LoginRequest'
- *           example:
- *             email: jane.doe@example.com
- *             password: SecurePass1
- *     responses:
- *       200:
- *         description: Login successful
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthTokens'
- *       401:
- *         description: Invalid credentials
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/login', (_req, res) => {
-  ResponseUtil.success(res, null, 'Login endpoint - to be implemented');
-});
+// Public routes (rate limited)
+router.post("/register", authLimiter, AuthController.register);
+// loginLockoutCheck runs before the handler to short-circuit locked accounts early
+router.post(
+  "/login",
+  authLimiter,
+  asyncHandler(loginLockoutCheck),
+  AuthController.login,
+);
+router.post("/refresh", authLimiter, asyncHandler(handleTokenRefresh));
+router.post("/forgot-password", authLimiter, AuthController.forgotPassword);
+router.post("/reset-password", authLimiter, AuthController.resetPassword);
 
-/**
- * @swagger
- * /auth/refresh:
- *   post:
- *     summary: Refresh access token
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RefreshTokenRequest'
- *     responses:
- *       200:
- *         description: New access token issued
- *         content:
- *           application/json:
- *             schema:
- *               allOf:
- *                 - $ref: '#/components/schemas/ApiResponse'
- *                 - type: object
- *                   properties:
- *                     data:
- *                       $ref: '#/components/schemas/AuthTokens'
- *       401:
- *         description: Invalid or expired refresh token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/refresh', handleTokenRefresh);
+// MFA Public routes
+router.post("/mfa/validate", authLimiter, asyncHandler(MfaController.validate));
+router.post("/mfa/backup", authLimiter, asyncHandler(MfaController.backup));
 
-/**
- * @swagger
- * /auth/logout:
- *   post:
- *     summary: Logout and invalidate refresh token
- *     tags: [Auth]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/RefreshTokenRequest'
- *     responses:
- *       200:
- *         description: Logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/logout', authenticate, async (req: AuthenticatedRequest, res) => {
-  try {
-    const { refreshToken } = req.body;
-    const authHeader = req.headers.authorization;
+// Protected routes (no strict rate limiting required beyond global)
+router.post("/logout", authenticate, AuthController.logout);
+router.get("/me", authenticate, AuthController.getMe);
 
-    if (authHeader) {
-      const accessToken = authHeader.substring(7);
-      const decoded = JwtUtils.verifyAccessToken(accessToken);
-      // Blacklist the access token until its natural expiration
-      await TokenService.blacklistToken(decoded.jti, decoded.exp);
-    }
+// MFA Protected routes
+router.post("/mfa/setup", authenticate, asyncHandler(MfaController.setup));
+router.post(
+  "/mfa/verify-setup",
+  authenticate,
+  asyncHandler(MfaController.verifySetup),
+);
+router.post("/mfa/disable", authenticate, asyncHandler(MfaController.disable));
 
-    if (refreshToken) {
-      // Revoke the refresh token from DB
-      await TokenService.revokeRefreshToken(refreshToken);
-    }
+// MFA OTP routes (SMS/email)
+router.post(
+  "/mfa/otp/send",
+  authenticate,
+  asyncHandler(MfaOtpController.sendOtp),
+);
+router.post(
+  "/mfa/otp/setup",
+  authenticate,
+  asyncHandler(MfaOtpController.setupOtp),
+);
+router.post(
+  "/mfa/otp/validate",
+  authLimiter,
+  asyncHandler(MfaOtpController.validateOtp),
+);
 
-    ResponseUtil.success(res, null, 'Logged out successfully');
-  } catch {
-    // Even if something fails (like invalid token), we want to return success or generic message
-    ResponseUtil.success(res, null, 'Logged out successfully');
-  }
-});
+// Session management routes
+router.get(
+  "/sessions",
+  authenticate,
+  asyncHandler(SessionsController.listSessions),
+);
+router.delete(
+  "/sessions",
+  authenticate,
+  asyncHandler(SessionsController.revokeAllSessions),
+);
+router.delete(
+  "/sessions/:id",
+  authenticate,
+  asyncHandler(SessionsController.revokeSession),
+);
 
-/**
- * @swagger
- * /auth/forgot-password:
- *   post:
- *     summary: Request a password reset email
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ForgotPasswordRequest'
- *           example:
- *             email: jane.doe@example.com
- *     responses:
- *       200:
- *         description: Reset email sent (if account exists)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- */
-router.post('/forgot-password', (_req, res) => {
-  ResponseUtil.success(
-    res,
-    null,
-    'Forgot password endpoint - to be implemented',
-  );
-});
-
-/**
- * @swagger
- * /auth/reset-password:
- *   post:
- *     summary: Reset password using a reset token
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ResetPasswordRequest'
- *     responses:
- *       200:
- *         description: Password reset successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- *       400:
- *         description: Invalid or expired token
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/reset-password', (_req, res) => {
-  ResponseUtil.success(
-    res,
-    null,
-    'Reset password endpoint - to be implemented',
-  );
-});
-
-/**
- * @swagger
- * /auth/change-password:
- *   post:
- *     summary: Change password for authenticated user
- *     tags: [Auth]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/ChangePasswordRequest'
- *     responses:
- *       200:
- *         description: Password changed successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ApiResponse'
- *       400:
- *         description: Current password incorrect
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
-router.post('/change-password', (_req, res) => {
-  ResponseUtil.success(
-    res,
-    null,
-    'Change password endpoint - to be implemented',
-  );
-});
+// OAuth routes
+router.get("/google", asyncHandler(OAuthController.googleAuth));
+router.get("/google/callback", asyncHandler(OAuthController.googleCallback));
+router.get("/github", asyncHandler(OAuthController.githubAuth));
+router.get("/github/callback", asyncHandler(OAuthController.githubCallback));
+router.get(
+  "/oauth/providers",
+  authenticate,
+  asyncHandler(OAuthController.getLinkedProviders),
+);
+router.delete(
+  "/oauth/:provider",
+  authenticate,
+  asyncHandler(OAuthController.unlinkProvider),
+);
 
 export default router;

@@ -119,10 +119,10 @@ Once a dispute is opened:
 - Minor issues that don't warrant refund
 - Mentor provided reasonable accommodation
 
-**Option 2: Refund to Learner**
+**Option 2: Refund to Mentee**
 ```json
 {
-  "resolution": "refund_to_learner",
+  "resolution": "refund_to_mentee",
   "notes": "Mentor failed to deliver agreed service."
 }
 ```

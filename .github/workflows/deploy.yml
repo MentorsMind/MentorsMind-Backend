@@ -1,0 +1,81 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: mentorminds-backend
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
+  GHCR_LATEST: ghcr.io/${{ github.repository }}:latest
+  ECR_IMAGE: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
+  ECR_LATEST: ${{ secrets.ECR_REGISTRY }}/${{ secrets.ECR_REPOSITORY }}:latest
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - run: npm ci
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}
+          cache-to: type=inline
+          push: true
+          tags: |
+            ${{ env.GHCR_IMAGE }}
+            ${{ env.GHCR_LATEST }}
+            ${{ env.ECR_IMAGE }}
+            ${{ env.ECR_LATEST }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          region: ${{ secrets.AWS_REGION }}
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "📦 Deploying ${{ env.ECR_IMAGE }} to staging"
+          echo "Replace this step with actual infrastructure deploy command (kubectl/ecs/terraform)"
+
+  deploy-production:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Manual production deploy
+        run: |
+          echo "📦 Manual deploy to production requested"
+          echo "Replace this step with actual production deploy command"
+
+  notify-slack:
+    needs: [build-and-push, deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,commit,author
+          author_name: MentorMinds CI
+          title: "Deploy workflow ${{ github.workflow }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

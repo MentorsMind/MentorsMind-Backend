@@ -7,3 +7,4 @@ export * from './user.factory';
 export * from './mentor.factory';
 export * from './session.factory';
 export * from './payment.factory';
+export * from './wallet.factory';

@@ -53,6 +53,34 @@ Use the **Authorize** button (🔒) above to set your token for all requests.
         },
       },
       schemas: {
+        // Common response schemas
+        SuccessResponse: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', example: 'success' },
+            message: { type: 'string' },
+            data: { type: 'object' },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        ErrorResponse: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', example: 'error' },
+            message: { type: 'string' },
+            error: { type: 'string' },
+            timestamp: { type: 'string', format: 'date-time' },
+          },
+        },
+        PaginationMeta: {
+          type: 'object',
+          properties: {
+            page: { type: 'integer' },
+            limit: { type: 'integer' },
+            total: { type: 'integer' },
+            hasMore: { type: 'boolean' },
+          },
+        },
         ...commonSchemas,
         ...authSchemas,
         ...userSchemas,
@@ -82,7 +110,9 @@ Use the **Authorize** button (🔒) above to set your token for all requests.
         name: 'Admin',
         description: 'Platform administration (admin role required)',
       },
+      { name: 'Bookings', description: 'Session booking and meeting management' },
+      { name: 'Notifications', description: 'In-app and push notifications' },
     ],
   },
-  apis: ['./src/routes/*.ts'],
+  apis: ['./src/routes/*.ts', './src/docs/schemas/*.ts'],
 };

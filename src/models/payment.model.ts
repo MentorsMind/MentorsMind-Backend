@@ -1,25 +1,27 @@
-import pool from '../config/database';
+import pool from "../config/database";
+import { logger } from "../utils/logger";
 
 export interface Payment {
   id: string;
   user_id: string;
   amount: number;
   currency: string;
-  status: 'pending' | 'completed' | 'failed';
-  transaction_hash: string | null;
+  status: "pending" | "completed" | "failed" | "refunded";
+  stellar_tx_hash: string | null;
   created_at: Date;
 }
 
 export const PaymentModel = {
   async initializeTable(): Promise<void> {
+    // This is now handled by transactions table, but keeping the method for compatibility
     const query = `
-      CREATE TABLE IF NOT EXISTS payments (
+      CREATE TABLE IF NOT EXISTS transactions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         amount DECIMAL(12, 2) NOT NULL,
         currency VARCHAR(10) DEFAULT 'USD',
         status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        transaction_hash TEXT,
+        stellar_tx_hash TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );
     `;
@@ -27,15 +29,32 @@ export const PaymentModel = {
   },
 
   async findByUserId(userId: string): Promise<Payment[]> {
-    const query = 'SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC;';
+    const query =
+      "SELECT * FROM transactions WHERE user_id = $1 ORDER BY created_at DESC;";
     const { rows } = await pool.query<Payment>(query, [userId]);
     return rows;
   },
 
-  async findEarningsByMentorId(mentorId: string, from?: string, to?: string): Promise<any[]> {
+  /**
+   * Bulk fetch payments for multiple users.
+   * Returns one array per requested userId.
+   */
+  async findByUserIds(userIds: string[]): Promise<Payment[]> {
+    if (userIds.length === 0) return [];
+    const query =
+      "SELECT * FROM transactions WHERE user_id = ANY($1) ORDER BY user_id, created_at DESC;";
+    const { rows } = await pool.query<Payment>(query, [userIds]);
+    return rows;
+  },
+
+  async findEarningsByMentorId(
+    mentorId: string,
+    from?: string,
+    to?: string,
+  ): Promise<any[]> {
     let query = `
       SELECT p.*, s.start_time as session_time
-      FROM payments p
+      FROM transactions p
       JOIN sessions s ON p.user_id = s.learner_id
       WHERE s.mentor_id = $1
     `;
@@ -50,8 +69,29 @@ export const PaymentModel = {
       query += ` AND p.created_at <= $${params.length}`;
     }
 
-    query += ' ORDER BY p.created_at DESC;';
+    query += " ORDER BY p.created_at DESC;";
     const { rows } = await pool.query(query, params);
     return rows;
+  },
+  /**
+   * Delete payments (transactions) older than given number of years.
+   * Returns number of records deleted.
+   */
+  async deleteOlderThanYears(years: number): Promise<number> {
+    try {
+      const { rowCount } = await pool.query(
+        `DELETE FROM transactions WHERE created_at < NOW() - ($1::int * INTERVAL '1 year') RETURNING id;`,
+        [years],
+      );
+
+      const deleted = rowCount ?? 0;
+      if (deleted > 0) {
+        logger.info('PaymentModel: deleted old payments', { years, deleted });
+      }
+      return deleted;
+    } catch (error) {
+      logger.error('Failed to delete old payments:', error);
+      return 0;
+    }
   },
 };

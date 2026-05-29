@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>{{subject}}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+    <style>
+        /* Reset styles */
+        body,
+        table,
+        td,
+        a {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+
+        table,
+        td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+
+        img {
+            -ms-interpolation-mode: bicubic;
+        }
+
+        /* Remove spacing around tables in Outlook */
+        img {
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+
+        table {
+            border-collapse: collapse !important;
+        }
+
+        body {
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+
+        /* iOS blue links */
+        a[x-apple-data-detectors] {
+            color: inherit !important;
+            text-decoration: none !important;
+            font-size: inherit !important;
+            font-family: inherit !important;
+            font-weight: inherit !important;
+            line-height: inherit !important;
+        }
+
+        /* Gmail blue links */
+        u+#body a {
+            color: inherit;
+            text-decoration: none;
+            font-size: inherit;
+            font-family: inherit;
+            font-weight: inherit;
+            line-height: inherit;
+        }
+
+        /* Samsung Mail */
+        #MessageViewBody a {
+            color: inherit;
+            text-decoration: none;
+            font-size: inherit;
+            font-family: inherit;
+            font-weight: inherit;
+            line-height: inherit;
+        }
+
+        /* Responsive styles */
+        @media screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+
+            .fluid {
+                max-width: 100% !important;
+                height: auto !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+            }
+
+            .stack-column,
+            .stack-column-center {
+                display: block !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                direction: ltr !important;
+            }
+
+            .stack-column-center {
+                text-align: center !important;
+            }
+
+            .center-on-narrow {
+                text-align: center !important;
+                display: block !important;
+                margin-left: auto !important;
+                margin-right: auto !important;
+                float: none !important;
+            }
+
+            table.center-on-narrow {
+                display: inline-block !important;
+            }
+        }
+    </style>
+</head>
+
+<body id="body" style="margin: 0 !important; padding: 0 !important; background-color: #f4f4f4;">
+
+    <!-- Preview text (hidden) -->
+    <div
+        style="display: none; font-size: 1px; color: #fefefe; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: none;">
+        {{previewText}}
+    </div>
+
+    <!-- Email wrapper -->
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"
+        style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 20px 0;">
+
+                <!-- Email container -->
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600"
+                    style="margin: auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);"
+                    class="email-container">
+
+                    <!-- Header with logo -->
+                    <tr>
+                        <td
+                            style="padding: 30px 40px; text-align: center; background-color: #4A90E2; border-radius: 8px 8px 0 0;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                <tr>
+                                    <td style="text-align: center;">
+                                        <!-- Logo -->
+                                        <img src="{{logoUrl}}" alt="MentorMinds" width="180" height="auto"
+                                            style="display: block; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Main content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                <tr>
+                                    <td
+                                        style="font-family: Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #333333;">
+                                        {{{content}}}
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td
+                            style="padding: 30px 40px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; border-top: 1px solid #e9ecef;">
+                            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                <tr>
+                                    <td
+                                        style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #666666; text-align: center;">
+                                        <p style="margin: 0 0 15px 0;">
+                                            Best regards,<br>
+                                            <strong>The MentorMinds Team</strong>
+                                        </p>
+
+                                        <!-- Social links -->
+                                        <table role="presentation" cellspacing="0" cellpadding="0" border="0"
+                                            style="margin: 20px auto;">
+                                            <tr>
+                                                <td style="padding: 0 10px;">
+                                                    <a href="{{twitterUrl}}"
+                                                        style="color: #4A90E2; text-decoration: none;">
+                                                        <img src="https://cdn-icons-png.flaticon.com/512/733/733579.png"
+                                                            alt="Twitter" width="24" height="24"
+                                                            style="display: block;">
+                                                    </a>
+                                                </td>
+                                                <td style="padding: 0 10px;">
+                                                    <a href="{{linkedinUrl}}"
+                                                        style="color: #4A90E2; text-decoration: none;">
+                                                        <img src="https://cdn-icons-png.flaticon.com/512/733/733561.png"
+                                                            alt="LinkedIn" width="24" height="24"
+                                                            style="display: block;">
+                                                    </a>
+                                                </td>
+                                                <td style="padding: 0 10px;">
+                                                    <a href="{{facebookUrl}}"
+                                                        style="color: #4A90E2; text-decoration: none;">
+                                                        <img src="https://cdn-icons-png.flaticon.com/512/733/733547.png"
+                                                            alt="Facebook" width="24" height="24"
+                                                            style="display: block;">
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <!-- Links -->
+                                        <p style="margin: 15px 0 0 0; font-size: 12px;">
+                                            <a href="{{platformUrl}}"
+                                                style="color: #4A90E2; text-decoration: none; margin: 0 10px;">Visit
+                                                MentorMinds</a>
+                                            <span style="color: #cccccc;">|</span>
+                                            <a href="{{supportUrl}}"
+                                                style="color: #4A90E2; text-decoration: none; margin: 0 10px;">Support</a>
+                                            <span style="color: #cccccc;">|</span>
+                                            <a href="{{privacyUrl}}"
+                                                style="color: #4A90E2; text-decoration: none; margin: 0 10px;">Privacy
+                                                Policy</a>
+                                        </p>
+
+                                        <!-- Unsubscribe -->
+                                        <p style="margin: 20px 0 0 0; font-size: 11px; color: #999999;">
+                                            You received this email because you signed up for MentorMinds.<br>
+                                            <a href="{{unsubscribeUrl}}"
+                                                style="color: #999999; text-decoration: underline;">Unsubscribe</a> |
+                                            <a href="{{preferencesUrl}}"
+                                                style="color: #999999; text-decoration: underline;">Email
+                                                Preferences</a>
+                                        </p>
+
+                                        <!-- Copyright -->
+                                        <p style="margin: 15px 0 0 0; font-size: 11px; color: #999999;">
+                                            &copy; {{currentYear}} MentorMinds. All rights reserved.<br>
+                                            {{companyAddress}}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                </table>
+                <!-- End email container -->
+
+            </td>
+        </tr>
+    </table>
+    <!-- End email wrapper -->
+
+</body>
+
+</html>

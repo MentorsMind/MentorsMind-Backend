@@ -1,0 +1,71 @@
+{{#> base-layout}}
+{{#*inline "content"}}
+<h2 style="color: #4A90E2; margin: 0 0 20px 0; font-size: 24px;">Payment Received ✓</h2>
+
+<p style="margin: 0 0 20px 0;">
+    Hi {{userName}},
+</p>
+
+<p style="margin: 0 0 20px 0;">
+    We've successfully processed your payment. Here are the details:
+</p>
+
+<div
+    style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
+    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">Payment Details</h3>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px; width: 40%;">
+                <strong>Amount:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{amount}} XLM
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Transaction ID:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px; word-break: break-all;">
+                {{transactionId}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Date:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{paymentDate}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Description:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{description}}
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{transactionUrl}}"
+        style="display: inline-block; background-color: #4A90E2; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        View Transaction
+    </a>
+</div>
+
+<div
+    style="background-color: #d4edda; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #28a745;">
+    <p style="margin: 0; color: #155724; font-size: 14px;">
+        <strong>Payment Confirmed:</strong> Your payment has been successfully processed and is now reflected in your
+        wallet balance.
+    </p>
+</div>
+
+<p style="margin: 20px 0 0 0; color: #666; font-size: 14px;">
+    If you have any questions about this payment, please contact our support team.
+</p>
+{{/inline}}
+{{/base-layout}}

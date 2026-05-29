@@ -1,0 +1,5 @@
+Hi {{userName}},
+
+Your account deletion is complete. Personal data has been erased or anonymized. Transaction records required for compliance have been retained without identifiable information.
+
+Thank you for using MentorMinds.

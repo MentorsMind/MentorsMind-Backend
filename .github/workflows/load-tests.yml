@@ -1,0 +1,44 @@
+name: k6 Load Testing
+
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  run-load-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install k6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 software-properties-common
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5B85CD18
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: Run mentor search load test
+        run: k6 run --vus 100 --duration 60s --out json=load-tests/summary-search.json --summary-export=load-tests/summary-search.json load-tests/search.k6.js
+      - name: Run booking load test
+        run: k6 run --vus 50 --duration 60s --out json=load-tests/summary-booking.json --summary-export=load-tests/summary-booking.json load-tests/booking.k6.js
+      - name: Run wallet balance load test
+        run: k6 run --vus 100 --duration 60s --out json=load-tests/summary-wallet.json --summary-export=load-tests/summary-wallet.json load-tests/wallet.k6.js
+      - name: Run websocket load test
+        run: k6 run --vus 500 --duration 60s --out json=load-tests/summary-websocket.json --summary-export=load-tests/summary-websocket.json load-tests/websocket.k6.js
+      - name: Generate HTML report summaries
+        run: |
+          mkdir -p load-tests/reports
+          node - <<'NODE'
+          const fs = require('fs');
+          const tests = ['search','booking','wallet','websocket'];
+          for (const t of tests) {
+            const data = JSON.parse(fs.readFileSync(`load-tests/summary-${t}.json`, 'utf8'));
+            const html = `<!doctype html><html><head><meta charset=utf-8><title>k6-${t}</title></head><body><h1>k6 ${t} test summary</h1><pre>${JSON.stringify(data, null, 2)}</pre></body></html>`;
+            fs.writeFileSync(`load-tests/reports/${t}.html`, html);
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: k6-html-reports
+          path: load-tests/reports/*.html

@@ -11,6 +11,10 @@ export interface Session {
   created_at: Date;
 }
 
+import pool from "../config/database";
+import { PaginationUtil } from "../utils/pagination.utils";
+import { logger } from "../utils/logger";
+
 export interface SessionRecord {
   id: string;
   mentor_id: string;
@@ -19,7 +23,7 @@ export interface SessionRecord {
   description: string | null;
   scheduled_at: Date;
   duration_minutes: number;
-  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  status: "pending" | "confirmed" | "cancelled" | "completed";
   meeting_link: string | null;
   meeting_url: string | null;
   meeting_provider: string | null;
@@ -123,19 +127,80 @@ export const SessionModel = {
    * Find session by ID
    */
   async findById(id: string): Promise<SessionRecord | null> {
-    const query = 'SELECT * FROM sessions WHERE id = $1';
+    const query = "SELECT * FROM sessions WHERE id = $1";
     const { rows } = await pool.query<SessionRecord>(query, [id]);
     return rows[0] ?? null;
   },
 
   /**
-   * Find sessions by user ID (either as mentor or mentee)
+   * Find sessions by user ID (either as mentor or mentee) with cursor pagination
+   */
+  async findByUserIdPaginated(
+    userId: string,
+    filters: { cursor?: string; limit?: number },
+  ): Promise<{
+    sessions: SessionRecord[];
+    next_cursor: string | null;
+    has_more: boolean;
+    total: number;
+  }> {
+    const limit = filters.limit ?? 20;
+
+    const conditions: string[] = ["(mentor_id = $1 OR mentee_id = $1)"];
+    const params: unknown[] = [userId];
+    let idx = 2;
+
+    if (filters.cursor) {
+      const decoded = PaginationUtil.decodeCursor(filters.cursor);
+      if (decoded) {
+        conditions.push(`(scheduled_at, id) < ($${idx}, $${idx + 1})`);
+        params.push(decoded.created_at, decoded.id);
+        idx += 2;
+      }
+    }
+
+    const [{ rows }, { rows: countRows }] = await Promise.all([
+      pool.query<SessionRecord>(
+        `SELECT * FROM sessions
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY scheduled_at DESC, id DESC
+         LIMIT $${idx}`,
+        [...params, limit + 1],
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM sessions WHERE mentor_id = $1 OR mentee_id = $1`,
+        [userId],
+      ),
+    ]);
+
+    const has_more = rows.length > limit;
+    const data = has_more ? rows.slice(0, limit) : rows;
+
+    const lastItem = data[data.length - 1];
+    const next_cursor =
+      has_more && lastItem
+        ? PaginationUtil.encodeCursor({
+            id: lastItem.id,
+            created_at: lastItem.scheduled_at.toISOString(),
+          })
+        : null;
+
+    return {
+      sessions: data,
+      next_cursor,
+      has_more,
+      total: parseInt(countRows[0].count, 10),
+    };
+  },
+
+  /**
+   * Find all sessions for a user (both as mentor and mentee)
    */
   async findByUserId(userId: string): Promise<SessionRecord[]> {
     const query = `
       SELECT * FROM sessions
       WHERE mentor_id = $1 OR mentee_id = $1
-      ORDER BY scheduled_at DESC
+      ORDER BY scheduled_at DESC, id DESC
     `;
 
     const { rows } = await pool.query<SessionRecord>(query, [userId]);
@@ -161,7 +226,10 @@ export const SessionModel = {
   /**
    * Update session status
    */
-  async updateStatus(id: string, status: string): Promise<SessionRecord | null> {
+  async updateStatus(
+    id: string,
+    status: string,
+  ): Promise<SessionRecord | null> {
     const query = `
       UPDATE sessions
       SET status = $1, updated_at = NOW()
@@ -176,10 +244,13 @@ export const SessionModel = {
   /**
    * Update meeting URL and related fields
    */
-  async updateMeetingUrl(id: string, payload: UpdateMeetingUrlPayload): Promise<SessionRecord | null> {
+  async updateMeetingUrl(
+    id: string,
+    payload: UpdateMeetingUrlPayload,
+  ): Promise<SessionRecord | null> {
     const query = `
       UPDATE sessions
-      SET 
+      SET
         meeting_url = $1,
         meeting_provider = $2,
         meeting_room_id = $3,
@@ -225,7 +296,7 @@ export const SessionModel = {
   async markForManualIntervention(id: string): Promise<SessionRecord | null> {
     const query = `
       UPDATE sessions
-      SET 
+      SET
         needs_manual_intervention = TRUE,
         updated_at = NOW()
       WHERE id = $1
@@ -272,7 +343,7 @@ export const SessionModel = {
   async clearManualIntervention(id: string): Promise<boolean> {
     const query = `
       UPDATE sessions
-      SET 
+      SET
         needs_manual_intervention = FALSE,
         updated_at = NOW()
       WHERE id = $1
@@ -287,9 +358,65 @@ export const SessionModel = {
    * Delete a session
    */
   async delete(id: string): Promise<boolean> {
-    const query = 'DELETE FROM sessions WHERE id = $1 RETURNING id';
+    const query = "DELETE FROM sessions WHERE id = $1 RETURNING id";
     const { rowCount } = await pool.query(query, [id]);
     return (rowCount ?? 0) > 0;
+  },
+
+  /**
+   * Archive sessions older than the specified number of years.
+   * Moves rows into `sessions_archive` and deletes from `sessions` in a single CTE.
+   * Returns number of archived sessions.
+   */
+  async archiveOlderThanYears(years: number): Promise<number> {
+    // Ensure archive table exists (small, safe DDL guard)
+    const createArchiveTable = `
+      CREATE TABLE IF NOT EXISTS sessions_archive (
+        id UUID PRIMARY KEY,
+        mentor_id UUID NOT NULL,
+        mentee_id UUID NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        duration_minutes INTEGER NOT NULL DEFAULT 60,
+        status VARCHAR(20),
+        meeting_link VARCHAR(500),
+        meeting_url VARCHAR(500),
+        meeting_provider VARCHAR(50),
+        meeting_room_id VARCHAR(255),
+        meeting_expires_at TIMESTAMP WITH TIME ZONE,
+        needs_manual_intervention BOOLEAN,
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE,
+        updated_at TIMESTAMP WITH TIME ZONE,
+        archived_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `;
+
+    const moveQuery = `
+      WITH moved AS (
+        DELETE FROM sessions
+        WHERE created_at < NOW() - ($1::int * INTERVAL '1 year')
+        RETURNING id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at
+      )
+      INSERT INTO sessions_archive (id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at, archived_at)
+      SELECT id, mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, status, meeting_link, meeting_url, meeting_provider, meeting_room_id, meeting_expires_at, needs_manual_intervention, notes, created_at, updated_at, NOW()
+      FROM moved
+      RETURNING id;
+    `;
+
+    try {
+      await pool.query(createArchiveTable);
+      const { rowCount } = await pool.query(moveQuery, [years]);
+      const moved = rowCount ?? 0;
+      if (moved > 0) {
+        logger.info('SessionModel: archived old sessions', { years, moved });
+      }
+      return moved;
+    } catch (error) {
+      logger.error('Failed to archive old sessions:', error);
+      return 0;
+    }
   },
 };
 

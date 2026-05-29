@@ -1,0 +1,83 @@
+{{#> base-layout}}
+{{#*inline "content"}}
+<h2 style="color: #dc3545; margin: 0 0 20px 0; font-size: 24px;">Account Suspended</h2>
+
+<p style="margin: 0 0 20px 0;">
+    Hi {{userName}},
+</p>
+
+<p style="margin: 0 0 20px 0;">
+    We're writing to inform you that your MentorMinds account has been suspended.
+</p>
+
+<div
+    style="background-color: #f8d7da; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545;">
+    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">Suspension Details</h3>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px; width: 40%;">
+                <strong>Reason:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{reason}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Suspended On:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{suspensionDate}}
+            </td>
+        </tr>
+        {{#if duration}}
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Duration:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{duration}}
+            </td>
+        </tr>
+        {{/if}}
+    </table>
+
+    {{#if details}}
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #f5c6cb;">
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">
+            <strong>Additional Details:</strong>
+        </p>
+        <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6;">
+            {{details}}
+        </p>
+    </div>
+    {{/if}}
+</div>
+
+<div
+    style="background-color: #fff3cd; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #ffc107;">
+    <p style="margin: 0; color: #856404; font-size: 14px;">
+        <strong>What This Means:</strong><br>
+        • You cannot access your account during the suspension period<br>
+        • Any pending sessions have been cancelled<br>
+        • Your wallet balance is secure and will be available after suspension ends
+    </p>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{appealUrl}}"
+        style="display: inline-block; background-color: #4A90E2; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        Appeal Suspension
+    </a>
+</div>
+
+<p style="margin: 20px 0 0 0; color: #666; font-size: 14px;">
+    If you believe this suspension was made in error, you can appeal by clicking the button above. Our support team will
+    review your case.
+</p>
+
+<p style="margin: 15px 0 0 0; color: #666; font-size: 14px;">
+    For questions, contact us at <a href="mailto:{{supportEmail}}" style="color: #4A90E2;">{{supportEmail}}</a>
+</p>
+{{/inline}}
+{{/base-layout}}

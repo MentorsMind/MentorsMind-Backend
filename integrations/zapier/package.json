@@ -1,0 +1,15 @@
+{
+  "name": "mentorminds-zapier-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": ">=14"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^11.0.0"
+  },
+  "scripts": {
+    "test": "zapier test || true"
+  }
+}

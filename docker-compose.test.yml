@@ -1,0 +1,46 @@
+# Integration tests in Docker (CI or local). Uses builder stage so Jest + ts-jest are available.
+# Env file: .env.docker.test (committed; Docker network hostnames for postgres/redis).
+
+services:
+  test-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    env_file:
+      - .env.docker.test
+    command: npm run test -- --runInBand --coverage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - mentorminds-test-network
+
+  postgres:
+    image: postgres:15-alpine
+    env_file:
+      - .env.docker.test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - mentorminds-test-network
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - mentorminds-test-network
+
+networks:
+  mentorminds-test-network:

@@ -1,0 +1,90 @@
+{{#> base-layout}}
+{{#*inline "content"}}
+<h2 style="color: #4A90E2; margin: 0 0 20px 0; font-size: 24px;">Dispute Opened</h2>
+
+<p style="margin: 0 0 20px 0;">
+    Hi {{userName}},
+</p>
+
+<p style="margin: 0 0 20px 0;">
+    A dispute has been opened regarding one of your sessions. Please review the details below:
+</p>
+
+<div
+    style="background-color: #fff3cd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #ffc107;">
+    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">Dispute Details</h3>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px; width: 40%;">
+                <strong>Dispute ID:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{disputeId}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Session:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{sessionTopic}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Amount:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{amount}} XLM
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Filed By:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{filedByName}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Date:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{disputeDate}}
+            </td>
+        </tr>
+    </table>
+
+    {{#if reason}}
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">
+            <strong>Reason:</strong>
+        </p>
+        <p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6;">
+            {{reason}}
+        </p>
+    </div>
+    {{/if}}
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{disputeUrl}}"
+        style="display: inline-block; background-color: #ffc107; color: #333; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        View Dispute Details
+    </a>
+</div>
+
+<div
+    style="background-color: #f8d7da; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #dc3545;">
+    <p style="margin: 0; color: #721c24; font-size: 14px;">
+        <strong>Action Required:</strong> Please respond to this dispute within 48 hours. Our support team will review
+        the case and make a decision based on the evidence provided by both parties.
+    </p>
+</div>
+
+<p style="margin: 20px 0 0 0; color: #666; font-size: 14px;">
+    If you have any questions, please contact our support team.
+</p>
+{{/inline}}
+{{/base-layout}}

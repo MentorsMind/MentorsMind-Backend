@@ -2,6 +2,12 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../types/api.types';
 import { UsersService } from '../services/users.service';
 import { ResponseUtil } from '../utils/response.utils';
+import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
+import { accountDeletionService } from '../services/accountDeletion.service';
+
+function getAuthenticatedUserId(req: AuthenticatedRequest): string {
+  return (req.user as any)?.id ?? (req.user as any)?.userId;
+}
 
 export const UsersController = {
   /** GET /users/:id */
@@ -16,28 +22,82 @@ export const UsersController = {
 
   /** PUT /users/:id */
   async updateUser(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { firstName, lastName, bio } = req.body;
-    const updated = await UsersService.update(req.params.id as string, { firstName, lastName, bio });
+    const {
+      firstName,
+      lastName,
+      bio,
+      phoneNumber,
+      dateOfBirth,
+      governmentIdNumber,
+      bankAccountDetails,
+    } = req.body;
+    const userId = req.params.id as string;
+    
+    // Get old values for audit
+    const oldUser = await UsersService.findById(userId);
+    
+    const updated = await UsersService.update(userId, {
+      firstName,
+      lastName,
+      bio,
+      phoneNumber,
+      dateOfBirth,
+      governmentIdNumber,
+      bankAccountDetails,
+    });
     if (!updated) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log profile update
+    await AuditLogService.log({
+      userId: getAuthenticatedUserId(req),
+      action: 'PROFILE_UPDATED',
+      resourceType: 'user',
+      resourceId: userId,
+      oldValue: oldUser ? { 
+        first_name: oldUser.first_name, 
+        last_name: oldUser.last_name, 
+        bio: oldUser.bio 
+      } : null,
+      newValue: { 
+        first_name: updated.first_name, 
+        last_name: updated.last_name, 
+        bio: updated.bio 
+      },
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.success(res, updated, 'User updated successfully');
   },
 
   /** DELETE /users/:id */
   async deleteUser(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const deleted = await UsersService.deactivate(req.params.id as string);
+    const userId = req.params.id as string;
+    const deleted = await UsersService.deactivate(userId);
     if (!deleted) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log user deactivation
+    await AuditLogService.log({
+      userId: req.user!.id,
+      action: 'USER_DEACTIVATED',
+      resourceType: 'user',
+      resourceId: userId,
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.noContent(res);
   },
 
   /** GET /users/me */
   async getMe(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const user = await UsersService.findById(req.user!.id);
+    const user = await UsersService.findById(getAuthenticatedUserId(req));
     if (!user) {
       ResponseUtil.notFound(res, 'User not found');
       return;
@@ -47,12 +107,54 @@ export const UsersController = {
 
   /** PUT /users/me */
   async updateMe(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { firstName, lastName, bio } = req.body;
-    const updated = await UsersService.update(req.user!.id, { firstName, lastName, bio });
+    const {
+      firstName,
+      lastName,
+      bio,
+      phoneNumber,
+      dateOfBirth,
+      governmentIdNumber,
+      bankAccountDetails,
+    } = req.body;
+    const userId = getAuthenticatedUserId(req);
+    
+    // Get old values for audit
+    const oldUser = await UsersService.findById(userId);
+    
+    const updated = await UsersService.update(userId, {
+      firstName,
+      lastName,
+      bio,
+      phoneNumber,
+      dateOfBirth,
+      governmentIdNumber,
+      bankAccountDetails,
+    });
     if (!updated) {
       ResponseUtil.notFound(res, 'User not found');
       return;
     }
+    
+    // Log profile update
+    await AuditLogService.log({
+      userId,
+      action: 'PROFILE_UPDATED',
+      resourceType: 'user',
+      resourceId: userId,
+      oldValue: oldUser ? { 
+        first_name: oldUser.first_name, 
+        last_name: oldUser.last_name, 
+        bio: oldUser.bio 
+      } : null,
+      newValue: { 
+        first_name: updated.first_name, 
+        last_name: updated.last_name, 
+        bio: updated.bio 
+      },
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
     ResponseUtil.success(res, updated, 'Profile updated successfully');
   },
 
@@ -61,7 +163,7 @@ export const UsersController = {
     const { avatarBase64 } = req.body;
     // Derive a stable key for storage (e.g. future S3 integration uses this as the object key)
     const avatarUrl = avatarBase64; // placeholder: replace with URL after uploading to storage
-    const updated = await UsersService.updateAvatar(req.user!.id, avatarUrl);
+    const updated = await UsersService.updateAvatar(getAuthenticatedUserId(req), avatarUrl);
     if (!updated) {
       ResponseUtil.notFound(res, 'User not found');
       return;
@@ -77,5 +179,35 @@ export const UsersController = {
       return;
     }
     ResponseUtil.success(res, user, 'Public profile retrieved successfully');
+  },
+
+  /** DELETE /users/me */
+  async requestAccountDeletion(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const userId = getAuthenticatedUserId(req);
+    const deletionRequest = await accountDeletionService.requestDeletion(userId);
+
+    ResponseUtil.success(
+      res,
+      deletionRequest,
+      'Account deletion scheduled. Your account can be restored within 30 days.',
+    );
+  },
+
+  /** POST /users/me/cancel-deletion */
+  async cancelAccountDeletion(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const userId = getAuthenticatedUserId(req);
+    const result = await accountDeletionService.cancelDeletion(userId);
+    if (!result) {
+      ResponseUtil.notFound(res, 'No pending deletion request found');
+      return;
+    }
+
+    ResponseUtil.success(res, result, 'Account deletion request cancelled');
   },
 };

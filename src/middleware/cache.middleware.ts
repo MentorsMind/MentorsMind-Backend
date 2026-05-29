@@ -2,10 +2,19 @@ import { Request, Response, NextFunction } from 'express';
 import { CacheService } from '../services/cache.service';
 import { CacheTTL } from '../utils/cache-key.utils';
 
+// Shared context for tracking cache hits in this request
+export interface CacheContext {
+  isHit: boolean;
+  key: string;
+}
+
+export const cacheContextKey = Symbol('cacheContext');
+
 /**
  * Cache middleware factory.
  * Caches GET responses by URL (+ optional custom key).
  * Skips caching for authenticated requests unless `cacheAuthenticated` is true.
+ * Adds X-Cache: HIT|MISS header for debugging.
  *
  * @example
  * router.get('/mentors', cacheMiddleware({ ttl: CacheTTL.medium }), handler);
@@ -29,15 +38,30 @@ export function cacheMiddleware(options: {
     const isAuthed = !!(req as any).user;
     if (isAuthed && !cacheAuthenticated) return next();
 
-    const key = keyFn ? keyFn(req) : `mm:http:${req.originalUrl}`;
+    // When caching authenticated responses, scope the key to the user to
+    // prevent one user's private data from being served to another user.
+    const userId = (req as any).user?.userId ?? (req as any).user?.id;
+    if (cacheAuthenticated && !userId) return next();
+
+    const defaultKey = cacheAuthenticated
+      ? `mm:http:${userId}:${req.originalUrl}`
+      : `mm:http:${req.originalUrl}`;
+    const key = keyFn ? keyFn(req) : defaultKey;
     const cached = await CacheService.get<{ status: number; body: unknown }>(
       key,
     );
 
     if (cached) {
+      // Mark request as cache hit and set header
+      (req as any)[cacheContextKey] = { isHit: true, key } as CacheContext;
+      res.setHeader('X-Cache', 'HIT');
       res.status(cached.status).json(cached.body);
       return;
     }
+
+    // Mark as cache miss
+    (req as any)[cacheContextKey] = { isHit: false, key } as CacheContext;
+    res.setHeader('X-Cache', 'MISS');
 
     // Intercept res.json to capture the response
     const originalJson = res.json.bind(res);
@@ -56,6 +80,7 @@ export function cacheMiddleware(options: {
 
 /**
  * Middleware that adds cache metrics to the response headers (dev/admin use).
+ * Displays aggregate cache hit/miss rates and which backend is active.
  */
 export function cacheMetricsMiddleware(
   _req: Request,

@@ -1,0 +1,16 @@
+Welcome to MentorMinds, {{userName}}!
+
+Thank you for joining MentorMinds. We connect learners with experienced mentors
+for 1-on-1 sessions powered by the Stellar blockchain.
+
+Get Started:
+- Set up your Stellar wallet to send and receive payments
+- Browse mentors by expertise, rating, and availability
+- Book your first mentoring session
+
+Explore Mentors: {{platformUrl}}
+
+Best regards,
+The MentorMinds Team
+
+Support: {{supportUrl}}

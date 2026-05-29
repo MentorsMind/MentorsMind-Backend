@@ -1,0 +1,330 @@
+{
+  "dashboard": {
+    "id": null,
+    "uid": "mentorminds-apm",
+    "title": "MentorsMind — Metrics & APM",
+    "tags": ["mentorminds", "prometheus", "apm"],
+    "style": "dark",
+    "timezone": "browser",
+    "schemaVersion": 38,
+    "version": 1,
+    "refresh": "30s",
+    "time": { "from": "now-1h", "to": "now" },
+    "templating": {
+      "list": [
+        {
+          "name": "datasource",
+          "type": "datasource",
+          "label": "Prometheus",
+          "pluginId": "prometheus",
+          "current": {}
+        }
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate (req/s)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 0, "w": 8, "h": 7 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[1m])) by (method, status_code)",
+            "legendFormat": "{{method}} {{status_code}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "HTTP Error Rate (%)",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 0, "w": 4, "h": 7 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "100 * sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+            "legendFormat": "5xx %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 1 },
+                { "color": "red", "value": 5 }
+              ]
+            },
+            "color": { "mode": "thresholds" }
+          }
+        },
+        "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+      },
+      {
+        "id": 3,
+        "title": "Latency Percentiles (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 0, "w": 12, "h": 7 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2, "fillOpacity": 8 }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Active WebSocket Connections",
+        "type": "stat",
+        "gridPos": { "x": 0, "y": 7, "w": 4, "h": 5 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "active_websocket_connections",
+            "legendFormat": "Active"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "color": { "mode": "thresholds" },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 500 },
+                { "color": "red", "value": 1000 }
+              ]
+            }
+          }
+        },
+        "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+      },
+      {
+        "id": 5,
+        "title": "WebSocket Connections Over Time",
+        "type": "timeseries",
+        "gridPos": { "x": 4, "y": 7, "w": 8, "h": 5 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "active_websocket_connections",
+            "legendFormat": "Active connections"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "custom": { "lineWidth": 2, "fillOpacity": 20 }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "DB Query Latency P95 (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 7, "w": 12, "h": 5 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, operation, table))",
+            "legendFormat": "{{operation}} {{table}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2 }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Redis Command Latency P95 (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 12, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(redis_call_duration_seconds_bucket[5m])) by (le, command))",
+            "legendFormat": "{{command}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2 }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Queue Throughput (jobs/s)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 12, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "sum(rate(queue_jobs_total[5m])) by (queue_name, status)",
+            "legendFormat": "{{queue_name}} — {{status}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ops",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Queue Job Latency P95 (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 18, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(queue_job_duration_seconds_bucket[5m])) by (le, queue_name, job_name))",
+            "legendFormat": "{{queue_name}}/{{job_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2 }
+          }
+        }
+      },
+      {
+        "id": 10,
+        "title": "Stellar API Latency P95 (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 18, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(stellar_api_call_duration_seconds_bucket[5m])) by (le, operation, network))",
+            "legendFormat": "{{operation}} ({{network}})"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2 }
+          }
+        }
+      },
+      {
+        "id": 11,
+        "title": "Stellar API Error Rate (%)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 24, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "100 * sum(rate(stellar_api_calls_total{status=\"error\"}[5m])) by (operation) / sum(rate(stellar_api_calls_total[5m])) by (operation)",
+            "legendFormat": "{{operation}} error %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Node.js Heap Used (bytes)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 24, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "nodejs_heap_size_used_bytes{app=\"mentorminds\"}",
+            "legendFormat": "Heap used"
+          },
+          {
+            "expr": "nodejs_heap_size_total_bytes{app=\"mentorminds\"}",
+            "legendFormat": "Heap total"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "bytes",
+            "custom": { "lineWidth": 2, "fillOpacity": 8 }
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Event Loop Lag (seconds)",
+        "type": "timeseries",
+        "gridPos": { "x": 0, "y": 30, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "nodejs_eventloop_lag_seconds{app=\"mentorminds\"}",
+            "legendFormat": "Event loop lag"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2 },
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": null },
+                { "color": "yellow", "value": 0.05 },
+                { "color": "red", "value": 0.1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "GC Duration (seconds/s)",
+        "type": "timeseries",
+        "gridPos": { "x": 12, "y": 30, "w": 12, "h": 6 },
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "targets": [
+          {
+            "expr": "sum(rate(nodejs_gc_duration_seconds_sum{app=\"mentorminds\"}[5m])) by (kind)",
+            "legendFormat": "{{kind}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          }
+        }
+      }
+    ]
+  },
+  "folderId": 0,
+  "overwrite": true
+}

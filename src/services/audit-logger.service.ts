@@ -4,6 +4,7 @@ import {
   formatAuditLogJSON,
   StructuredLogPayload,
 } from '../utils/log-formatter.utils';
+import { logger } from '../utils/logger';
 
 export interface AuditLogSearchParams {
   action?: string;
@@ -31,13 +32,13 @@ export const AuditLoggerService = {
   ): Promise<AuditLogRecord | null> {
     // 1. Output the structured JSON to the standard stream (e.g., for Datadog, ELK, stdout)
     const jsonOutput = formatAuditLogJSON(payload);
-    // Depending on the level, you might map this to console.info, console.warn, etc.
+    // Map audit level to Winston log level
     if (payload.level === 'ERROR') {
-      console.error(jsonOutput);
+      logger.error(jsonOutput, { audit: true });
     } else if (payload.level === 'WARN') {
-      console.warn(jsonOutput);
+      logger.warn(jsonOutput, { audit: true });
     } else {
-      console.info(jsonOutput);
+      logger.info(jsonOutput, { audit: true });
     }
 
     // 2. Persist to Postgres Database

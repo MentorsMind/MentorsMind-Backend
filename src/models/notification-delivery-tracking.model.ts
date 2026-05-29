@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { logger } from '../utils/logger';
 
 export interface NotificationDeliveryTrackingRecord {
   id: string;
@@ -87,7 +88,7 @@ export const NotificationDeliveryTrackingModel = {
       const { rows } = await pool.query<NotificationDeliveryTrackingRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to create delivery tracking record:', error);
+      logger.error('Failed to create delivery tracking record:', error);
       return null;
     }
   },
@@ -106,7 +107,7 @@ export const NotificationDeliveryTrackingModel = {
       const { rows } = await pool.query<NotificationDeliveryTrackingRecord>(query, [notificationId]);
       return rows;
     } catch (error) {
-      console.error('Failed to get delivery tracking records:', error);
+      logger.error('Failed to get delivery tracking records:', error);
       return [];
     }
   },
@@ -126,7 +127,7 @@ export const NotificationDeliveryTrackingModel = {
       const { rows } = await pool.query<NotificationDeliveryTrackingRecord>(query, [notificationId]);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to get latest delivery status:', error);
+      logger.error('Failed to get latest delivery status:', error);
       return null;
     }
   },
@@ -160,7 +161,7 @@ export const NotificationDeliveryTrackingModel = {
         count: parseInt(row.count, 10),
       }));
     } catch (error) {
-      console.error('Failed to get delivery statistics:', error);
+      logger.error('Failed to get delivery statistics:', error);
       return [];
     }
   },
@@ -191,7 +192,7 @@ export const NotificationDeliveryTrackingModel = {
       const { rows } = await pool.query<NotificationDeliveryTrackingRecord>(query, values);
       return rows;
     } catch (error) {
-      console.error('Failed to get failed deliveries:', error);
+      logger.error('Failed to get failed deliveries:', error);
       return [];
     }
   },
@@ -230,7 +231,7 @@ export const NotificationDeliveryTrackingModel = {
       const { rows } = await pool.query<NotificationDeliveryTrackingRecord>(query, values);
       return rows[0] || null;
     } catch (error) {
-      console.error('Failed to update delivery status:', error);
+      logger.error('Failed to update delivery status:', error);
       return null;
     }
   },

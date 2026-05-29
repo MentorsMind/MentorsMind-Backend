@@ -1,30 +1,18 @@
-import morgan from 'morgan';
+/**
+ * logging.middleware.ts
+ *
+ * Thin compatibility shim. Request/response logging is now handled by
+ * `request-logger.middleware.ts` (Winston-based). This file re-exports
+ * helpers for any consumers that still import from here.
+ */
 import { Request, Response, NextFunction } from 'express';
-import config from '../config';
+import { logger } from '../utils/logger';
 
-morgan.token('user-id', (req: Request) => {
-  const authReq = req as any;
-  return authReq.user?.id || 'anonymous';
-});
-
-morgan.token('body', (req: Request) => {
-  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
-    const body = { ...req.body };
-    if (body.password) body.password = '[REDACTED]';
-    if (body.secretKey) body.secretKey = '[REDACTED]';
-    if (body.token) body.token = '[REDACTED]';
-    return JSON.stringify(body);
-  }
-  return '';
-});
-
-export const requestLogger = morgan(
-  config.isDevelopment
-    ? ':method :url :status :response-time ms - :user-id :body'
-    : ':remote-addr - :user-id [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"',
-);
-
-export const customLogger = (
+/**
+ * @deprecated Use `requestLoggerMiddleware` from `request-logger.middleware.ts`.
+ * Kept for backward compatibility.
+ */
+export const requestLogger = (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -32,23 +20,31 @@ export const customLogger = (
   const start = Date.now();
 
   res.on('finish', () => {
-    const duration = Date.now() - start;
-    const logData = {
+    const durationMs = Date.now() - start;
+    const logMeta = {
+      correlationId: (req as any).correlationId,
       method: req.method,
       url: req.originalUrl,
-      status: res.statusCode,
-      duration: `${duration}ms`,
+      statusCode: res.statusCode,
+      durationMs,
       ip: req.ip,
-      userAgent: req.get('user-agent'),
-      timestamp: new Date().toISOString(),
     };
 
-    if (res.statusCode >= 400) {
-      console.error('Request Error:', logData);
-    } else if (config.isDevelopment) {
-      console.log('Request:', logData);
+    if (res.statusCode >= 500) {
+      logger.error('Request completed with server error', logMeta);
+    } else if (res.statusCode >= 400) {
+      logger.warn('Request completed with client error', logMeta);
+    } else {
+      logger.info('Request completed', logMeta);
     }
   });
 
   next();
 };
+
+/**
+ * @deprecated Use `requestLoggerMiddleware` from `request-logger.middleware.ts`.
+ * Kept for backward compatibility — delegates to the same Winston logger.
+ */
+export const customLogger = requestLogger;
+

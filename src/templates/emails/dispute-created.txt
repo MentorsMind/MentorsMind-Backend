@@ -1,0 +1,18 @@
+Dispute Filed — MentorMinds
+
+A dispute has been filed regarding your transaction.
+
+Dispute Details:
+- Dispute ID: {{disputeId}}
+- Session: {{sessionTitle}}
+- Amount: {{amount}} XLM
+- Reason: {{reason}}
+
+Our team will review this dispute and reach out within 48 hours.
+Funds will remain in escrow until resolution.
+
+Best regards,
+The MentorMinds Team
+
+Visit MentorMinds: {{platformUrl}}
+Support: {{supportUrl}}

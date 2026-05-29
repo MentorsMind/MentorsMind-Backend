@@ -1,13 +1,15 @@
-import jwt, { SignOptions } from 'jsonwebtoken';
-import config from '../config';
-import crypto from 'crypto';
-import { Request } from 'express';
+import jwt, { SignOptions } from "jsonwebtoken";
+import config from "../config";
+import crypto from "crypto";
+import { Request } from "express";
 
 export interface TokenPayload {
   userId: string;
   email: string;
   role: string;
+  userTier?: string;
   fingerprint?: string;
+  mfaVerified?: boolean;
 }
 
 export interface DecodedToken extends TokenPayload {
@@ -17,14 +19,18 @@ export interface DecodedToken extends TokenPayload {
 }
 
 export const JwtUtils = {
+  isSha256Hash(value: string): boolean {
+    return /^[a-f0-9]{64}$/i.test(value);
+  },
+
   /**
    * Generate access token with short TTL (15 min)
    */
   generateAccessToken(payload: TokenPayload, fingerprint?: string): string {
     const options: SignOptions = {
-      expiresIn: '15m', // Hardened: 15 min as requested
-      issuer: 'mentorsmind-api',
-      audience: 'mentorsmind-client',
+      expiresIn: "15m", // Hardened: 15 min as requested
+      issuer: "mentorsmind-api",
+      audience: "mentorsmind-client",
       jwtid: crypto.randomUUID(),
     };
 
@@ -41,9 +47,9 @@ export const JwtUtils = {
    */
   generateRefreshToken(payload: TokenPayload, fingerprint?: string): string {
     const options: SignOptions = {
-      expiresIn: '7d', // Hardened: 7 days as requested
-      issuer: 'mentorsmind-api',
-      audience: 'mentorsmind-client',
+      expiresIn: "7d", // Hardened: 7 days as requested
+      issuer: "mentorsmind-api",
+      audience: "mentorsmind-client",
       jwtid: crypto.randomUUID(),
     };
 
@@ -59,10 +65,21 @@ export const JwtUtils = {
    * Verify access token
    */
   verifyAccessToken(token: string): DecodedToken {
-    return jwt.verify(token, config.jwt.secret, {
-      issuer: 'mentorsmind-api',
-      audience: 'mentorsmind-client',
-    }) as DecodedToken;
+    try {
+      return jwt.verify(token, config.jwt.secret, {
+        issuer: "mentorsmind-api",
+        audience: "mentorsmind-client",
+      }) as DecodedToken;
+    } catch (err) {
+      // Accept previous secret during rotation window (HMAC fallback)
+      if (config.jwt.previousSecret) {
+        return jwt.verify(token, config.jwt.previousSecret, {
+          issuer: "mentorsmind-api",
+          audience: "mentorsmind-client",
+        }) as DecodedToken;
+      }
+      throw err;
+    }
   },
 
   /**
@@ -70,31 +87,54 @@ export const JwtUtils = {
    */
   verifyRefreshToken(token: string): DecodedToken {
     return jwt.verify(token, config.jwt.refreshSecret, {
-      issuer: 'mentorsmind-api',
-      audience: 'mentorsmind-client',
+      issuer: "mentorsmind-api",
+      audience: "mentorsmind-client",
     }) as DecodedToken;
   },
 
   /**
    * Generate device fingerprint from request
    */
-  getDeviceFingerprint(req: Request): string {
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
-    return `${userAgent}-${ip}`;
+  getDeviceFingerprint(req: Request): string | null {
+    const userAgentHeader = req.headers["user-agent"];
+    const acceptLanguageHeader = req.headers["accept-language"];
+    const forwardedFor = req.headers["x-forwarded-for"];
+
+    const userAgent =
+      typeof userAgentHeader === "string" ? userAgentHeader.trim() : "";
+    const acceptLanguage =
+      typeof acceptLanguageHeader === "string"
+        ? acceptLanguageHeader.trim()
+        : "";
+    const forwardedIp =
+      typeof forwardedFor === "string"
+        ? forwardedFor.split(",")[0]?.trim() || ""
+        : Array.isArray(forwardedFor)
+          ? forwardedFor[0] || ""
+          : "";
+    const ip = req.ip || forwardedIp || req.socket?.remoteAddress || "";
+
+    if (!userAgent && !acceptLanguage && !ip) {
+      return null;
+    }
+
+    return this.hashFingerprint(`${userAgent}|${acceptLanguage}|${ip}`);
   },
 
   /**
    * Hash fingerprint for privacy in token
    */
   hashFingerprint(fingerprint: string): string {
-    return crypto.createHash('sha256').update(fingerprint).digest('hex');
+    if (this.isSha256Hash(fingerprint)) {
+      return fingerprint;
+    }
+    return crypto.createHash("sha256").update(fingerprint).digest("hex");
   },
 
   /**
    * Hash token for storage in DB
    */
   hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
+    return crypto.createHash("sha256").update(token).digest("hex");
   },
 };

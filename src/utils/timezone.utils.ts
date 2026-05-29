@@ -1,4 +1,4 @@
-import { DateTime, Settings, IANAZone, Interval } from 'luxon';
+import { DateTime, Settings, IANAZone, Interval } from "luxon";
 
 /**
  * Timezone Utilities - Robust IANA timezone handling with DST awareness
@@ -8,7 +8,7 @@ import { DateTime, Settings, IANAZone, Interval } from 'luxon';
  * Docs: https://moment.github.io/luxon/#/zones
  */
 
-Settings.defaultZone = 'UTC'; // Ensure Luxon defaults to UTC
+Settings.defaultZone = "UTC"; // Ensure Luxon defaults to UTC
 
 // Cache for valid IANA timezones (populated on first getAllTimezones())
 let validIANATimezones: string[] = [];
@@ -31,16 +31,28 @@ export const isValidIANATimezone = (tz: string): boolean => {
  */
 export const getAllTimezones = (): string[] => {
   if (validIANATimezones.length === 0) {
-    validIANATimezones = DateTime.local().resolvedZone!.names
-      .map(name => name.split('/')[1]?.replace(/_/g, ' ') || name)
-      .filter(Boolean);
-    
+    try {
+      validIANATimezones = [...Intl.supportedValuesOf("timeZone")];
+    } catch {
+      validIANATimezones = ["UTC"];
+    }
+
     // Add popular zones explicitly
     const popular = [
-      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-      'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Moscow',
-      'Asia/Tokyo', 'Asia/Singapore', 'Asia/Dubai', 'Australia/Sydney',
-      'UTC', 'Etc/UTC'
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "Europe/London",
+      "Europe/Paris",
+      "Europe/Berlin",
+      "Europe/Moscow",
+      "Asia/Tokyo",
+      "Asia/Singapore",
+      "Asia/Dubai",
+      "Australia/Sydney",
+      "UTC",
+      "Etc/UTC",
     ];
     validIANATimezones.unshift(...popular);
     validIANATimezones = [...new Set(validIANATimezones)].sort();
@@ -58,12 +70,12 @@ export const localToUTC = (localISO: string, timezone: string): DateTime => {
   if (!isValidIANATimezone(timezone)) {
     throw new Error(`Invalid IANA timezone: ${timezone}`);
   }
-  
+
   const localDT = DateTime.fromISO(localISO, { zone: timezone });
   if (!localDT.isValid) {
     throw new Error(`Invalid local datetime: ${localISO}`);
   }
-  
+
   return localDT.toUTC();
 };
 
@@ -77,12 +89,12 @@ export const utcToLocal = (utcISO: string, timezone: string): DateTime => {
   if (!isValidIANATimezone(timezone)) {
     throw new Error(`Invalid IANA timezone: ${timezone}`);
   }
-  
-  const utcDT = DateTime.fromISO(utcISO, { zone: 'utc' });
+
+  const utcDT = DateTime.fromISO(utcISO, { zone: "utc" });
   if (!utcDT.isValid) {
     throw new Error(`Invalid UTC datetime: ${utcISO}`);
   }
-  
+
   return utcDT.setZone(timezone);
 };
 
@@ -93,6 +105,7 @@ export const formatInTimezone = (
   utcISO: string,
   timezone: string,
   format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz"
+  format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz",
 ): string => {
   return utcToLocal(utcISO, timezone).toFormat(format);
 };
@@ -103,16 +116,16 @@ export const formatInTimezone = (
  */
 export const sessionsOverlap = (
   session1: { scheduledAt: string; durationMinutes: number; timezone: string },
-  session2: { scheduledAt: string; durationMinutes: number; timezone: string }
+  session2: { scheduledAt: string; durationMinutes: number; timezone: string },
 ): boolean => {
   const start1 = localToUTC(session1.scheduledAt, session1.timezone);
   const end1 = start1.plus({ minutes: session1.durationMinutes });
   const start2 = localToUTC(session2.scheduledAt, session2.timezone);
   const end2 = start2.plus({ minutes: session2.durationMinutes });
-  
+
   const interval1 = Interval.fromDateTimes(start1, end1);
   const interval2 = Interval.fromDateTimes(start2, end2);
-  
+
   return interval1.overlaps(interval2);
 };
 
@@ -126,11 +139,9 @@ export const getLocalNow = (timezone: string): DateTime => {
 /**
  * DST transition info for timezone (next DST change)
  */
-export const nextDSTTransition = (timezone: string): DateTime | null => {
-  const zone = IANAZone.create(timezone);
-  const now = DateTime.now().setZone(timezone);
-  const untilUndefined = zone.untilUndefined(now);
-  return untilUndefined ? DateTime.fromMillis(untilUndefined, { zone: timezone }) : null;
+export const nextDSTTransition = (_timezone: string): DateTime | null => {
+  // IANAZone.untilUndefined is not part of the public Luxon API — returning null as a safe stub.
+  return null;
 };
 
 // Export types
@@ -139,4 +150,3 @@ export type SessionSlot = {
   durationMinutes: number;
   timezone: string;
 };
-

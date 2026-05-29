@@ -1,0 +1,3 @@
+ALTER TABLE wallets
+ADD COLUMN IF NOT EXISTS encrypted_secret_key TEXT,
+ADD COLUMN IF NOT EXISTS wallet_activated BOOLEAN DEFAULT FALSE;

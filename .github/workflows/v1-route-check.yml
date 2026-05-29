@@ -1,0 +1,50 @@
+name: v1 Route Migration Check
+
+# Warns when a PR touches src/routes/v1/ without a migration note.
+# v1 routes are under a stability guarantee — any change (breaking or not)
+# must be documented so reviewers can assess the impact on existing clients.
+#
+# To pass this check, include the following tag anywhere in your PR body:
+#   <!-- migration: <description of what changed and why it is safe> -->
+#
+# Examples:
+#   <!-- migration: non-breaking — added optional `timezone` field to GET /bookings response -->
+#   <!-- migration: bug fix — corrected 422 → 400 status on malformed booking date (no client impact) -->
+#
+# Breaking changes must NOT be made to v1. Introduce them in src/routes/v2/ instead.
+# See API_VERSIONING.md for the full policy.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    paths:
+      - 'src/routes/v1/**'
+
+jobs:
+  check-migration-note:
+    name: Require migration note for v1 route changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Check PR body for migration tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prBody = context.payload.pull_request.body ?? '';
+            const hasMigrationTag = /<!--\s*migration\s*:/i.test(prBody);
+
+            if (!hasMigrationTag) {
+              core.setFailed(
+                '🚨 This PR modifies src/routes/v1/ but is missing a migration note.\n\n' +
+                'v1 routes are under a stability guarantee. Please add a tag to your PR description:\n\n' +
+                '  <!-- migration: <describe what changed and confirm it is non-breaking, or explain why v2 was not used> -->\n\n' +
+                'See API_VERSIONING.md for the full policy.'
+              );
+            } else {
+              const match = prBody.match(/<!--\s*migration\s*:([\s\S]*?)-->/i);
+              const note = match ? match[1].trim() : '(no note extracted)';
+              core.notice(`Migration note found: "${note}"`);
+              console.log('✅ Migration note present — v1 route change is documented.');
+            }

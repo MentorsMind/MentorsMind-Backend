@@ -17,6 +17,12 @@ interface MemEntry {
   value: string;
   expiresAt: number;
 }
+/**
+ * Fallback cache store used when Redis is unavailable.
+ * Limitation: if the process writes to memory during a Redis outage and Redis
+ * later reconnects, old in-memory entries can remain until TTL expiry because
+ * delete/invalidate operations route to the currently active backend.
+ */
 const memStore = new Map<string, MemEntry>();
 
 // Evict expired entries every minute
@@ -203,6 +209,14 @@ export class CacheService {
   /** Returns whether Redis is active */
   static isDistributed(): boolean {
     return redisAvailable;
+  }
+
+  /** Ping the shared Redis client. Throws if the ping fails. */
+  static async ping(): Promise<void> {
+    const client = await getClient();
+    if (!client) throw new Error('Redis client unavailable');
+    const pong = await client.ping();
+    if (pong !== 'PONG') throw new Error(`Unexpected ping response: ${pong}`);
   }
 
   /** Warm the cache by pre-populating a set of key/value pairs */

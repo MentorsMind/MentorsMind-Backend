@@ -107,6 +107,21 @@ export const paginationSchema = z.object({
     }),
 });
 
+/** Standard cursor-based pagination query parameters */
+export const cursorPaginationSchema = z.object({
+    query: z.object({
+        cursor: z.string().trim().optional(),
+        limit: z
+            .string()
+            .optional()
+            .transform((v) => (v ? parseInt(v, 10) : pagCfg.defaultLimit))
+            .refine(
+                (v) => v >= 1 && v <= 100,
+                'Limit must be between 1 and 100',
+            ),
+    }),
+});
+
 /** Reusable name field (first / last name, display name, etc.) */
 export const nameSchema = z
     .string()

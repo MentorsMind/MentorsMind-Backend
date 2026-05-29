@@ -1,0 +1,14 @@
+# Development overrides: builder image + hot reload via mounted source.
+# Usage: npm run docker:dev  (compose merges this file with docker-compose.yml)
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    command: npm run dev
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json

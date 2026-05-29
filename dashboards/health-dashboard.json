@@ -1,0 +1,99 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "MentorMinds Health & Metrics",
+    "tags": ["health", "prometheus", "mentorminds"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "Health Status",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "health_degraded_components",
+"legendFormat": "Degraded Components"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 3}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Request Duration P95",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_ms_bucket[5m])) by (le))",
+            "legendFormat": "P95"
+          }
+        ],
+        "unit": "ms"
+      },
+      {
+        "title": "Error Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "rate(http_request_errors_total[5m]) / rate(http_requests_total[5m]) * 100",
+            "legendFormat": "Error %"
+          }
+        ],
+        "unit": "percent"
+      },
+      {
+        "title": "Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{method}} {{path}}"
+          }
+        ],
+        "unit": "reqps"
+      },
+      {
+        "title": "System Metrics",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "process_memory_usage_bytes{type=\"heap_used\"}",
+            "legendFormat": "Heap"
+          },
+          {
+            "expr": "process_memory_usage_bytes{type=\"rss\"}",
+            "legendFormat": "RSS"
+          },
+          {
+            "expr": "app_uptime_seconds",
+            "legendFormat": "Uptime"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s"
+  },
+  "overwrite": false
+}

@@ -1,0 +1,7 @@
+Hi {{userName}},
+
+Your MentorMinds data export is ready.
+
+Download: {{downloadUrl}}
+
+This link expires on {{expiresAt}}.

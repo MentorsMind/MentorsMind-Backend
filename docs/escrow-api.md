@@ -180,7 +180,7 @@ pending → funded → released (to mentor)
 
 **Resolution Options:**
 - `release_to_mentor` - Release funds to the mentor
-- `refund_to_learner` - Refund funds to the learner
+- `refund_to_mentee` - Refund funds to the mentee
 
 **Response (200):**
 ```json

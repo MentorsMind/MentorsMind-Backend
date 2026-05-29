@@ -1,0 +1,74 @@
+{{#> base-layout}}
+{{#*inline "content"}}
+<h2 style="color: #4A90E2; margin: 0 0 20px 0; font-size: 24px;">New Review Received! ⭐</h2>
+
+<p style="margin: 0 0 20px 0;">
+    Hi {{userName}},
+</p>
+
+<p style="margin: 0 0 20px 0;">
+    Great news! You've received a new review from {{reviewerName}}.
+</p>
+
+<div
+    style="background-color: #e8f4fd; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4A90E2;">
+    <h3 style="margin: 0 0 15px 0; color: #333; font-size: 18px;">Review Details</h3>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px; width: 40%;">
+                <strong>Rating:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{#each stars}}⭐{{/each}} ({{rating}}/5)
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Session:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{sessionTopic}}
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 14px;">
+                <strong>Date:</strong>
+            </td>
+            <td style="padding: 8px 0; color: #333; font-size: 14px;">
+                {{reviewDate}}
+            </td>
+        </tr>
+    </table>
+
+    {{#if reviewComment}}
+    <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+        <p style="margin: 0 0 10px 0; color: #666; font-size: 14px;">
+            <strong>Comment:</strong>
+        </p>
+        <p style="margin: 0; color: #333; font-size: 14px; font-style: italic; line-height: 1.6;">
+            "{{reviewComment}}"
+        </p>
+    </div>
+    {{/if}}
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="{{reviewUrl}}"
+        style="display: inline-block; background-color: #4A90E2; color: #ffffff; text-decoration: none; padding: 14px 30px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        View Review
+    </a>
+</div>
+
+<div
+    style="background-color: #d4edda; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #28a745;">
+    <p style="margin: 0; color: #155724; font-size: 14px;">
+        <strong>Keep up the great work!</strong> Positive reviews help you build credibility and attract more learners
+        to your mentoring sessions.
+    </p>
+</div>
+
+<p style="margin: 20px 0 0 0; color: #666; font-size: 14px;">
+    Thank you for being an amazing mentor!
+</p>
+{{/inline}}
+{{/base-layout}}

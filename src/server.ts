@@ -4,10 +4,108 @@ import config from './config';
 import app from './app';
 import { initializeModels } from './models';
 import { initializeCollaborationSocket } from './services/collaboration.socket';
+// Sentry must be initialised before any other imports so it can instrument them
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
-// Initialize database tables
-initializeModels().catch(err => {
-  console.error('Failed to initialize models:', err);
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || "development",
+  enabled: !!process.env.SENTRY_DSN,
+  integrations: [nodeProfilingIntegration()],
+  tracesSampleRate: process.env.NODE_ENV === "production" ? 0.2 : 1.0,
+  profilesSampleRate: 1.0,
+  // Only capture server errors — ignore expected client/auth errors
+  beforeSend(event) {
+    const status = event.contexts?.response?.status_code as number | undefined;
+    if (status && status < 500) return null;
+    return event;
+  },
+});
+
+// Config must be imported first — validates env vars before anything else loads
+import config from "./config";
+import app from "./app";
+import { createSocketServer } from "./config/socket";
+import { initializeSocketService } from "./services/socket.service";
+import { initializeGraphQL } from "./graphql/server";
+import { stellarMonitorJob } from "./jobs/stellarMonitor.job";
+import {
+  emailWorker,
+  paymentWorker,
+  escrowReleaseWorker,
+  reportWorker,
+  sessionReminderWorker,
+  stellarTxWorker,
+  escrowCheckWorker,
+  notificationsWorker,
+  notificationCleanupWorker,
+  startScheduler,
+  stopScheduler,
+} from "./workers";
+import { initializeEmailTemplates } from "./services/template-initializer.service";
+import { logger } from "./utils/logger.utils";
+import { validateRequiredTables } from "./utils/table-validator.utils";
+import "../queues/bulk.queue";
+import "../queues/export.queue";
+import "../queues/export.queue";
+import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
+
+
+// Validate that all required tables exist (from migrations)
+// This replaces the anti-pattern of creating tables at runtime via DDL
+validateRequiredTables()
+  .then((validation) => {
+    if (!validation.allTablesExist) {
+      logger.error(
+        `Database validation failed: ${validation.missingTables.length} table(s) missing. ` +
+          "Please run migrations before starting the server.",
+        { missingTables: validation.missingTables },
+      );
+      // Don't exit here - allow health check to report the issue
+      // This gives ops teams time to fix via migrations
+    } else {
+      logger.info("Database validation successful: all required tables exist");
+    }
+  })
+  .catch((err) => {
+    logger.error({ err }, "Failed to validate database tables");
+  });
+
+// Initialize email templates
+initializeEmailTemplates().catch((err) => {
+  logger.error("Failed to initialize email templates", { error: err });
+});
+
+// Initialize JWKS key store (generates RSA key pair if none exists)
+import("./services/jwks.service").then(({ JwksService }) =>
+  JwksService.initialize().catch((err) =>
+    logger.error("Failed to initialize JWKS key store", { error: err }),
+  ),
+);
+
+// Log effective retry configuration for each active queue
+import { defaultJobOptions, QUEUE_NAMES } from "./config/queue";
+const queueRetryOverrides: Record<
+  string,
+  { attempts: number; backoff: unknown }
+> = {
+  [QUEUE_NAMES.PAYMENT_POLL]: {
+    attempts: 20,
+    backoff: { type: "fixed", delay: 30_000 },
+  },
+};
+Object.values(QUEUE_NAMES).forEach((name) => {
+  const effective = queueRetryOverrides[name] ?? {
+    attempts: defaultJobOptions.attempts,
+    backoff: defaultJobOptions.backoff,
+  };
+  logger.info("Queue retry config", { queue: name, ...effective });
+});
+
+// Start background job workers and scheduler
+startScheduler().catch((err) => {
+  logger.error("Failed to start job scheduler", { error: err });
 });
 
 const { port: PORT, apiVersion: API_VERSION } = config.server;
@@ -22,23 +120,68 @@ server.listen(PORT, () => {
   console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
   console.log(`💚 Health check: http://localhost:${PORT}/health`);
   console.log(`📚 API Docs: http://localhost:${PORT}/api/${API_VERSION}/docs`);
+// Initialize GraphQL server
+initializeGraphQL(app).catch((err) => {
+  logger.error("Failed to initialize GraphQL server", { error: err });
 });
+
+// Start server
+startPoolMonitor();
+
+const server = app.listen(PORT, () => {
+  logger.info("Server started", {
+    port: PORT,
+    env: NODE_ENV,
+    apiUrl: `http://localhost:${PORT}/api/${API_VERSION}`,
+    healthCheck: `http://localhost:${PORT}/health`,
+    apiDocs: `http://localhost:${PORT}/api/${API_VERSION}/docs`,
+    graphql: `http://localhost:${PORT}/api/graphql`,
+    webSocket: `ws://localhost:${PORT}/ws`,
+  });
+});
+
+// Attach Socket.IO server to the same HTTP server
+const io = createSocketServer(server);
+initializeSocketService(io);
+
+// Subscribe to Stellar Horizon SSE for real-time payment confirmations
+stellarMonitorJob.start().catch((err) => {
+  logger.error("Failed to start Horizon SSE monitor", { error: err });
+});
+
+// Start background exchange rate refresh (60s interval, cached in Redis)
+import("./services/assetExchange.service")
+  .then(({ AssetExchangeService }) => {
+    AssetExchangeService.startRateRefresh();
+  })
+  .catch((err) =>
+    logger.error("Failed to start asset exchange rate refresh", { error: err }),
+  );
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+async function shutdown(signal: string) {
+  logger.info({ signal }, "Signal received: closing HTTP server");
+  stellarMonitorJob.stop();
+  await Promise.all([
+    emailWorker.close(),
+    paymentWorker.close(),
+    escrowReleaseWorker.close(),
+    reportWorker.close(),
+    sessionReminderWorker.close(),
+    stellarTxWorker.close(),
+    escrowCheckWorker.close(),
+    notificationsWorker.close(),
+    notificationCleanupWorker.close(),
+    stopScheduler(),
+    Promise.resolve(stopPoolMonitor()),
+  ]);
   server.close(() => {
-    console.log('HTTP server closed');
+    logger.info("HTTP server closed");
     process.exit(0);
   });
-});
+}
 
-process.on('SIGINT', () => {
-  console.log('SIGINT signal received: closing HTTP server');
-  server.close(() => {
-    console.log('HTTP server closed');
-    process.exit(0);
-  });
-});
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default app;

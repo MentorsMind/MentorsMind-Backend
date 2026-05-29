@@ -1,0 +1,563 @@
+import crypto from "crypto";
+import { google } from "googleapis";
+import { redis } from "../config/redis";
+import { pool } from "../config/database";
+import { createError } from "../middleware/errorHandler";
+import {
+  buildICalFeed,
+  generateICalToken,
+  ICalSession,
+} from "../utils/ical.utils";
+import { logger } from "../utils/logger";
+import { EncryptionUtil } from "../utils/encryption.utils";
+import {
+  NotificationService,
+  NotificationChannel,
+  NotificationPriority,
+} from "./notification.service";
+import { NotificationType } from "../models/notifications.model";
+
+const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.events"];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function isInvalidGrantError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return msg.includes("invalid_grant");
+  }
+  return false;
+}
+
+function createOAuth2Client(): InstanceType<typeof google.auth.OAuth2> {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI,
+  );
+}
+
+async function persistGoogleCredentials(
+  userId: string,
+  accessToken: string | undefined,
+  refreshToken: string | undefined,
+  expiryDateMs: number | undefined,
+): Promise<void> {
+  if (!accessToken) return;
+
+  const [encAccess, version, encRefresh] = await Promise.all([
+    EncryptionUtil.encrypt(accessToken),
+    EncryptionUtil.getCurrentKeyVersion(),
+    refreshToken ? EncryptionUtil.encrypt(refreshToken) : Promise.resolve(null),
+  ]);
+
+  await pool.query(
+    `UPDATE users
+       SET google_calendar_access_token  = NULL,
+           google_calendar_refresh_token = NULL,
+           google_calendar_token_expiry  = $1,
+           encrypted_access_token        = $2,
+           encrypted_refresh_token       = COALESCE($3, encrypted_refresh_token),
+           pii_encryption_version        = $4
+     WHERE id = $5`,
+    [
+      expiryDateMs ? new Date(expiryDateMs) : null,
+      encAccess,
+      encRefresh,
+      version,
+      userId,
+    ],
+  );
+}
+
+async function disconnectExpiredCalendar(userId: string): Promise<void> {
+  await pool.query(
+    `UPDATE users
+       SET google_calendar_access_token  = NULL,
+           google_calendar_refresh_token = NULL,
+           google_calendar_token_expiry  = NULL,
+           google_calendar_connected     = false,
+           encrypted_access_token        = NULL,
+           encrypted_refresh_token       = NULL
+       WHERE id = $1`,
+    [userId],
+  );
+
+  try {
+    await NotificationService.sendNotification({
+      userId,
+      type: NotificationType.CALENDAR_CONNECTION_EXPIRED,
+      channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+      priority: NotificationPriority.HIGH,
+      title: "Calendar Connection Expired",
+      message: "Your Google Calendar connection has expired. Please reconnect.",
+    });
+  } catch (notifyErr) {
+    logger.error("Failed to send calendar expiry notification", {
+      userId,
+      error: notifyErr,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// iCal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch all confirmed/upcoming sessions for a user and map them to ICalSession
+ */
+async function fetchSessionsForUser(userId: string): Promise<ICalSession[]> {
+  const { rows } = await pool.query(
+    `SELECT
+       b.id,
+       b.scheduled_start,
+       b.scheduled_end,
+       b.meeting_url,
+       b.status,
+       mentor.first_name  AS mentor_first,
+       mentor.last_name   AS mentor_last,
+       mentee.first_name AS mentee_first,
+       mentee.last_name  AS mentee_last
+     FROM bookings b
+     JOIN users mentor  ON mentor.id  = b.mentor_id
+     JOIN users mentee ON mentee.id = b.mentee_id
+     WHERE (b.mentor_id = $1 OR b.mentee_id = $1)
+       AND b.status IN ('confirmed', 'in_progress', 'completed')
+       AND b.scheduled_end >= NOW()
+     ORDER BY b.scheduled_start ASC`,
+    [userId],
+  );
+
+  return rows.map((row) => ({
+    uid: row.id,
+    title: `Mentoring Session: ${row.mentor_first} ${row.mentor_last} & ${row.mentee_first} ${row.mentee_last}`,
+    mentorName: `${row.mentor_first} ${row.mentor_last}`,
+    learnerName: `${row.mentee_first} ${row.mentee_last}`,
+    startTime: new Date(row.scheduled_start),
+    endTime: new Date(row.scheduled_end),
+    meetingLink: row.meeting_url ?? undefined,
+    location: undefined,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Public service methods
+// ---------------------------------------------------------------------------
+
+export const CalendarService = {
+  // ---- iCal ----------------------------------------------------------------
+
+  /**
+   * Retrieve a user's iCal token, generating one if it doesn't exist yet
+   */
+  async getOrCreateICalToken(userId: string): Promise<string> {
+    const { rows } = await pool.query(
+      "SELECT ical_token FROM users WHERE id = $1",
+      [userId],
+    );
+    if (!rows[0]) throw createError("User not found", 404);
+
+    if (rows[0].ical_token) return rows[0].ical_token;
+
+    const token = generateICalToken();
+    await pool.query("UPDATE users SET ical_token = $1 WHERE id = $2", [
+      token,
+      userId,
+    ]);
+    return token;
+  },
+
+  /**
+   * Regenerate a user's iCal token (revokes the old one)
+   */
+  async regenerateICalToken(userId: string): Promise<string> {
+    const token = generateICalToken();
+    const { rowCount } = await pool.query(
+      "UPDATE users SET ical_token = $1 WHERE id = $2",
+      [token, userId],
+    );
+    if (!rowCount) throw createError("User not found", 404);
+    return token;
+  },
+
+  /**
+   * Build and return the iCal feed for the user identified by the given token
+   */
+  async getICalFeed(token: string): Promise<string> {
+    const { rows } = await pool.query(
+      "SELECT id, first_name, last_name FROM users WHERE ical_token = $1 AND is_active = true",
+      [token],
+    );
+    if (!rows[0]) throw createError("Invalid or expired iCal token", 404);
+
+    const user = rows[0];
+    const sessions = await fetchSessionsForUser(user.id);
+    return buildICalFeed(
+      sessions,
+      `MentorMinds – ${user.first_name} ${user.last_name}`,
+    );
+  },
+
+  // ---- Google Calendar OAuth -----------------------------------------------
+
+  /**
+   * Generate a Google OAuth2 authorisation URL for the given user
+   */
+  async getGoogleAuthUrl(userId: string): Promise<string> {
+    const csrf = crypto.randomBytes(16).toString("hex");
+    // Store CSRF in Redis with 10-minute TTL
+    await redis.set(`google_oauth_csrf:${userId}`, csrf, "EX", 600);
+
+    const oauth2Client = createOAuth2Client();
+    return oauth2Client.generateAuthUrl({
+      access_type: "offline",
+      scope: GOOGLE_SCOPES,
+      state: JSON.stringify({ userId, csrf }),
+      prompt: "consent",
+    });
+  },
+
+  /**
+   * Verify and clear the CSRF token from Redis
+   */
+  async verifyAndClearCsrfToken(
+    userId: string,
+    csrf: string,
+  ): Promise<boolean> {
+    const key = `google_oauth_csrf:${userId}`;
+    const storedCsrf = await redis.get(key);
+
+    if (!storedCsrf || storedCsrf !== csrf) {
+      return false;
+    }
+
+    await redis.del(key);
+    return true;
+  },
+
+  /**
+   * Exchange an OAuth2 code for tokens and persist them for the user
+   */
+  async connectGoogleCalendar(userId: string, code: string): Promise<void> {
+    const oauth2Client = createOAuth2Client();
+    const { tokens } = await oauth2Client.getToken(code);
+
+    const [encAccess, encRefresh, version] = await Promise.all([
+      EncryptionUtil.encrypt(tokens.access_token),
+      EncryptionUtil.encrypt(tokens.refresh_token),
+      EncryptionUtil.getCurrentKeyVersion(),
+    ]);
+
+    await pool.query(
+      `UPDATE users
+       SET google_calendar_access_token  = NULL,
+           google_calendar_refresh_token = NULL,
+           google_calendar_token_expiry  = $1,
+           google_calendar_connected     = true,
+           encrypted_access_token        = $2,
+           encrypted_refresh_token       = $3,
+           pii_encryption_version        = $4
+       WHERE id = $5`,
+      [
+        tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        encAccess,
+        encRefresh,
+        version,
+        userId,
+      ],
+    );
+  },
+
+  /**
+   * Remove Google Calendar credentials for the user
+   */
+  async disconnectGoogleCalendar(userId: string): Promise<void> {
+    const { rowCount } = await pool.query(
+      `UPDATE users
+       SET google_calendar_access_token  = NULL,
+           google_calendar_refresh_token = NULL,
+           google_calendar_token_expiry  = NULL,
+           google_calendar_connected     = false,
+           encrypted_access_token        = NULL,
+           encrypted_refresh_token       = NULL
+       WHERE id = $1`,
+      [userId],
+    );
+    if (!rowCount) throw createError("User not found", 404);
+  },
+
+  // ---- Google Calendar event management ------------------------------------
+
+  /**
+   * Build an OAuth2 client pre-loaded with a user's stored tokens
+   */
+  async _buildAuthedClient(userId: string) {
+    const { rows } = await pool.query(
+      `SELECT encrypted_access_token,
+              encrypted_refresh_token,
+              google_calendar_token_expiry AS expiry_date
+       FROM users WHERE id = $1`,
+      [userId],
+    );
+    if (!rows[0]?.encrypted_access_token) return null;
+
+    const [accessToken, refreshToken] = await Promise.all([
+      EncryptionUtil.decrypt(rows[0].encrypted_access_token),
+      EncryptionUtil.decrypt(rows[0].encrypted_refresh_token),
+    ]);
+
+    if (!accessToken) return null;
+
+    const client = createOAuth2Client();
+    client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken ?? undefined,
+      expiry_date: rows[0].expiry_date
+        ? new Date(rows[0].expiry_date).getTime()
+        : undefined,
+    });
+
+    // Proactively refresh if the access token is expired
+    const expiryDate = rows[0].expiry_date
+      ? new Date(rows[0].expiry_date).getTime()
+      : undefined;
+    if (expiryDate && Date.now() >= expiryDate) {
+      try {
+        await client.refreshAccessToken();
+        await persistGoogleCredentials(
+          userId,
+          client.credentials.access_token,
+          client.credentials.refresh_token,
+          client.credentials.expiry_date,
+        );
+      } catch (err) {
+        if (isInvalidGrantError(err)) {
+          logger.warn("Google Calendar refresh token invalid_grant", {
+            userId,
+          });
+          await disconnectExpiredCalendar(userId);
+          return null;
+        }
+        logger.error("Failed to refresh access token", { userId, error: err });
+        return null;
+      }
+    }
+
+    return client;
+  },
+
+  /**
+   * Create a Google Calendar event for a booking; stores the event ID on the booking row
+   */
+  async createGoogleCalendarEvent(bookingId: string): Promise<void> {
+    const { rows } = await pool.query(
+      `SELECT
+         b.id, b.scheduled_start, b.scheduled_end, b.meeting_url,
+         b.mentor_id, b.mentee_id,
+         mentor.first_name  AS mentor_first,  mentor.last_name  AS mentor_last,
+         mentor.email       AS mentor_email,
+         mentee.first_name AS mentee_first, mentee.last_name AS mentee_last,
+         mentee.email      AS mentee_email
+       FROM bookings b
+       JOIN users mentor  ON mentor.id  = b.mentor_id
+       JOIN users mentee ON mentee.id = b.mentee_id
+       WHERE b.id = $1`,
+      [bookingId],
+    );
+    if (!rows[0]) throw createError("Booking not found", 404);
+    const booking = rows[0];
+
+    const eventBody = {
+      summary: `Mentoring Session: ${booking.mentor_first} ${booking.mentor_last} & ${booking.mentee_first} ${booking.mentee_last}`,
+      location: booking.meeting_url ?? "",
+      description: booking.meeting_url
+        ? `Meeting Link: ${booking.meeting_url}`
+        : "MentorMinds session",
+      start: {
+        dateTime: new Date(booking.scheduled_start).toISOString(),
+        timeZone: "UTC",
+      },
+      end: {
+        dateTime: new Date(booking.scheduled_end).toISOString(),
+        timeZone: "UTC",
+      },
+      attendees: [
+        {
+          email: booking.mentor_email,
+          displayName: `${booking.mentor_first} ${booking.mentor_last}`,
+        },
+        {
+          email: booking.mentee_email,
+          displayName: `${booking.mentee_first} ${booking.mentee_last}`,
+        },
+      ],
+      conferenceData: booking.meeting_url
+        ? {
+            entryPoints: [
+              { entryPointType: "video", uri: booking.meeting_url },
+            ],
+          }
+        : undefined,
+    };
+
+    for (const participantId of [booking.mentor_id, booking.mentee_id]) {
+      try {
+        const authClient =
+          await CalendarService._buildAuthedClient(participantId);
+        if (!authClient) continue;
+
+        const calendar = google.calendar({ version: "v3", auth: authClient });
+        const { data } = await calendar.events.insert({
+          calendarId: "primary",
+          requestBody: eventBody,
+          sendUpdates: "all",
+        });
+
+        // Store the event ID on the booking (one column per participant)
+        if (participantId === booking.mentor_id) {
+          await pool.query(
+            "UPDATE bookings SET google_event_id_mentor = $1 WHERE id = $2",
+            [data.id, bookingId],
+          );
+        } else {
+          await pool.query(
+            "UPDATE bookings SET google_event_id_learner = $1 WHERE id = $2",
+            [data.id, bookingId],
+          );
+        }
+      } catch (err) {
+        if (isInvalidGrantError(err)) {
+          logger.warn("invalid_grant during calendar event creation", {
+            bookingId,
+            participantId,
+          });
+          await disconnectExpiredCalendar(participantId);
+        } else {
+          logger.error("Failed to create Google Calendar event", {
+            bookingId,
+            participantId,
+            error: err,
+          });
+        }
+      }
+    }
+  },
+
+  /**
+   * Update the Google Calendar event when a booking is rescheduled
+   */
+  async updateGoogleCalendarEvent(bookingId: string): Promise<void> {
+    const { rows } = await pool.query(
+      `SELECT
+         b.scheduled_start, b.scheduled_end, b.meeting_url,
+         b.mentor_id, b.mentee_id,
+         b.google_event_id_mentor, b.google_event_id_learner,
+         mentor.first_name AS mentor_first, mentor.last_name AS mentor_last,
+         mentee.first_name AS mentee_first, mentee.last_name AS mentee_last
+       FROM bookings b
+       JOIN users mentor  ON mentor.id  = b.mentor_id
+       JOIN users mentee ON mentee.id = b.mentee_id
+       WHERE b.id = $1`,
+      [bookingId],
+    );
+    if (!rows[0]) throw createError("Booking not found", 404);
+    const booking = rows[0];
+
+    const participants: Array<{ id: string; eventId: string | null }> = [
+      { id: booking.mentor_id, eventId: booking.google_event_id_mentor },
+      { id: booking.mentee_id, eventId: booking.google_event_id_learner },
+    ];
+
+    for (const { id: participantId, eventId } of participants) {
+      if (!eventId) continue;
+      try {
+        const authClient =
+          await CalendarService._buildAuthedClient(participantId);
+        if (!authClient) continue;
+
+        const calendar = google.calendar({ version: "v3", auth: authClient });
+        await calendar.events.patch({
+          calendarId: "primary",
+          eventId,
+          requestBody: {
+            start: {
+              dateTime: new Date(booking.scheduled_start).toISOString(),
+              timeZone: "UTC",
+            },
+            end: {
+              dateTime: new Date(booking.scheduled_end).toISOString(),
+              timeZone: "UTC",
+            },
+            location: booking.meeting_url ?? "",
+          },
+          sendUpdates: "all",
+        });
+      } catch (err) {
+        if (isInvalidGrantError(err)) {
+          logger.warn("invalid_grant during calendar event update", {
+            bookingId,
+            participantId,
+          });
+          await disconnectExpiredCalendar(participantId);
+        } else {
+          logger.error("Failed to update Google Calendar event", {
+            bookingId,
+            participantId,
+            error: err,
+          });
+        }
+      }
+    }
+  },
+
+  /**
+   * Delete the Google Calendar event when a booking is cancelled
+   */
+  async deleteGoogleCalendarEvent(bookingId: string): Promise<void> {
+    const { rows } = await pool.query(
+      `SELECT mentor_id, mentee_id, google_event_id_mentor, google_event_id_learner
+       FROM bookings WHERE id = $1`,
+      [bookingId],
+    );
+    if (!rows[0]) return;
+    const booking = rows[0];
+
+    const participants: Array<{ id: string; eventId: string | null }> = [
+      { id: booking.mentor_id, eventId: booking.google_event_id_mentor },
+      { id: booking.mentee_id, eventId: booking.google_event_id_learner },
+    ];
+
+    for (const { id: participantId, eventId } of participants) {
+      if (!eventId) continue;
+      try {
+        const authClient =
+          await CalendarService._buildAuthedClient(participantId);
+        if (!authClient) continue;
+
+        const calendar = google.calendar({ version: "v3", auth: authClient });
+        await calendar.events.delete({
+          calendarId: "primary",
+          eventId,
+          sendUpdates: "all",
+        });
+      } catch (err) {
+        if (isInvalidGrantError(err)) {
+          logger.warn("invalid_grant during calendar event deletion", {
+            bookingId,
+            participantId,
+          });
+          await disconnectExpiredCalendar(participantId);
+        } else {
+          logger.error("Failed to delete Google Calendar event", {
+            bookingId,
+            participantId,
+            error: err,
+          });
+        }
+      }
+    }
+  },
+};

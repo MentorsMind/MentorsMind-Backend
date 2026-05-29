@@ -1,15 +1,17 @@
-import { Router } from 'express';
-import { UsersController } from '../controllers/users.controller';
-import { authenticate } from '../middleware/auth.middleware';
-import { requireOwnerOrAdmin } from '../middleware/rbac.middleware';
-import { validate } from '../middleware/validation.middleware';
-import { asyncHandler } from '../utils/asyncHandler.utils';
+import { Router } from "express";
+import { UsersController } from "../controllers/users.controller";
+import { DataExportController } from "../controllers/dataExport.controller";
+import { authenticate } from "../middleware/auth.middleware";
+import { requireOwnerOrAdmin } from "../middleware/rbac.middleware";
+import { validate } from "../middleware/validation.middleware";
+import { asyncHandler } from "../utils/asyncHandler.utils";
 import {
   updateUserSchema,
   updateMeSchema,
   avatarUploadSchema,
-} from '../validators/schemas/users.schemas';
-import { idParamSchema } from '../validators/schemas/common.schemas';
+} from "../validators/schemas/users.schemas";
+import { idParamSchema } from "../validators/schemas/common.schemas";
+import { RecommendationController } from "../controllers/recommendation.controller";
 
 const router = Router();
 
@@ -42,7 +44,7 @@ router.use(authenticate);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get('/me', asyncHandler(UsersController.getMe));
+router.get("/me", asyncHandler(UsersController.getMe));
 
 /**
  * @swagger
@@ -88,9 +90,28 @@ router.get('/me', asyncHandler(UsersController.getMe));
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put(
-  '/me',
+  "/me",
   validate(updateMeSchema),
   asyncHandler(UsersController.updateMe),
+);
+
+router.delete("/me", asyncHandler(UsersController.requestAccountDeletion));
+router.post(
+  "/me/delete-request",
+  asyncHandler(UsersController.requestAccountDeletion),
+);
+router.post(
+  "/me/cancel-deletion",
+  asyncHandler(UsersController.cancelAccountDeletion),
+);
+
+router.post(
+  "/me/data-export",
+  asyncHandler(DataExportController.requestExport),
+);
+router.get(
+  "/me/data-export/status",
+  asyncHandler(DataExportController.getExportStatus),
 );
 
 /**
@@ -138,7 +159,7 @@ router.put(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
-  '/avatar',
+  "/avatar",
   validate(avatarUploadSchema),
   asyncHandler(UsersController.uploadAvatar),
 );
@@ -173,7 +194,7 @@ router.post(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
-  '/:id/public',
+  "/:id/public",
   validate(idParamSchema),
   asyncHandler(UsersController.getPublicUser),
 );
@@ -214,7 +235,7 @@ router.get(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
-  '/:id',
+  "/:id",
   validate(idParamSchema),
   requireOwnerOrAdmin,
   asyncHandler(UsersController.getUser),
@@ -262,7 +283,7 @@ router.get(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put(
-  '/:id',
+  "/:id",
   validate(updateUserSchema),
   requireOwnerOrAdmin,
   asyncHandler(UsersController.updateUser),
@@ -295,10 +316,25 @@ router.put(
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.delete(
-  '/:id',
+  "/:id",
   validate(idParamSchema),
   requireOwnerOrAdmin,
   asyncHandler(UsersController.deleteUser),
+);
+
+router.get(
+  "/recommendations/mentors",
+  asyncHandler(RecommendationController.getMentorRecommendations),
+);
+
+router.post(
+  "/recommendations/dismiss/:mentorId",
+  asyncHandler(RecommendationController.dismissMentor),
+);
+
+router.post(
+  "/recommendations/click/:mentorId",
+  asyncHandler(RecommendationController.logRecommendationClick),
 );
 
 export default router;

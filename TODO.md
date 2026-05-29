@@ -1,16 +1,11 @@
-# Timezone & Scheduling Implementation TODO
+# TODO
 
-## Plan Breakdown
+## Database Query Optimization
 
-1. ✅ [DONE] Install dependencies (luxon, cron, @types/luxon)
-2. [PENDING] Create src/utils/timezone.utils.ts
-3. [PENDING] Create src/utils/scheduler.utils.ts
-4. [PENDING] Create src/services/reminder.service.ts
-5. [PENDING] Add unit tests for new utils/services
-6. [PENDING] Update mentor.schemas.ts with proper timezone validation
-7. [PENDING] Add GET /api/v1/timezones route
-8. [PENDING] Add documentation for timezone handling & DST
-9. [PENDING] Integration with booking service (Issue #B8)
-10. [PENDING] Background job queue integration (Issue #B29)
-
-**Next step: Create timezone.utils.ts**
+1. Inspect GraphQL DataLoader batch functions; identify ineffective batching.
+2. Implement bulk-fetch model methods for DataLoader (payments, reviews, bookings/users if needed) to avoid per-id queries.
+3. Update `src/graphql/dataloaders/index.ts` to use bulk-fetch methods and return results in input order.
+4. Add a new migration that creates missing indexes on foreign keys and frequently-filtered/sorted columns.
+5. Verify code compiles logically (no builds/tests executed per instruction).
+6. Document expected N+1 reductions and indexing impact.
+7. Update TODO as steps are completed.

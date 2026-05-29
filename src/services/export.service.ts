@@ -1,105 +1,278 @@
-import fs from 'fs';
-import path from 'path';
-import archiver from 'archiver';
-import { ExportJobModel } from '../models/export-job.model';
-import { SessionModel } from '../models/session.model';
-import { PaymentModel } from '../models/payment.model';
-import { ReviewModel } from '../models/review.model';
-import { UsersService } from './users.service';
-import { exportQueue } from '../queues/export.queue';
-import { AuditLoggerService } from './audit-logger.service';
-import { LogLevel } from '../utils/log-formatter.utils';
+import fs from "fs";
+import path from "path";
+import archiver from "archiver";
+import pool from "../config/database";
+import { ExportJobModel } from "../models/export-job.model";
+import { SessionModel } from "../models/session.model";
+import { PaymentModel } from "../models/payment.model";
+import { ReviewModel } from "../models/review.model";
+import { UsersService } from "./users.service";
+import { exportQueue } from "../queues/export.queue";
+import { enqueueEmail } from "../queues/email.queue";
+import { AuditLoggerService } from "./audit-logger.service";
+import { LogLevel } from "../utils/log-formatter.utils";
+import { StorageService } from "./storage.service";
+import { createError } from "../middleware/errorHandler";
 
-const EXPORT_DIR = path.join(process.cwd(), 'exports');
+const EXPORT_LINK_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
+function toExportSafeRecord(user: any): any {
+  const safeUser = { ...user };
+  delete safeUser.password_hash;
+  delete safeUser.refresh_token;
+  delete safeUser.reset_token;
+  return safeUser;
 }
 
 export const ExportService = {
   async requestExport(userId: string): Promise<string> {
+    // Check if user already has a pending or processing export job
+    const existing = await ExportJobModel.findPendingByUserId(userId);
+    if (existing) {
+      throw createError(
+        "An export is already in progress. Please wait for it to complete or check the status.",
+        409,
+      );
+    }
+
+    // Check cooldown: prevent new requests within 24 hours of last completed export
+    const lastCompleted =
+      await ExportJobModel.findLastCompletedByUserId(userId);
+    if (lastCompleted && lastCompleted.created_at) {
+      const hoursSinceLastExport =
+        (Date.now() - new Date(lastCompleted.created_at).getTime()) /
+        (1000 * 60 * 60);
+      if (hoursSinceLastExport < 24) {
+        const hoursRemaining = Math.ceil(24 - hoursSinceLastExport);
+        throw createError(
+          `You can request a new export in ${hoursRemaining} hour(s). Please wait before requesting another export.`,
+          429,
+        );
+      }
+    }
+
     const job = await ExportJobModel.create(userId);
-    await exportQueue.add('process-export', { userId, jobId: job.id });
-    
+    await exportQueue.add("process-export", { userId, jobId: job.id });
+
     await AuditLoggerService.logEvent({
       level: LogLevel.INFO,
-      action: 'DATA_EXPORT_REQUESTED',
+      action: "DATA_EXPORT_REQUESTED",
       message: `User ${userId} requested data export`,
       userId: userId,
-      entityType: 'export_job',
+      entityType: "export_job",
       entityId: job.id,
-      metadata: {}
+      metadata: {},
     });
 
     return job.id;
   },
 
   async processExport(userId: string, jobId: string): Promise<void> {
+    let tempFilePath: string | null = null;
     try {
-      await ExportJobModel.updateStatus(jobId, 'processing');
+      await ExportJobModel.updateStatus(jobId, "processing");
 
       const user = await UsersService.findById(userId);
       const sessions = await SessionModel.findByUserId(userId);
       const payments = await PaymentModel.findByUserId(userId);
       const reviews = await ReviewModel.findByUserId(userId);
+      const { rows: messages } = await pool.query(
+        `SELECT m.*
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+         WHERE c.participant_one_id = $1 OR c.participant_two_id = $1`,
+        [userId],
+      );
 
       const fileName = `export_${userId}_${Date.now()}.zip`;
-      const filePath = path.join(EXPORT_DIR, fileName);
-      const output = fs.createWriteStream(filePath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
+      const timestamp = Date.now();
+      tempFilePath = path.join(process.cwd(), "temp", fileName);
+
+      // Ensure temp directory exists
+      const tempDir = path.dirname(tempFilePath);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      const output = fs.createWriteStream(tempFilePath);
+      const archive = archiver("zip", { zlib: { level: 9 } });
 
       archive.pipe(output);
 
-      // Add profile
-      archive.append(JSON.stringify(user, null, 2), { name: 'profile.json' });
-      
+      // Add profile with sensitive fields stripped
+      const safeUser = toExportSafeRecord(user);
+      archive.append(JSON.stringify(safeUser, null, 2), {
+        name: "profile.json",
+      });
+
       // Add sessions
-      archive.append(JSON.stringify(sessions, null, 2), { name: 'sessions.json' });
-      archive.append(this.jsonToCsv(sessions), { name: 'sessions.csv' });
+      archive.append(JSON.stringify(sessions, null, 2), {
+        name: "sessions.json",
+      });
+      archive.append(this.jsonToCsv(sessions), { name: "sessions.csv" });
 
       // Add payments
-      archive.append(JSON.stringify(payments, null, 2), { name: 'payments.json' });
-      archive.append(this.jsonToCsv(payments), { name: 'payments.csv' });
+      archive.append(JSON.stringify(payments, null, 2), {
+        name: "payments.json",
+      });
+      archive.append(this.jsonToCsv(payments), { name: "payments.csv" });
 
       // Add reviews
-      archive.append(JSON.stringify(reviews, null, 2), { name: 'reviews.json' });
-      archive.append(this.jsonToCsv(reviews), { name: 'reviews.csv' });
+      archive.append(JSON.stringify(reviews, null, 2), {
+        name: "reviews.json",
+      });
+      archive.append(this.jsonToCsv(reviews), { name: "reviews.csv" });
+
+      archive.append(JSON.stringify(messages, null, 2), {
+        name: "messages.json",
+      });
+      archive.append(this.jsonToCsv(messages), { name: "messages.csv" });
 
       await archive.finalize();
 
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
+      // Wait for the write stream to finish
+      await new Promise<void>((resolve, reject) => {
+        output.on("finish", resolve);
+        output.on("error", reject);
+      });
 
-      await ExportJobModel.updateStatus(jobId, 'completed', filePath, undefined, expiresAt);
+      // Read the file buffer
+      const fileBuffer = fs.readFileSync(tempFilePath);
+
+      // Upload to S3
+      const s3Key = StorageService.buildExportKey(userId, jobId, timestamp);
+      const result = await StorageService.uploadFile(
+        s3Key,
+        fileBuffer,
+        "application/zip",
+        { userId, fileName },
+      );
+
+      // Store the S3 key (not local path) in the database
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await ExportJobModel.updateStatus(
+        jobId,
+        "completed",
+        result.key,
+        undefined,
+        expiresAt,
+      );
+
+      const downloadUrl = await StorageService.generatePresignedUrl(
+        result.key,
+        EXPORT_LINK_TTL_SECONDS,
+      );
+
+      const exportUser = await UsersService.findById(userId);
+      const recipientEmail = exportUser?.email;
+      if (recipientEmail) {
+        try {
+          await enqueueEmail({
+            to: [recipientEmail],
+            subject: "Your MentorMinds data export is ready",
+            templateId: "data_export_ready",
+            templateData: {
+              userName: exportUser?.first_name
+                ? `${exportUser.first_name} ${exportUser.last_name || ""}`.trim()
+                : "there",
+              downloadUrl,
+              expiresAt: expiresAt.toISOString(),
+              platformUrl:
+                process.env.APP_CLIENT_URL ||
+                process.env.APP_BASE_URL ||
+                "https://mentorsmind.com",
+              supportUrl:
+                process.env.SUPPORT_URL || "https://mentorsmind.com/support",
+            },
+          });
+        } catch (emailError) {
+          await AuditLoggerService.logEvent({
+            level: LogLevel.WARN,
+            action: "DATA_EXPORT_EMAIL_FAILED",
+            message: `Failed to queue export ready email for user ${userId}`,
+            userId,
+            entityType: "export_job",
+            entityId: jobId,
+            metadata: {
+              error:
+                emailError instanceof Error
+                  ? emailError.message
+                  : String(emailError),
+            },
+          });
+        }
+      }
+
+      // Delete the local temp file after successful S3 upload
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
 
       await AuditLoggerService.logEvent({
         level: LogLevel.INFO,
-        action: 'DATA_EXPORT_COMPLETED',
+        action: "DATA_EXPORT_COMPLETED",
         message: `Data export completed for user ${userId}`,
         userId: userId,
-        entityType: 'export_job',
+        entityType: "export_job",
         entityId: jobId,
-        metadata: { fileName, expiresAt }
+        metadata: {
+          fileName,
+          s3Key: result.key,
+          expiresAt,
+          downloadUrlSent: Boolean(recipientEmail),
+        },
       });
     } catch (error: any) {
-      await ExportJobModel.updateStatus(jobId, 'failed', undefined, error.message);
+      // Cleanup: delete the local temp file on failure
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+
+      // Mark the job as failed
+      await ExportJobModel.updateStatus(
+        jobId,
+        "failed",
+        undefined,
+        error.message,
+      );
+
+      await AuditLoggerService.logEvent({
+        level: LogLevel.ERROR,
+        action: "DATA_EXPORT_FAILED",
+        message: `Data export failed for user ${userId}: ${error.message}`,
+        userId: userId,
+        entityType: "export_job",
+        entityId: jobId,
+        metadata: { error: error.message },
+      });
+
       throw error;
     }
   },
 
-  async getEarningsExport(mentorId: string, from?: string, to?: string): Promise<{ data: string; fileName: string }> {
-    const earnings = await PaymentModel.findEarningsByMentorId(mentorId, from, to);
+  async getEarningsExport(
+    mentorId: string,
+    from?: string,
+    to?: string,
+  ): Promise<{ data: string; fileName: string }> {
+    const earnings = await PaymentModel.findEarningsByMentorId(
+      mentorId,
+      from,
+      to,
+    );
     const csv = this.jsonToCsv(earnings);
     const fileName = `earnings_${mentorId}_${Date.now()}.csv`;
-    
+
     await AuditLoggerService.logEvent({
       level: LogLevel.INFO,
-      action: 'EARNINGS_EXPORT_GENERATED',
+      action: "EARNINGS_EXPORT_GENERATED",
       message: `Mentor ${mentorId} generated earnings export`,
       userId: mentorId,
-      entityType: 'mentor',
+      entityType: "mentor",
       entityId: mentorId,
-      metadata: { from, to }
+      metadata: { from, to },
     });
 
     return { data: csv, fileName };
@@ -114,17 +287,22 @@ export const ExportService = {
   },
 
   jsonToCsv(items: any[]): string {
-    if (items.length === 0) return '';
-    const replacer = (_key: string, value: any) => (value === null ? '' : value);
+    if (items.length === 0) return "";
+    const replacer = (_key: string, value: any) =>
+      value === null ? "" : value;
     const header = Object.keys(items[0]);
     const csv = [
-      header.join(','),
+      header.join(","),
       ...items.map((row) =>
         header
-          .map((fieldName) => JSON.stringify(row[fieldName], replacer))
-          .join(',')
+          .map((fieldName) =>
+            JSON.stringify(row[fieldName], replacer)
+              .replace(/\n/g, "\\n")
+              .replace(/\r/g, "\\r"),
+          )
+          .join(","),
       ),
-    ].join('\r\n');
+    ].join("\r\n");
     return csv;
   },
 };

@@ -1,10 +1,12 @@
-import { env } from './env';
+import { env } from "./env";
+import monitoringConfig from "./monitoring.config";
+import retentionConfig from "./retention.config";
 
 const config = {
   env: env.NODE_ENV,
-  isProduction: env.NODE_ENV === 'production',
-  isTest: env.NODE_ENV === 'test',
-  isDevelopment: env.NODE_ENV === 'development',
+  isProduction: env.NODE_ENV === "production",
+  isTest: env.NODE_ENV === "test",
+  isDevelopment: env.NODE_ENV === "development",
 
   server: {
     port: parseInt(env.PORT, 10),
@@ -18,9 +20,12 @@ const config = {
     name: env.DB_NAME,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
-    poolMax: 20,
-    idleTimeoutMs: 30000,
-    connectionTimeoutMs: 2000,
+    poolMax: parseInt(env.DB_POOL_MAX, 10),
+    poolMin: parseInt(env.DB_POOL_MIN, 10),
+    idleTimeoutMs: parseInt(env.DB_IDLE_TIMEOUT_MS, 10),
+    connectionTimeoutMs: parseInt(env.DB_CONNECTION_TIMEOUT_MS, 10),
+    statementTimeoutMs: parseInt(env.DB_STATEMENT_TIMEOUT_MS, 10),
+    poolExhaustionThreshold: parseInt(env.DB_POOL_EXHAUSTION_THRESHOLD, 10),
   },
 
   jwt: {
@@ -28,22 +33,48 @@ const config = {
     expiresIn: env.JWT_EXPIRES_IN,
     refreshSecret: env.JWT_REFRESH_SECRET,
     refreshExpiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    /** Previous secret — accepted during rotation window. */
+    previousSecret: env.JWT_SECRET_PREVIOUS,
   },
 
   stellar: {
     network: env.STELLAR_NETWORK,
     horizonUrl: env.STELLAR_HORIZON_URL,
     platformPublicKey: env.PLATFORM_PUBLIC_KEY,
-    // Never expose secret key directly — accessed only via getPlatformKeypair()
   },
 
   cors: {
-    origins: env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+    origins: env.CORS_ORIGIN.split(",").map((o: string) => o.trim()),
   },
 
   rateLimit: {
     windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS, 10),
     maxRequests: parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10),
+  },
+
+  email: {
+    provider: env.EMAIL_PROVIDER,
+    smtp: {
+      host: env.SMTP_HOST,
+      port: parseInt(env.SMTP_PORT, 10),
+      secure: env.SMTP_SECURE === "true",
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    },
+    gmail: {
+      user: env.GMAIL_USER,
+      pass: env.GMAIL_PASS,
+    },
+    sendgrid: {
+      apiKey: env.SENDGRID_API_KEY,
+    },
+    mailgun: {
+      apiKey: env.MAILGUN_API_KEY,
+      domain: env.MAILGUN_DOMAIN,
+      host: env.MAILGUN_HOST,
+    },
+    fromEmail: env.FROM_EMAIL,
+    webhookSecret: env.EMAIL_WEBHOOK_SECRET,
   },
 
   redis: {
@@ -61,6 +92,9 @@ const config = {
   platform: {
     feePercentage: parseInt(env.PLATFORM_FEE_PERCENTAGE, 10),
   },
+
+  monitoring: monitoringConfig,
+  retention: retentionConfig,
 } as const;
 
 export default config;

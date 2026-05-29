@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import meetingConfig, { MeetingProvider } from '../config/meeting.config';
 import { calculateMeetingExpiry, generateJitsiRoomName } from '../utils/meeting.utils';
+import { logger } from '../utils/logger';
 
 export interface MeetingRoomOptions {
   sessionId: string;
@@ -85,8 +86,6 @@ async function createWherebyRoom(
   expiresAt: Date,
   _options: MeetingRoomOptions
 ): Promise<MeetingRoomResult> {
-  const roomName = `mentorminds-${sessionId}`;
-
   const response = await axios.post<WherebyRoomResponse>(
     `${meetingConfig.baseUrl}/meetings`,
     {
@@ -165,6 +164,30 @@ async function createJitsiRoom(
 }
 
 /**
+ * Generate Daily.co participant token
+ */
+async function generateDailyToken(roomName: string, participantName: string): Promise<string> {
+  const response = await axios.post(
+    `${meetingConfig.baseUrl}/meeting-tokens`,
+    {
+      properties: {
+        room_name: roomName,
+        user_name: participantName,
+        is_owner: false,
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${meetingConfig.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  return response.data.token;
+}
+
+/**
  * Check if an error is retryable
  */
 function isRetryableError(error: unknown): boolean {
@@ -232,12 +255,12 @@ export const MeetingService = {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       // Retry logic
       if (isRetryableError(error)) {
-        console.warn(`Meeting provider API failed, retrying... (${errorMessage})`);
+        logger.warn(`Meeting provider API failed, retrying... (${errorMessage})`);
         try {
           return await retryCreateMeetingRoom(options);
         } catch (retryError) {
           const retryErrorMessage = retryError instanceof Error ? retryError.message : 'Unknown error';
-          console.error('Meeting room creation failed after retry:', retryErrorMessage);
+          logger.error('Meeting room creation failed after retry:', retryErrorMessage);
           throw new Error(
             `Failed to create meeting room after retry. Session ${sessionId} requires manual intervention.`
           );
@@ -252,10 +275,9 @@ export const MeetingService = {
    */
   validateConfig(): boolean {
     try {
-      meetingConfig;
-      return true;
+      return Boolean(meetingConfig?.provider);
     } catch (error) {
-      console.error('Meeting configuration validation failed:', error);
+      logger.error('Meeting configuration validation failed:', error);
       return false;
     }
   },
@@ -268,6 +290,27 @@ export const MeetingService = {
       provider: meetingConfig.provider,
       baseUrl: meetingConfig.baseUrl,
     };
+  },
+
+  /**
+   * Generate participant token for provider-specific authentication
+   */
+  async generateToken(roomId: string, participantName: string): Promise<string> {
+    switch (meetingConfig.provider) {
+      case MeetingProvider.DAILY:
+        return await generateDailyToken(roomId, participantName);
+      case MeetingProvider.WHEREBY:
+        // Whereby doesn't use tokens - return empty string
+        return '';
+      case MeetingProvider.ZOOM:
+        // Zoom uses JWT tokens but they're generated differently
+        return '';
+      case MeetingProvider.JITSI:
+        // Jitsi doesn't require tokens for basic usage
+        return '';
+      default:
+        throw new Error(`Token generation not supported for provider: ${meetingConfig.provider}`);
+    }
   },
 };
 

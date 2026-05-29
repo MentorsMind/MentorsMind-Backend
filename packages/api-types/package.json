@@ -1,0 +1,28 @@
+{
+  "name": "@mentorminds/api-types",
+  "version": "1.0.0",
+  "description": "TypeScript types generated from OpenAPI spec for MentorMinds API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "generate": "node ../../scripts/generate-api-types.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mentorminds",
+    "api",
+    "types",
+    "openapi",
+    "typescript"
+  ],
+  "author": "MentorMinds Team",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
