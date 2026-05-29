@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { CollaborationState } from '../types/collaboration.types';
 
 export interface Session {
   id: string;
@@ -10,7 +11,6 @@ export interface Session {
   created_at: Date;
 }
 
-export const SessionModel = {
 export interface SessionRecord {
   id: string;
   mentor_id: string;
@@ -26,6 +26,7 @@ export interface SessionRecord {
   meeting_room_id: string | null;
   meeting_expires_at: Date | null;
   needs_manual_intervention: boolean;
+  collaboration_state: CollaborationState | null;
   notes: string | null;
   created_at: Date;
   updated_at: Date;
@@ -47,38 +48,21 @@ export interface UpdateMeetingUrlPayload {
   meetingExpiresAt: Date;
 }
 
+export interface UpdateCollaborationStatePayload {
+  collaborationState: CollaborationState;
+}
+
 /**
  * Session Model - Database operations for mentorship sessions
  */
 export const SessionModel = {
   /**
-   * Initialize sessions table with meeting URL support
+   * Initialize sessions table with meeting URL support and collaboration storage
    */
   async initializeTable(): Promise<void> {
     const query = `
       CREATE TABLE IF NOT EXISTS sessions (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        mentor_id UUID NOT NULL,
-        learner_id UUID NOT NULL,
-        start_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        end_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'scheduled',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-    await pool.query(query);
-  },
-
-  async findByUserId(userId: string): Promise<Session[]> {
-    const query = `
-      SELECT * FROM sessions
-      WHERE mentor_id = $1 OR learner_id = $1
-      ORDER BY start_time DESC;
-    `;
-    const { rows } = await pool.query<Session>(query, [userId]);
-    return rows;
-  },
-};
         mentor_id UUID NOT NULL REFERENCES users(id),
         mentee_id UUID NOT NULL REFERENCES users(id),
         title VARCHAR(255) NOT NULL,
@@ -92,6 +76,7 @@ export const SessionModel = {
         meeting_room_id VARCHAR(255),
         meeting_expires_at TIMESTAMP WITH TIME ZONE,
         needs_manual_intervention BOOLEAN DEFAULT FALSE,
+        collaboration_state JSONB,
         notes TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -104,8 +89,9 @@ export const SessionModel = {
       CREATE INDEX IF NOT EXISTS idx_sessions_meeting_url ON sessions(meeting_url) WHERE meeting_url IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_sessions_meeting_expires_at ON sessions(meeting_expires_at) WHERE meeting_expires_at IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_sessions_needs_manual_intervention ON sessions(needs_manual_intervention) WHERE needs_manual_intervention = TRUE;
+      CREATE INDEX IF NOT EXISTS idx_sessions_collaboration_state ON sessions USING gin (collaboration_state);
     `;
-    
+
     await pool.query(query);
   },
 
@@ -114,11 +100,12 @@ export const SessionModel = {
    */
   async create(payload: CreateSessionPayload): Promise<SessionRecord> {
     const query = `
-      INSERT INTO sessions (mentor_id, mentee_id, title, description, scheduled_at, duration_minutes)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO sessions (mentor_id, mentee_id, title, description, scheduled_at, duration_minutes, collaboration_state)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
-    
+
+    const defaultState = null;
     const { rows } = await pool.query<SessionRecord>(query, [
       payload.mentorId,
       payload.menteeId,
@@ -126,6 +113,7 @@ export const SessionModel = {
       payload.description || null,
       payload.scheduledAt,
       payload.durationMinutes,
+      defaultState,
     ]);
 
     return rows[0];
@@ -149,7 +137,7 @@ export const SessionModel = {
       WHERE mentor_id = $1 OR mentee_id = $1
       ORDER BY scheduled_at DESC
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query, [userId]);
     return rows;
   },
@@ -165,7 +153,7 @@ export const SessionModel = {
         AND status IN ('pending', 'confirmed')
       ORDER BY scheduled_at ASC
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query, [userId]);
     return rows;
   },
@@ -180,7 +168,7 @@ export const SessionModel = {
       WHERE id = $2
       RETURNING *
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query, [status, id]);
     return rows[0] ?? null;
   },
@@ -200,7 +188,7 @@ export const SessionModel = {
       WHERE id = $5
       RETURNING *
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query, [
       payload.meetingUrl,
       payload.meetingProvider,
@@ -209,6 +197,25 @@ export const SessionModel = {
       id,
     ]);
 
+    return rows[0] ?? null;
+  },
+
+  /**
+   * Update collaboration state for a session
+   */
+  async updateCollaborationState(
+    id: string,
+    collaborationState: CollaborationState,
+  ): Promise<SessionRecord | null> {
+    const query = `
+      UPDATE sessions
+      SET collaboration_state = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `;
+
+    const { rows } = await pool.query<SessionRecord>(query, [collaborationState, id]);
     return rows[0] ?? null;
   },
 
@@ -224,7 +231,7 @@ export const SessionModel = {
       WHERE id = $1
       RETURNING *
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query, [id]);
     return rows[0] ?? null;
   },
@@ -238,7 +245,7 @@ export const SessionModel = {
       WHERE needs_manual_intervention = TRUE
       ORDER BY created_at DESC
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query);
     return rows;
   },
@@ -254,7 +261,7 @@ export const SessionModel = {
         AND status IN ('confirmed', 'completed')
       ORDER BY meeting_expires_at ASC
     `;
-    
+
     const { rows } = await pool.query<SessionRecord>(query);
     return rows;
   },
@@ -271,7 +278,7 @@ export const SessionModel = {
       WHERE id = $1
       RETURNING id
     `;
-    
+
     const { rowCount } = await pool.query(query, [id]);
     return (rowCount ?? 0) > 0;
   },

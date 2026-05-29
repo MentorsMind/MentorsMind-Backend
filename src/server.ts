@@ -1,7 +1,9 @@
+import http from 'http';
 // Config must be imported first — validates env vars before anything else loads
 import config from './config';
 import app from './app';
 import { initializeModels } from './models';
+import { initializeCollaborationSocket } from './services/collaboration.socket';
 
 // Initialize database tables
 initializeModels().catch(err => {
@@ -11,8 +13,10 @@ initializeModels().catch(err => {
 const { port: PORT, apiVersion: API_VERSION } = config.server;
 const NODE_ENV = config.env;
 
-// Start server
-const server = app.listen(PORT, () => {
+const server = http.createServer(app);
+initializeCollaborationSocket(server);
+
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📝 Environment: ${NODE_ENV}`);
   console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
