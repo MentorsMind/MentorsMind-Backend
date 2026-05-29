@@ -92,4 +92,12 @@ router.use("/certifications", certificationRoutes);
 // Referral and Affiliate Program routes
 router.use("/referrals", referralRoutes);
 
+// Session Quality Analytics (issue #538)
+import sessionQualityRoutes from "../session-quality.routes";
+router.use("/session-quality", sessionQualityRoutes);
+
+// API Documentation Portal (issue #537)
+import apiDocsPortalRoutes from "../api-docs-portal.routes";
+router.use("/docs", apiDocsPortalRoutes);
+
 export default router;
