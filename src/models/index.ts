@@ -25,4 +25,5 @@ export { EscrowModel } from './escrow.model';
 export { WalletModel } from './wallet.model';
 export { PayoutRequestModel } from './payout-request.model';
 export { WalletEventModel } from './wallet-event.model';
+export { TenantModel } from './tenant.model';
 export { EventStoreModel } from './event.model';

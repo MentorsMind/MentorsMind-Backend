@@ -105,4 +105,9 @@ router.use("/session-quality", sessionQualityRoutes);
 import apiDocsPortalRoutes from "../api-docs-portal.routes";
 router.use("/docs", apiDocsPortalRoutes);
 
+import tenantRoutes from "../tenant.routes";
+
+// Multi-tenant routes
+router.use("/tenants", tenantRoutes);
+
 export default router;
