@@ -1,6 +1,7 @@
 import { env } from "./env";
 import monitoringConfig from "./monitoring.config";
 import retentionConfig from "./retention.config";
+import elasticsearchConfig from "./elasticsearch.config";
 
 const config = {
   env: env.NODE_ENV,
@@ -95,6 +96,8 @@ const config = {
 
   monitoring: monitoringConfig,
   retention: retentionConfig,
+  elasticsearch: elasticsearchConfig,
+  recording: recordingConfig,
 } as const;
 
 export default config;

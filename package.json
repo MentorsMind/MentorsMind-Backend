@@ -37,6 +37,7 @@
     "benchmark:baseline": "ts-node benchmarks/index.ts baseline",
     "benchmark:compare": "ts-node benchmarks/index.ts compare",
     "benchmark:ci": "UPDATE_BASELINE=false ts-node benchmarks/index.ts run",
+    "sync:elasticsearch": "ts-node scripts/sync-elasticsearch.ts",
     "prepare": "husky"
   },
   "keywords": [
@@ -61,6 +62,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1037.0",
     "@bull-board/api": "^6.20.6",
     "@bull-board/express": "^6.20.6",
+    "@elastic/elasticsearch": "^9.4.2",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.56.0",
     "@opentelemetry/exporter-jaeger": "^1.30.1",
@@ -98,6 +100,8 @@
     "graphql-tag": "^2.12.6",
     "handlebars": "^4.7.8",
     "helmet": "^8.1.0",
+    "i18next": "^23.7.0",
+    "i18next-fs-backend": "^2.3.0",
     "ioredis": "^5.10.1",
     "ip-range-check": "^0.2.0",
     "ipaddr.js": "^2.3.0",

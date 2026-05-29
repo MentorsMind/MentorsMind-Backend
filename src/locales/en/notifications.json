@@ -1,0 +1,66 @@
+{
+  "title": "Notifications",
+  "types": {
+    "booking": {
+      "created": "New Booking Created",
+      "confirmed": "Booking Confirmed",
+      "cancelled": "Booking Cancelled",
+      "completed": "Booking Completed",
+      "reminder": "Booking Reminder",
+      "rescheduled": "Booking Rescheduled"
+    },
+    "payment": {
+      "received": "Payment Received",
+      "failed": "Payment Failed",
+      "refunded": "Payment Refunded"
+    },
+    "message": {
+      "new": "New Message",
+      "reply": "Message Reply"
+    },
+    "review": {
+      "new": "New Review",
+      "reply": "Review Reply"
+    },
+    "system": {
+      "maintenance": "System Maintenance",
+      "update": "System Update",
+      "security": "Security Alert"
+    }
+  },
+  "messages": {
+    "bookingCreated": "You have a new booking with {{mentorName}} on {{date}}",
+    "bookingConfirmed": "Your booking with {{mentorName}} on {{date}} has been confirmed",
+    "bookingCancelled": "Your booking with {{mentorName}} on {{date}} has been cancelled",
+    "bookingCompleted": "Your session with {{mentorName}} has been completed",
+    "bookingReminder": "Reminder: Your session with {{mentorName}} starts in {{time}}",
+    "bookingRescheduled": "Your booking with {{mentorName}} has been rescheduled to {{date}}",
+    "paymentReceived": "Payment of {{amount}} received for booking #{{bookingId}}",
+    "paymentFailed": "Payment failed for booking #{{bookingId}}. Please try again.",
+    "paymentRefunded": "Refund of {{amount}} processed for booking #{{bookingId}}",
+    "newMessage": "You have a new message from {{senderName}}",
+    "messageReply": "{{senderName}} replied to your message",
+    "newReview": "You received a new review from {{reviewerName}}",
+    "reviewReply": "{{reviewerName}} replied to your review",
+    "systemMaintenance": "System maintenance scheduled for {{date}}",
+    "systemUpdate": "New system features available",
+    "securityAlert": "Security alert: Please review your account activity"
+  },
+  "actions": {
+    "view": "View",
+    "reply": "Reply",
+    "dismiss": "Dismiss",
+    "markRead": "Mark as Read",
+    "markUnread": "Mark as Unread"
+  },
+  "settings": {
+    "title": "Notification Settings",
+    "email": "Email Notifications",
+    "push": "Push Notifications",
+    "sms": "SMS Notifications",
+    "bookingReminders": "Booking Reminders",
+    "paymentUpdates": "Payment Updates",
+    "messageAlerts": "Message Alerts",
+    "marketingEmails": "Marketing Emails"
+  }
+}

@@ -56,4 +56,51 @@ router.delete(
   asyncHandler(SessionRecordingController.deleteRecording),
 );
 
+// Transcription endpoints
+router.post(
+  '/recordings/:recordingId/transcription',
+  asyncHandler(SessionRecordingController.startTranscription),
+);
+
+router.get(
+  '/recordings/:recordingId/transcription',
+  asyncHandler(SessionRecordingController.getTranscription),
+);
+
+router.get(
+  '/transcriptions/search',
+  asyncHandler(SessionRecordingController.searchTranscriptions),
+);
+
+// Bookmark endpoints
+router.post(
+  '/recordings/:recordingId/bookmarks',
+  asyncHandler(SessionRecordingController.createBookmark),
+);
+
+router.get(
+  '/recordings/:recordingId/bookmarks',
+  asyncHandler(SessionRecordingController.getBookmarks),
+);
+
+router.get(
+  '/bookmarks',
+  asyncHandler(SessionRecordingController.getUserBookmarks),
+);
+
+router.put(
+  '/bookmarks/:bookmarkId',
+  asyncHandler(SessionRecordingController.updateBookmark),
+);
+
+router.delete(
+  '/bookmarks/:bookmarkId',
+  asyncHandler(SessionRecordingController.deleteBookmark),
+);
+
+router.get(
+  '/recordings/:recordingId/bookmarks/export',
+  asyncHandler(SessionRecordingController.exportBookmarks),
+);
+
 export default router;

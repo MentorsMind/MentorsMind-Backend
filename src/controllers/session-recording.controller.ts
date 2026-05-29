@@ -1,6 +1,9 @@
 import { Response, Request } from 'express';
 import { SessionRecordingService } from '../services/session-recording.service';
+import recordingTranscriptionService from '../services/recording-transcription.service';
+import recordingBookmarkService from '../services/recording-bookmark.service';
 import { logger } from '../utils/logger';
+import pool from '../config/database';
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -272,6 +275,310 @@ export const SessionRecordingController = {
       return res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to delete recording',
+      });
+    }
+  },
+
+  /**
+   * POST /api/v1/recordings/:recordingId/transcription
+   * Start transcription for a recording
+   */
+  async startTranscription(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { recordingId } = req.params;
+      const { language = 'en' } = req.body as { language?: string };
+
+      const transcriptionId = await recordingTranscriptionService.startTranscription({
+        recordingId,
+        language,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: { transcriptionId },
+      });
+    } catch (error) {
+      logger.error('Failed to start transcription:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to start transcription',
+      });
+    }
+  },
+
+  /**
+   * GET /api/v1/recordings/:recordingId/transcription
+   * Get transcription for a recording
+   */
+  async getTranscription(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { recordingId } = req.params;
+
+      const transcriptions = await recordingTranscriptionService.getTranscriptionsByRecording(recordingId);
+
+      // Verify user has access to the recording
+      if (transcriptions.length > 0) {
+        const recordingQuery = `
+          SELECT mentor_id, mentee_id FROM session_recordings WHERE id = $1
+        `;
+        const { rows } = await pool.query(recordingQuery, [recordingId]);
+        
+        if (rows.length > 0) {
+          const recording = rows[0];
+          if (recording.mentor_id !== userId && recording.mentee_id !== userId) {
+            return res.status(403).json({
+              success: false,
+              error: 'Not authorized to access this transcription',
+            });
+          }
+        }
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: transcriptions,
+      });
+    } catch (error) {
+      logger.error('Failed to get transcription:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get transcription',
+      });
+    }
+  },
+
+  /**
+   * GET /api/v1/transcriptions/search
+   * Search transcriptions
+   */
+  async searchTranscriptions(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { query } = req.query as { query?: string };
+
+      if (!query) {
+        return res.status(400).json({
+          success: false,
+          error: 'Search query is required',
+        });
+      }
+
+      const results = await recordingTranscriptionService.searchTranscriptions(query, userId);
+
+      return res.status(200).json({
+        success: true,
+        data: results,
+      });
+    } catch (error) {
+      logger.error('Failed to search transcriptions:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to search transcriptions',
+      });
+    }
+  },
+
+  /**
+   * POST /api/v1/recordings/:recordingId/bookmarks
+   * Create a bookmark
+   */
+  async createBookmark(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { recordingId } = req.params;
+      const { type, timestampSeconds, title, note, color, durationSeconds, isPrivate } = req.body as {
+        type?: 'bookmark' | 'annotation' | 'highlight';
+        timestampSeconds: number;
+        title?: string;
+        note?: string;
+        color?: string;
+        durationSeconds?: number;
+        isPrivate?: boolean;
+      };
+
+      const bookmark = await recordingBookmarkService.createBookmark({
+        recordingId,
+        userId,
+        type,
+        timestampSeconds,
+        title,
+        note,
+        color,
+        durationSeconds,
+        isPrivate,
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: bookmark,
+      });
+    } catch (error) {
+      logger.error('Failed to create bookmark:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to create bookmark',
+      });
+    }
+  },
+
+  /**
+   * GET /api/v1/recordings/:recordingId/bookmarks
+   * Get bookmarks for a recording
+   */
+  async getBookmarks(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { recordingId } = req.params;
+
+      const bookmarks = await recordingBookmarkService.getBookmarksByRecording(recordingId, userId);
+
+      return res.status(200).json({
+        success: true,
+        data: bookmarks,
+      });
+    } catch (error) {
+      logger.error('Failed to get bookmarks:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get bookmarks',
+      });
+    }
+  },
+
+  /**
+   * GET /api/v1/bookmarks
+   * Get user's bookmarks
+   */
+  async getUserBookmarks(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const bookmarks = await recordingBookmarkService.getBookmarksByUser(userId);
+
+      return res.status(200).json({
+        success: true,
+        data: bookmarks,
+      });
+    } catch (error) {
+      logger.error('Failed to get user bookmarks:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get user bookmarks',
+      });
+    }
+  },
+
+  /**
+   * PUT /api/v1/bookmarks/:bookmarkId
+   * Update a bookmark
+   */
+  async updateBookmark(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { bookmarkId } = req.params;
+      const updates = req.body as {
+        title?: string;
+        note?: string;
+        color?: string;
+        isPrivate?: boolean;
+      };
+
+      const bookmark = await recordingBookmarkService.updateBookmark(bookmarkId, userId, updates);
+
+      return res.status(200).json({
+        success: true,
+        data: bookmark,
+      });
+    } catch (error) {
+      logger.error('Failed to update bookmark:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update bookmark',
+      });
+    }
+  },
+
+  /**
+   * DELETE /api/v1/bookmarks/:bookmarkId
+   * Delete a bookmark
+   */
+  async deleteBookmark(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { bookmarkId } = req.params;
+
+      await recordingBookmarkService.deleteBookmark(bookmarkId, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Bookmark deleted successfully',
+      });
+    } catch (error) {
+      logger.error('Failed to delete bookmark:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete bookmark',
+      });
+    }
+  },
+
+  /**
+   * GET /api/v1/recordings/:recordingId/bookmarks/export
+   * Export bookmarks for a recording
+   */
+  async exportBookmarks(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+
+      const { recordingId } = req.params;
+
+      const exportData = await recordingBookmarkService.exportBookmarks(recordingId, userId);
+
+      return res.status(200).json({
+        success: true,
+        data: exportData,
+      });
+    } catch (error) {
+      logger.error('Failed to export bookmarks:', error);
+      return res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to export bookmarks',
       });
     }
   },

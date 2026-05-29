@@ -1,0 +1,117 @@
+{
+  "subject": {
+    "welcome": "Welcome to MentorMinds",
+    "verifyEmail": "Verify Your Email Address",
+    "passwordReset": "Reset Your Password",
+    "bookingConfirmed": "Booking Confirmed",
+    "bookingReminder": "Booking Reminder",
+    "bookingCancelled": "Booking Cancelled",
+    "paymentReceived": "Payment Received",
+    "paymentFailed": "Payment Failed",
+    "newMessage": "New Message",
+    "reviewReceived": "New Review Received",
+    "sessionSummary": "Session Summary Available"
+  },
+  "greeting": {
+    "formal": "Dear {{name}},",
+    "casual": "Hi {{name}},",
+    "default": "Hello,"
+  },
+  "closing": {
+    "formal": "Sincerely,",
+    "casual": "Best regards,",
+    "default": "Thanks,"
+  },
+  "welcome": {
+    "title": "Welcome to MentorMinds",
+    "body": "Thank you for joining MentorMinds. We're excited to help you on your learning journey.",
+    "nextSteps": "Next steps:",
+    "completeProfile": "Complete your profile",
+    "findMentor": "Find a mentor",
+    "bookSession": "Book your first session"
+  },
+  "verifyEmail": {
+    "title": "Verify Your Email Address",
+    "body": "Please verify your email address by clicking the button below.",
+    "button": "Verify Email",
+    "link": "Or copy and paste this link: {{link}}",
+    "expires": "This link expires in 24 hours."
+  },
+  "passwordReset": {
+    "title": "Reset Your Password",
+    "body": "You requested a password reset. Click the button below to set a new password.",
+    "button": "Reset Password",
+    "link": "Or copy and paste this link: {{link}}",
+    "expires": "This link expires in 1 hour.",
+    "ignore": "If you didn't request this, please ignore this email."
+  },
+  "bookingConfirmed": {
+    "title": "Booking Confirmed",
+    "body": "Your booking with {{mentorName}} has been confirmed.",
+    "details": "Booking Details:",
+    "date": "Date: {{date}}",
+    "time": "Time: {{time}}",
+    "duration": "Duration: {{duration}}",
+    "topic": "Topic: {{topic}}",
+    "meetingLink": "Meeting Link: {{link}}",
+    "button": "View Booking"
+  },
+  "bookingReminder": {
+    "title": "Booking Reminder",
+    "body": "Reminder: Your session with {{mentorName}} starts in {{time}}.",
+    "details": "Session Details:",
+    "date": "Date: {{date}}",
+    "time": "Time: {{time}}",
+    "topic": "Topic: {{topic}}",
+    "meetingLink": "Join Meeting: {{link}}",
+    "button": "Join Session"
+  },
+  "bookingCancelled": {
+    "title": "Booking Cancelled",
+    "body": "Your booking with {{mentorName}} on {{date}} has been cancelled.",
+    "refund": "A refund will be processed if applicable.",
+    "bookAgain": "Book another session"
+  },
+  "paymentReceived": {
+    "title": "Payment Received",
+    "body": "Payment of {{amount}} received for booking #{{bookingId}}.",
+    "details": "Payment Details:",
+    "amount": "Amount: {{amount}}",
+    "date": "Date: {{date}}",
+    "method": "Payment Method: {{method}}",
+    "button": "View Receipt"
+  },
+  "paymentFailed": {
+    "title": "Payment Failed",
+    "body": "Payment failed for booking #{{bookingId}}. Please try again.",
+    "reason": "Reason: {{reason}}",
+    "button": "Retry Payment"
+  },
+  "newMessage": {
+    "title": "New Message",
+    "body": "You have a new message from {{senderName}}.",
+    "preview": "Message preview: {{preview}}",
+    "button": "View Message"
+  },
+  "reviewReceived": {
+    "title": "New Review Received",
+    "body": "You received a new review from {{reviewerName}}.",
+    "rating": "Rating: {{rating}}/5",
+    "comment": "Comment: {{comment}}",
+    "button": "View Review"
+  },
+  "sessionSummary": {
+    "title": "Session Summary Available",
+    "body": "The AI-generated summary for your session with {{mentorName}} is now available.",
+    "topics": "Key Topics: {{topics}}",
+    "actionItems": "Action Items: {{actionItems}}",
+    "button": "View Summary"
+  },
+  "footer": {
+    "unsubscribe": "Unsubscribe from emails",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "support": "Contact Support",
+    "copyright": "© {{year}} MentorMinds. All rights reserved."
+  }
+}

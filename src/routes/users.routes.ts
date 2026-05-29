@@ -105,6 +105,85 @@ router.post(
   asyncHandler(UsersController.cancelAccountDeletion),
 );
 
+/**
+ * @swagger
+ * /users/me/language:
+ *   get:
+ *     summary: Get current user's language preference
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Language preference retrieved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         language:
+ *                           type: string
+ *                           example: en
+ *       401:
+ *         description: Unauthorized
+ */
+router.get(
+  "/me/language",
+  asyncHandler(UsersController.getLanguage),
+);
+
+/**
+ * @swagger
+ * /users/me/language:
+ *   put:
+ *     summary: Update current user's language preference
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - language
+ *             properties:
+ *               language:
+ *                 type: string
+ *                 enum: [en, es, fr, de, zh, ja]
+ *                 example: es
+ *     responses:
+ *       200:
+ *         description: Language preference updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         language:
+ *                           type: string
+ *                           example: es
+ *       400:
+ *         description: Invalid language
+ *       401:
+ *         description: Unauthorized
+ */
+router.put(
+  "/me/language",
+  asyncHandler(UsersController.updateLanguage),
+);
+
 router.post(
   "/me/data-export",
   asyncHandler(DataExportController.requestExport),

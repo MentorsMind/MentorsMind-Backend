@@ -179,6 +179,14 @@ const envSchema = z.object({
   ANDROID_PACKAGE_NAME: z.string().default("com.mentorminds.app"),
   IOS_APP_STORE_URL: z.string().url().optional(),
   ANDROID_PLAY_STORE_URL: z.string().url().optional(),
+
+  // Elasticsearch
+  ELASTICSEARCH_URL: z.string().url().default("http://localhost:9200"),
+  ELASTICSEARCH_USERNAME: z.string().optional(),
+  ELASTICSEARCH_PASSWORD: z.string().optional(),
+  ELASTICSEARCH_API_KEY: z.string().optional(),
+  ELASTICSEARCH_ENABLED: z.enum(["true", "false"]).default("true"),
+  ELASTICSEARCH_INDEX_PREFIX: z.string().default("mentorminds"),
 });
 
 // ---------------------------------------------------------------------------
@@ -203,6 +211,9 @@ const SENSITIVE_KEYS = new Set([
   "AWS_SECRET_ACCESS_KEY",
   "ENCRYPTION_KEY",
   "DAILY_API_KEY",
+  "ELASTICSEARCH_PASSWORD",
+  "ELASTICSEARCH_API_KEY",
+  "AGORA_APP_CERTIFICATE",
 ]);
 
 function validateEnv() {

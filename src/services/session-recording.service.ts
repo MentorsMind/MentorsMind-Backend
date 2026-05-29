@@ -3,6 +3,9 @@ import { StorageService } from './storage.service';
 import { AuditLogModel } from '../models/audit-log.model';
 import { logger } from '../utils/logger';
 import { DateTime } from 'luxon';
+import videoRecordingService from './video-recording.service';
+import recordingTranscriptionService from './recording-transcription.service';
+import recordingConfig from '../config/recording.config';
 
 export interface RecordingMetadata extends Record<string, any> {
   format?: string;
@@ -42,8 +45,8 @@ export const SessionRecordingService = {
   async startRecording(options: StartRecordingOptions): Promise<RecordingResult> {
     const { sessionId, mentorId, menteeId, format = 'mp4' } = options;
 
-    // Calculate expiry date (90 days from now)
-    const expiresAt = DateTime.now().plus({ days: 90 }).toJSDate();
+    // Calculate expiry date based on config
+    const expiresAt = DateTime.now().plus({ days: recordingConfig.retentionDays }).toJSDate();
 
     // Generate S3 key
     const recordingId = crypto.randomUUID();
@@ -59,11 +62,42 @@ export const SessionRecordingService = {
       expiresAt,
     });
 
-    // Update status to recording
-    await SessionRecordingModel.updateStatus(recording.id, {
-      status: 'recording',
-      recordingStartedAt: new Date(),
-    });
+    // Start video recording if using IVS or Agora
+    if (recordingConfig.provider !== 'manual') {
+      try {
+        const stream = await videoRecordingService.startRecording({
+          sessionId,
+          quality: 'medium',
+          format,
+        });
+        
+        // Store stream info in metadata
+        await SessionRecordingModel.updateStatus(recording.id, {
+          status: 'recording',
+          recordingStartedAt: new Date(),
+          metadata: {
+            streamId: stream.streamId,
+            streamUrl: stream.streamUrl,
+            ingestUrl: stream.ingestUrl,
+            playbackUrl: stream.playbackUrl,
+            provider: recordingConfig.provider,
+          },
+        });
+      } catch (error) {
+        logger.error('Failed to start video recording:', error);
+        // Continue with manual recording as fallback
+        await SessionRecordingModel.updateStatus(recording.id, {
+          status: 'recording',
+          recordingStartedAt: new Date(),
+        });
+      }
+    } else {
+      // Manual recording
+      await SessionRecordingModel.updateStatus(recording.id, {
+        status: 'recording',
+        recordingStartedAt: new Date(),
+      });
+    }
 
     // Log audit event
     await AuditLogModel.create({
@@ -77,12 +111,13 @@ export const SessionRecordingService = {
         sessionId,
         recordingId: recording.id,
         s3Key,
+        provider: recordingConfig.provider,
       },
       ip_address: null,
       user_agent: null,
     });
 
-    logger.info(`Recording started for session ${sessionId}, recording ID: ${recording.id}`);
+    logger.info(`Recording started for session ${sessionId}, recording ID: ${recording.id}, provider: ${recordingConfig.provider}`);
 
     return {
       recordingId: recording.id,
@@ -126,6 +161,18 @@ export const SessionRecordingService = {
       throw new Error('Recording not found');
     }
 
+    // Stop video recording if using IVS or Agora
+    if (recordingConfig.provider !== 'manual') {
+      try {
+        await videoRecordingService.stopRecording({
+          sessionId: recording.session_id,
+          recordingId,
+        });
+      } catch (error) {
+        logger.error('Failed to stop video recording:', error);
+      }
+    }
+
     // Update status to ready
     await SessionRecordingModel.updateStatus(recordingId, {
       status: 'ready',
@@ -154,6 +201,19 @@ export const SessionRecordingService = {
     });
 
     logger.info(`Recording completed: ${recordingId}`);
+
+    // Start automatic transcription if enabled
+    if (recordingConfig.transcriptionEnabled && recording.mentor_consent && recording.mentee_consent) {
+      try {
+        await recordingTranscriptionService.startTranscription({
+          recordingId,
+          language: 'en',
+        });
+        logger.info(`Started automatic transcription for recording ${recordingId}`);
+      } catch (error) {
+        logger.error('Failed to start automatic transcription:', error);
+      }
+    }
   },
 
   /**

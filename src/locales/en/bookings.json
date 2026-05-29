@@ -1,0 +1,71 @@
+{
+  "title": "Bookings",
+  "create": {
+    "title": "Create Booking",
+    "success": "Booking created successfully",
+    "failed": "Failed to create booking",
+    "mentorRequired": "Mentor is required",
+    "dateTimeRequired": "Date and time are required",
+    "durationRequired": "Duration is required",
+    "pastDate": "Cannot book in the past",
+    "unavailable": "Mentor is not available at this time",
+    "conflict": "Booking time conflict"
+  },
+  "update": {
+    "title": "Update Booking",
+    "success": "Booking updated successfully",
+    "failed": "Failed to update booking",
+    "cannotModify": "Cannot modify this booking",
+    "tooLate": "Too late to modify booking"
+  },
+  "cancel": {
+    "title": "Cancel Booking",
+    "confirm": "Are you sure you want to cancel this booking?",
+    "success": "Booking cancelled successfully",
+    "failed": "Failed to cancel booking",
+    "cannotCancel": "Cannot cancel this booking",
+    "refund": "Refund will be processed",
+    "noRefund": "No refund for this cancellation"
+  },
+  "complete": {
+    "title": "Complete Booking",
+    "success": "Booking completed successfully",
+    "failed": "Failed to complete booking",
+    "cannotComplete": "Cannot complete this booking",
+    "beforeTime": "Cannot complete before session time"
+  },
+  "reschedule": {
+    "title": "Reschedule Booking",
+    "success": "Booking rescheduled successfully",
+    "failed": "Failed to reschedule booking",
+    "cannotReschedule": "Cannot reschedule this booking",
+    "mentorUnavailable": "Mentor is not available at the new time"
+  },
+  "status": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "cancelled": "Cancelled",
+    "completed": "Completed",
+    "noShow": "No Show"
+  },
+  "list": {
+    "title": "My Bookings",
+    "upcoming": "Upcoming",
+    "past": "Past",
+    "cancelled": "Cancelled",
+    "noBookings": "No bookings found"
+  },
+  "details": {
+    "title": "Booking Details",
+    "mentor": "Mentor",
+    "mentee": "Mentee",
+    "dateTime": "Date & Time",
+    "duration": "Duration",
+    "topic": "Topic",
+    "notes": "Notes",
+    "status": "Status",
+    "payment": "Payment",
+    "meetingLink": "Meeting Link",
+    "recording": "Recording"
+  }
+}

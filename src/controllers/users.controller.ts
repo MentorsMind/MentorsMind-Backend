@@ -210,4 +210,43 @@ export const UsersController = {
 
     ResponseUtil.success(res, result, 'Account deletion request cancelled');
   },
+
+  /** PUT /users/me/language */
+  async updateLanguage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { language } = req.body;
+    const userId = getAuthenticatedUserId(req);
+    
+    // Get old value for audit
+    const oldUser = await UsersService.findById(userId);
+    
+    const updated = await UsersService.update(userId, { language });
+    if (!updated) {
+      ResponseUtil.notFound(res, 'User not found');
+      return;
+    }
+    
+    // Log language update
+    await AuditLogService.log({
+      userId,
+      action: 'LANGUAGE_UPDATED',
+      resourceType: 'user',
+      resourceId: userId,
+      oldValue: oldUser ? { language: oldUser.language } : null,
+      newValue: { language: updated.language },
+      ipAddress: extractIpAddress(req),
+      userAgent: req.headers['user-agent'] || null,
+    });
+    
+    ResponseUtil.success(res, { language: updated.language }, 'Language preference updated successfully');
+  },
+
+  /** GET /users/me/language */
+  async getLanguage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const user = await UsersService.findById(getAuthenticatedUserId(req));
+    if (!user) {
+      ResponseUtil.notFound(res, 'User not found');
+      return;
+    }
+    ResponseUtil.success(res, { language: user.language }, 'Language preference retrieved successfully');
+  },
 };

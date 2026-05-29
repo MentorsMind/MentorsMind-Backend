@@ -1,0 +1,89 @@
+{
+  "generic": {
+    "title": "Error",
+    "message": "Ocurrió un error",
+    "tryAgain": "Por favor, intenta más tarde",
+    "contactSupport": "Si el problema persiste, por favor contacta al soporte"
+  },
+  "validation": {
+    "title": "Error de validación",
+    "required": "{{field}} es requerido",
+    "invalidFormat": "{{field}} tiene formato inválido",
+    "minLength": "{{field}} debe tener al menos {{min}} caracteres",
+    "maxLength": "{{field}} no debe exceder {{max}} caracteres",
+    "minValue": "{{field}} debe ser al menos {{min}}",
+    "maxValue": "{{field}} no debe exceder {{max}}",
+    "invalidEmail": "Dirección de correo inválida",
+    "invalidPhone": "Número de teléfono inválido",
+    "invalidUrl": "URL inválida",
+    "invalidDate": "Fecha inválida",
+    "passwordMismatch": "Las contraseñas no coinciden",
+    "weakPassword": "La contraseña es muy débil"
+  },
+  "authentication": {
+    "unauthorized": "Acceso no autorizado",
+    "tokenExpired": "Sesión expirada. Por favor, inicia sesión nuevamente",
+    "tokenInvalid": "Token de sesión inválido",
+    "credentialsInvalid": "Correo o contraseña inválidos",
+    "accountLocked": "La cuenta ha sido bloqueada",
+    "accountDisabled": "La cuenta ha sido deshabilitada",
+    "emailNotVerified": "Dirección de correo no verificada",
+    "mfaRequired": "Autenticación de dos factores requerida",
+    "mfaInvalid": "Código de verificación inválido"
+  },
+  "authorization": {
+    "forbidden": "Acceso denegado",
+    "insufficientPermissions": "No tienes permiso para realizar esta acción",
+    "resourceNotFound": "Recurso no encontrado",
+    "accessDenied": "Acceso denegado"
+  },
+  "notFound": {
+    "title": "No encontrado",
+    "resource": "{{resource}} no encontrado",
+    "page": "Página no encontrada",
+    "user": "Usuario no encontrado",
+    "booking": "Reserva no encontrada",
+    "session": "Sesión no encontrada",
+    "mentor": "Mentor no encontrado",
+    "mentee": "Mentee no encontrado"
+  },
+  "conflict": {
+    "title": "Conflicto",
+    "resourceExists": "{{resource}} ya existe",
+    "emailExists": "El correo ya está registrado",
+    "bookingConflict": "Conflicto de horario de reserva",
+    "duplicateRequest": "Solicitud duplicada"
+  },
+  "rateLimit": {
+    "title": "Demasiadas solicitudes",
+    "message": "Has excedido el límite de solicitudes",
+    "tryAgainLater": "Por favor, intenta en {{minutes}} minutos"
+  },
+  "server": {
+    "title": "Error del servidor",
+    "message": "Error interno del servidor",
+    "unavailable": "Servicio temporalmente no disponible",
+    "maintenance": "Sistema en mantenimiento"
+  },
+  "network": {
+    "title": "Error de red",
+    "message": "Falló la conexión de red",
+    "timeout": "Tiempo de espera agotado",
+    "offline": "Estás sin conexión"
+  },
+  "payment": {
+    "title": "Error de pago",
+    "failed": "Falló el pago",
+    "insufficientFunds": "Fondos insuficientes",
+    "cardDeclined": "Tarjeta rechazada",
+    "expired": "Método de pago expirado",
+    "invalidDetails": "Detalles de pago inválidos"
+  },
+  "upload": {
+    "title": "Error de carga",
+    "failed": "Falló la carga del archivo",
+    "tooLarge": "Archivo muy grande (máx {{maxSize}})",
+    "invalidType": "Tipo de archivo inválido",
+    "corrupted": "Archivo corrupto"
+  }
+}

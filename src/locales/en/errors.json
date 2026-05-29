@@ -1,0 +1,89 @@
+{
+  "generic": {
+    "title": "Error",
+    "message": "An error occurred",
+    "tryAgain": "Please try again later",
+    "contactSupport": "If the problem persists, please contact support"
+  },
+  "validation": {
+    "title": "Validation Error",
+    "required": "{{field}} is required",
+    "invalidFormat": "{{field}} has invalid format",
+    "minLength": "{{field}} must be at least {{min}} characters",
+    "maxLength": "{{field}} must not exceed {{max}} characters",
+    "minValue": "{{field}} must be at least {{min}}",
+    "maxValue": "{{field}} must not exceed {{max}}",
+    "invalidEmail": "Invalid email address",
+    "invalidPhone": "Invalid phone number",
+    "invalidUrl": "Invalid URL",
+    "invalidDate": "Invalid date",
+    "passwordMismatch": "Passwords do not match",
+    "weakPassword": "Password is too weak"
+  },
+  "authentication": {
+    "unauthorized": "Unauthorized access",
+    "tokenExpired": "Session expired. Please login again",
+    "tokenInvalid": "Invalid session token",
+    "credentialsInvalid": "Invalid email or password",
+    "accountLocked": "Account has been locked",
+    "accountDisabled": "Account has been disabled",
+    "emailNotVerified": "Email address not verified",
+    "mfaRequired": "Two-factor authentication required",
+    "mfaInvalid": "Invalid verification code"
+  },
+  "authorization": {
+    "forbidden": "Access denied",
+    "insufficientPermissions": "You don't have permission to perform this action",
+    "resourceNotFound": "Resource not found",
+    "accessDenied": "Access denied"
+  },
+  "notFound": {
+    "title": "Not Found",
+    "resource": "{{resource}} not found",
+    "page": "Page not found",
+    "user": "User not found",
+    "booking": "Booking not found",
+    "session": "Session not found",
+    "mentor": "Mentor not found",
+    "mentee": "Mentee not found"
+  },
+  "conflict": {
+    "title": "Conflict",
+    "resourceExists": "{{resource}} already exists",
+    "emailExists": "Email already registered",
+    "bookingConflict": "Booking time conflict",
+    "duplicateRequest": "Duplicate request"
+  },
+  "rateLimit": {
+    "title": "Too Many Requests",
+    "message": "You have exceeded the rate limit",
+    "tryAgainLater": "Please try again in {{minutes}} minutes"
+  },
+  "server": {
+    "title": "Server Error",
+    "message": "Internal server error",
+    "unavailable": "Service temporarily unavailable",
+    "maintenance": "System under maintenance"
+  },
+  "network": {
+    "title": "Network Error",
+    "message": "Network connection failed",
+    "timeout": "Request timeout",
+    "offline": "You are offline"
+  },
+  "payment": {
+    "title": "Payment Error",
+    "failed": "Payment failed",
+    "insufficientFunds": "Insufficient funds",
+    "cardDeclined": "Card declined",
+    "expired": "Payment method expired",
+    "invalidDetails": "Invalid payment details"
+  },
+  "upload": {
+    "title": "Upload Error",
+    "failed": "File upload failed",
+    "tooLarge": "File too large (max {{maxSize}})",
+    "invalidType": "Invalid file type",
+    "corrupted": "File is corrupted"
+  }
+}

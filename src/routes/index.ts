@@ -72,6 +72,7 @@ router.use("/bookings/:id/transcription", transcriptionRoutes);
 router.use("/transcriptions", transcriptionSearchRoutes);
 router.use("/webhooks/email", emailWebhookRoutes);
 router.use("/recordings", sessionRecordingRoutes);
+router.use(sessionSummaryRoutes);
 router.use("/feedback", sessionFeedbackRoutes);
 router.use("/calendar/sync", calendarSyncRoutes);
 router.use("/developer", developerRoutes);

@@ -14,6 +14,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { notFoundHandler } from "./middleware/notFoundHandler";
 import { swaggerOptions } from "./config/swagger";
 import { blocklistMiddleware } from "./middleware/ipFilter.middleware";
+import { i18nMiddleware } from "./middleware/i18n.middleware";
 import routes from "./routes";
 import v1Router from "./routes/v1";
 import v2Router from "./routes/v2";
@@ -27,10 +28,16 @@ import {
   SUPPORTED_VERSIONS,
 } from "./config/api-versions.config";
 import { logger } from "./utils/logger";
+import { initializeI18n } from "./config/i18n.config";
 
 const app: Application = express();
 const { apiVersion } = config.server;
 const resolvedApiVersion = apiVersion || CURRENT_VERSION;
+
+// Initialize i18n
+initializeI18n().catch((err) => {
+  logger.error("Failed to initialize i18n", { error: err });
+});
 
 // Tracing middleware must be first for all downstream components
 app.use(blocklistMiddleware);
@@ -40,6 +47,9 @@ app.use(tracingMiddleware);
 app.use(securityMiddleware);
 app.use(corsMiddleware);
 app.use(requestLoggerMiddleware);
+
+// i18n middleware (after request logger, before other middleware)
+app.use(i18nMiddleware);
 
 // Body parsing
 app.use(express.json({ limit: "10mb" }));

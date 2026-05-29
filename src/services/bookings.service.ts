@@ -18,6 +18,7 @@ import {
   NotificationPriority,
 } from "./notification.service";
 import { NotificationType } from "../models/notifications.model";
+import { SessionSummaryModel } from "../models/session-summary.model";
 
 export interface CreateBookingData {
   menteeId: string;
@@ -444,6 +445,19 @@ export const BookingsService = {
       bookingId,
       status: "completed",
       updatedAt: updated.updated_at,
+    });
+
+    // Fire-and-forget: Generate AI session summary
+    SessionSummaryModel.generateAndStore({
+      bookingId,
+      sessionId: booking.session_id || undefined,
+      sessionNotes: booking.notes || undefined,
+      sessionTitle: booking.topic,
+    }).catch((err) => {
+      logger.warn("Failed to generate session summary", {
+        bookingId,
+        error: err,
+      });
     });
 
     return updated;
