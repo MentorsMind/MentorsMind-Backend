@@ -55,6 +55,7 @@ import sessionMilestoneRoutes from "../session-milestone.routes";
 import notificationsRoutes from "../notifications.routes";
 import certificationRoutes from "../certification.routes";
 import referralRoutes from "../referral.routes";
+import eventsRoutes from "../events.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -91,5 +92,7 @@ router.use("/certifications", certificationRoutes);
 
 // Referral and Affiliate Program routes
 router.use("/referrals", referralRoutes);
+// Event Sourcing / Audit Trail routes
+router.use("/events", eventsRoutes);
 
 export default router;

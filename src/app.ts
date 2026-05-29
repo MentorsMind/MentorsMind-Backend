@@ -20,6 +20,7 @@ import v1Router from "./routes/v1";
 import v2Router from "./routes/v2";
 import HealthService from "./services/health.service";
 import { AnalyticsService } from "./services/analytics.service";
+import { AdvancedCacheService } from "./services/advanced-cache.service";
 import { metricsMiddleware } from "./middleware/metrics.middleware";
 import { versioningMiddleware } from "./middleware/versioning.middleware";
 import {
@@ -85,6 +86,11 @@ HealthService.initialize().catch((err) => {
 // Initialize analytics service
 AnalyticsService.initialize().catch((err) => {
   logger.error("AnalyticsService initialization failed", { error: err });
+});
+
+// Initialize advanced cache service
+AdvancedCacheService.initialize().catch((err) => {
+  logger.error("AdvancedCacheService initialization failed", { error: err });
 });
 
 // ─── GET /api/versions ────────────────────────────────────────────────────────

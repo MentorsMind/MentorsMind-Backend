@@ -103,6 +103,17 @@ const envSchema = z.object({
 
   // Redis
   REDIS_URL: z.string().url("REDIS_URL must be a valid URL").optional(),
+  REDIS_CLUSTER_ENABLED: z.enum(["true", "false"]).default("false"),
+  REDIS_CLUSTER_NODES: z.string().optional(),
+  REDIS_TLS_ENABLED: z.enum(["true", "false"]).default("false"),
+
+  // Microservices
+  AUTH_SERVICE_URL: z.string().url().optional(),
+  USER_SERVICE_URL: z.string().url().optional(),
+  BOOKING_SERVICE_URL: z.string().url().optional(),
+  PAYMENT_SERVICE_URL: z.string().url().optional(),
+  NOTIFICATION_SERVICE_URL: z.string().url().optional(),
+  ANALYTICS_SERVICE_URL: z.string().url().optional(),
 
   // Firebase (push notifications)
   FIREBASE_PROJECT_ID: z.string().optional(),
