@@ -29,6 +29,7 @@ import {
 } from "./config/api-versions.config";
 import { logger } from "./utils/logger";
 import { initializeI18n } from "./config/i18n.config";
+import { tenantMiddleware } from "./middleware/tenant.middleware";
 
 const app: Application = express();
 const { apiVersion } = config.server;
@@ -50,6 +51,9 @@ app.use(requestLoggerMiddleware);
 
 // i18n middleware (after request logger, before other middleware)
 app.use(i18nMiddleware);
+
+// Tenant resolution middleware (resolves tenant from hostname)
+app.use(tenantMiddleware as any);
 
 // Body parsing
 app.use(express.json({ limit: "10mb" }));

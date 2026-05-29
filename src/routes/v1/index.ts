@@ -92,4 +92,9 @@ router.use("/certifications", certificationRoutes);
 // Referral and Affiliate Program routes
 router.use("/referrals", referralRoutes);
 
+import tenantRoutes from "../tenant.routes";
+
+// Multi-tenant routes
+router.use("/tenants", tenantRoutes);
+
 export default router;
