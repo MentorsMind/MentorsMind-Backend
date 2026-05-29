@@ -364,7 +364,6 @@ impl VestingContract {
         };
 
         let unvested_amount = schedule.total.checked_sub(vested_amount).expect("Underflow");
-        let refund_amount = vested_amount.checked_sub(schedule.claimed).expect("Underflow");
 
         let token: Address = env
             .storage()
@@ -373,9 +372,22 @@ impl VestingContract {
             .expect("Not initialized");
         let token_client = token::Client::new(&env, &token);
 
-        // Return unvested tokens to treasury (admin)
-        if unvested_amount > 0 {
-            token_client.transfer(&env.current_contract_address(), &admin, &unvested_amount);
+        let contract_balance = token_client.balance(&env.current_contract_address());
+        let actual_refund = unvested_amount.min(contract_balance);
+
+        // Return unvested tokens to treasury (admin), capped by contract balance
+        if actual_refund > 0 {
+            token_client.transfer(&env.current_contract_address(), &admin, &actual_refund);
+        }
+
+        if actual_refund < unvested_amount {
+            env.events().publish(
+                (
+                    Symbol::new(&env, "VestingContract"),
+                    Symbol::new(&env, "PartialRevoke"),
+                ),
+                (schedule_id, unvested_amount, actual_refund, contract_balance),
+            );
         }
 
         // Mark schedule as revoked by removing it
@@ -411,7 +423,7 @@ impl VestingContract {
             ScheduleRevokedEventData {
                 schedule_id,
                 beneficiary: schedule.beneficiary.clone(),
-                refunded_amount: refund_amount,
+                refunded_amount: actual_refund,
             },
         );
     }
@@ -721,7 +733,40 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "Nothing to claim")]
+    fn test_revoke_after_partial_claim() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+        let token = create_mock_token(&env);
+        let vesting_contract_id = create_vesting_contract(&env, token.clone(), admin.clone());
+        let vesting_client = VestingContractClient::new(&env, &vesting_contract_id);
+        let token_client = MockTokenClient::new(&env, &token);
+        token_client.mint(&vesting_contract_id, &1000);
+
+        let schedule_id = vesting_client.create_schedule(
+            &beneficiary,
+            &1000,
+            &CLIFF,
+            &VEST,
+            &0,
+        );
+
+        env.ledger().set_timestamp(CLIFF + VEST / 2);
+        vesting_client.claim(&schedule_id);
+
+        let claimed = vesting_client.get_schedule(&schedule_id).claimed;
+        assert!(claimed > 0);
+
+        vesting_client.revoke(&schedule_id);
+
+        let contract_balance = token_client.balance(&vesting_contract_id);
+        assert_eq!(contract_balance, 0);
+        assert_eq!(token_client.balance(&admin) + token_client.balance(&beneficiary), 1000);
+    }
+
+    #[test]
     fn test_claim_nothing_to_claim() {
         let env = Env::default();
         env.mock_all_auths();
