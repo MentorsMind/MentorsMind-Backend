@@ -261,13 +261,29 @@ mod tests {
             env.storage().persistent().set(&session_id, &released);
         }
 
+        pub fn set_participants(
+            env: Env,
+            session_id: Symbol,
+            mentor: Address,
+            learner: Address,
+        ) {
+            let key = (symbol_short!("PART"), session_id);
+            env.storage().persistent().set(&key, &(mentor, learner));
+        }
+
         pub fn get_escrow_by_session(env: Env, session_id: Symbol) -> EscrowInfo {
             let released: bool = env.storage().persistent().get(&session_id).unwrap_or(false);
             let dummy = Address::generate(&env);
+            let participant_key = (symbol_short!("PART"), session_id.clone());
+            let (mentor, learner) = env
+                .storage()
+                .persistent()
+                .get(&participant_key)
+                .unwrap_or((dummy.clone(), dummy.clone()));
             EscrowInfo {
                 id: 1,
-                mentor: dummy.clone(),
-                learner: dummy.clone(),
+                mentor,
+                learner,
                 amount: 100,
                 session_id: session_id.clone(),
                 status: if released {
@@ -324,6 +340,7 @@ mod tests {
         // Mark session as released in mock escrow
         let mock = MockEscrowClient::new(&env, &escrow_id);
         mock.set_status(&session_id, &true);
+        mock.set_participants(&session_id, &mentor, &learner);
 
         client.submit_review(&session_id, &mentor, &learner, &5, &comment_hash);
 
@@ -350,6 +367,7 @@ mod tests {
                 _ => Symbol::new(&env, "s3"),
             };
             mock.set_status(&sid, &true);
+            mock.set_participants(&sid, &mentor, &learner);
             client.submit_review(&sid, &mentor, &learner, &(i * 2).min(5), &comment_hash);
         }
 
@@ -367,6 +385,7 @@ mod tests {
         let comment_hash = BytesN::from_array(&env, &[0u8; 32]);
         let mock = MockEscrowClient::new(&env, &escrow_id);
         mock.set_status(&session_id, &true);
+        mock.set_participants(&session_id, &mentor, &learner);
         client.submit_review(&session_id, &mentor, &learner, &6, &comment_hash);
     }
 
@@ -388,7 +407,34 @@ mod tests {
         let comment_hash = BytesN::from_array(&env, &[0u8; 32]);
         let mock = MockEscrowClient::new(&env, &escrow_id);
         mock.set_status(&session_id, &true);
+        mock.set_participants(&session_id, &mentor, &learner);
         client.submit_review(&session_id, &mentor, &learner, &3, &comment_hash);
         client.submit_review(&session_id, &mentor, &learner, &4, &comment_hash);
+    }
+
+    #[test]
+    #[should_panic(expected = "MentorMismatch")]
+    fn test_mentor_mismatch_rejected() {
+        let (env, client, escrow_id, mentor, learner) = setup();
+        let session_id = Symbol::new(&env, "s_mentor_bad");
+        let comment_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let mock = MockEscrowClient::new(&env, &escrow_id);
+        let wrong_mentor = Address::generate(&env);
+        mock.set_status(&session_id, &true);
+        mock.set_participants(&session_id, &mentor, &learner);
+        client.submit_review(&session_id, &wrong_mentor, &learner, &4, &comment_hash);
+    }
+
+    #[test]
+    #[should_panic(expected = "LearnerMismatch")]
+    fn test_learner_mismatch_rejected() {
+        let (env, client, escrow_id, mentor, learner) = setup();
+        let session_id = Symbol::new(&env, "s_learner_bad");
+        let comment_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let mock = MockEscrowClient::new(&env, &escrow_id);
+        let wrong_learner = Address::generate(&env);
+        mock.set_status(&session_id, &true);
+        mock.set_participants(&session_id, &mentor, &learner);
+        client.submit_review(&session_id, &mentor, &wrong_learner, &4, &comment_hash);
     }
 }
