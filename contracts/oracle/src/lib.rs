@@ -436,9 +436,25 @@ impl OracleContract {
     }
 
     /// Return `true` if the most recent price is older than STALE_SECS.
+    /// Returns `true` (stale) when no price data exists, avoiding panics
+    /// from `get_price` during bootstrap or before feeders are configured.
     pub fn is_price_stale(env: Env, asset: Symbol) -> bool {
-        let (_, updated) = Self::get_price(env.clone(), asset);
-        env.ledger().timestamp().saturating_sub(updated) > STALE_SECS
+        let key = (symbol_short!("PRICES"), asset);
+        let points: Vec<PricePoint> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        if points.is_empty() {
+            return true;
+        }
+        let mut last = 0u64;
+        for p in points.iter() {
+            if p.timestamp > last {
+                last = p.timestamp;
+            }
+        }
+        env.ledger().timestamp().saturating_sub(last) > STALE_SECS
     }
 
     /// Register a mapping from a token contract address to an asset symbol.
@@ -682,5 +698,24 @@ impl OracleContract {
             Some(rbac) => RbacContractClient::new(env, &rbac).has_role(&role, &account),
             None => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_is_price_stale_without_feeders_or_prices() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, OracleContract);
+        let client = OracleContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let asset = Symbol::new(&env, "XLM");
+        assert!(client.is_price_stale(&asset));
     }
 }
