@@ -24,6 +24,7 @@ import disputesRoutes from "../disputes.routes";
 import escrowRoutes from "../escrow.routes";
 import walletRoutes from "../wallets.routes";
 import consentRoutes from "../consent.routes";
+import complianceRoutes from "../compliance.routes";
 import bulkRoutes from "../bulk.routes";
 import integrationsRoutes from "../integrations.routes";
 import notesRoutes from "../notes.routes";
@@ -55,6 +56,7 @@ import sessionMilestoneRoutes from "../session-milestone.routes";
 import notificationsRoutes from "../notifications.routes";
 import certificationRoutes from "../certification.routes";
 import referralRoutes from "../referral.routes";
+import eventsRoutes from "../events.routes";
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
@@ -62,6 +64,7 @@ router.use("/goals", goalRoutes);
 router.use("/learners", learnerRoutes);
 router.use("/", exportRoutes);
 router.use("/consent", consentRoutes);
+router.use("/compliance", complianceRoutes);
 router.use("/bulk", bulkRoutes);
 
 // Apply IP whitelisting to all admin routes
@@ -91,6 +94,16 @@ router.use("/certifications", certificationRoutes);
 
 // Referral and Affiliate Program routes
 router.use("/referrals", referralRoutes);
+// Event Sourcing / Audit Trail routes
+router.use("/events", eventsRoutes);
+
+// Session Quality Analytics (issue #538)
+import sessionQualityRoutes from "../session-quality.routes";
+router.use("/session-quality", sessionQualityRoutes);
+
+// API Documentation Portal (issue #537)
+import apiDocsPortalRoutes from "../api-docs-portal.routes";
+router.use("/docs", apiDocsPortalRoutes);
 
 import tenantRoutes from "../tenant.routes";
 

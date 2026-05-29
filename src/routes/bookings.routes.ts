@@ -1,3 +1,8 @@
+import { Router } from 'express';
+import { BookingsController } from '../controllers/bookings.controller';
+import { CollaborationController } from '../controllers/collaboration.controller';
+import { authenticate } from '../middleware/auth.middleware';
+import { requireRole } from '../middleware/rbac.middleware';
 import { Router } from "express";
 import { BookingsController } from "../controllers/bookings.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -228,5 +233,66 @@ router.delete("/:id/cancel", authenticate, BookingsController.cancelBooking);
  *                       example: Meeting room creation failed. Manual intervention required.
  */
 router.post("/:id/confirm", authenticate, BookingsController.confirmBooking);
+
+/**
+ * @swagger
+ * /api/v1/bookings/{id}/collaboration:
+ *   get:
+ *     summary: Get saved collaboration state for a booking session
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Session ID
+ *     responses:
+ *       200:
+ *         description: Collaboration state retrieved
+ */
+router.get('/:id/collaboration', authenticate, CollaborationController.getCollaborationState);
+
+/**
+ * @swagger
+ * /api/v1/bookings/{id}/collaboration:
+ *   patch:
+ *     summary: Update collaboration state for a booking session
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Session ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               whiteboardData:
+ *                 type: object
+ *               sharedCode:
+ *                 type: object
+ *               participants:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *               screenShare:
+ *                 type: object
+ *     responses:
+ *       200:
+ *         description: Collaboration state updated successfully
+ */
+router.patch('/:id/collaboration', authenticate, CollaborationController.updateCollaborationState);
 
 export default router;

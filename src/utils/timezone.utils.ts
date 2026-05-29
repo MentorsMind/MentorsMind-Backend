@@ -104,6 +104,7 @@ export const utcToLocal = (utcISO: string, timezone: string): DateTime => {
 export const formatInTimezone = (
   utcISO: string,
   timezone: string,
+  format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz"
   format: string = "cccc, LLLL dd, yyyy 'at' HH:mm zzz",
 ): string => {
   return utcToLocal(utcISO, timezone).toFormat(format);

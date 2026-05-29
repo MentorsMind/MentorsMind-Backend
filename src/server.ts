@@ -1,3 +1,9 @@
+import http from 'http';
+// Config must be imported first — validates env vars before anything else loads
+import config from './config';
+import app from './app';
+import { initializeModels } from './models';
+import { initializeCollaborationSocket } from './services/collaboration.socket';
 // Sentry must be initialised before any other imports so it can instrument them
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
@@ -105,6 +111,15 @@ startScheduler().catch((err) => {
 const { port: PORT, apiVersion: API_VERSION } = config.server;
 const NODE_ENV = config.env;
 
+const server = http.createServer(app);
+initializeCollaborationSocket(server);
+
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📝 Environment: ${NODE_ENV}`);
+  console.log(`🌐 API URL: http://localhost:${PORT}/api/${API_VERSION}`);
+  console.log(`💚 Health check: http://localhost:${PORT}/health`);
+  console.log(`📚 API Docs: http://localhost:${PORT}/api/${API_VERSION}/docs`);
 // Initialize GraphQL server
 initializeGraphQL(app).catch((err) => {
   logger.error("Failed to initialize GraphQL server", { error: err });
