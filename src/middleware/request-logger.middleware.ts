@@ -16,11 +16,16 @@ import { maskPII } from "../utils/pii-mask";
  */
 export const requestLoggerMiddleware = pinoHttp({
   logger,
-  // Attach requestId and userId to every log line
-  genReqId: (_req, res) => (res as unknown as Response).locals?.requestId,
-  customProps: (_req, res) => ({
-    requestId: (res as unknown as Response).locals?.requestId,
+  // Attach requestId and userId to every log line. Try res.locals then fall back to req.
+  genReqId: (req, res) =>
+    (res as unknown as Response).locals?.requestId || (req as any).requestId,
+  customProps: (req, res) => ({
+    requestId:
+      (res as unknown as Response).locals?.requestId || (req as any).requestId,
+    correlationId:
+      (res as unknown as Response).locals?.correlationId || (req as any).correlationId,
     userId: (res as unknown as Response).locals?.userId ?? undefined,
+    responseTimeMs: (res as unknown as Response).locals?.responseTimeMs,
   }),
   customLogLevel: (_req, res, err) => {
     if (err || res.statusCode >= 500) return "error";

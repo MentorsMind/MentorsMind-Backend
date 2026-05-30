@@ -2,7 +2,7 @@
 
 ## Overview
 
-MentorsMind-Backend uses [Winston](https://github.com/winstonjs/winston) for structured logging, with daily log rotation in production. Every request is automatically correlated with a unique **Correlation ID** (UUID v4) so that all log entries from the same HTTP request can be traced together.
+MentorsMind-Backend uses [Pino](https://github.com/pinojs/pino) for high-performance structured JSON logging. Every request is automatically correlated with a unique **Correlation ID** (UUID v4) so that all log entries from the same HTTP request can be traced together.
 
 ---
 
@@ -23,8 +23,6 @@ Set the active level via the `LOG_LEVEL` environment variable (default: `info`).
 
 ```typescript
 import { logger } from './utils/logger';
-// or, via the backward-compat alias:
-import { logger } from './utils/logger.utils';
 ```
 
 ### Basic Usage
@@ -38,32 +36,21 @@ logger.debug('Executing SQL query', { sql, params });
 
 ---
 
-## Correlation IDs
+### Correlation IDs
 
-Every HTTP request gets a **correlation ID** attached by `correlationIdMiddleware` (mounted first in `app.ts`).
+Every HTTP request gets `X-Request-Id` and `X-Correlation-Id` headers assigned by `tracing.middleware` (mounted early in `app.ts`).
 
-- The ID is read from the `X-Correlation-Id` **request** header if present, otherwise a new UUID v4 is generated.
-- It is echoed back in the `X-Correlation-Id` **response** header.
-- It is available anywhere in the async call chain via `getCorrelationId()`.
+- If the upstream caller provides `X-Correlation-Id`, it is preserved; otherwise a new UUID v4 is generated.
+- The request-level `X-Request-Id` is always newly generated when missing.
+- Both IDs are available anywhere in the async call chain via the `traceStore` (used by `logger` mixin).
 
-### Retrieving the Correlation ID in Services
-
-```typescript
-import { getCorrelationId } from '../middleware/correlation-id.middleware';
-
-async function doSomething() {
-  const correlationId = getCorrelationId(); // works inside any request context
-  logger.info('Doing something', { correlationId });
-}
-```
-
-### Creating a Child Logger (pre-bound Correlation ID)
+Retrieving the correlation id or creating a child logger:
 
 ```typescript
 import { withCorrelationId } from '../utils/logger';
 
 const requestLogger = withCorrelationId(req.correlationId);
-requestLogger.info('Processing request'); // always includes correlationId
+requestLogger.info('Processing request');
 ```
 
 ---
@@ -90,20 +77,14 @@ You **never** need to redact these manually. However, **do not** use these key n
 
 ## Log Files (Production Only)
 
-When `NODE_ENV=production`, logs are written to rotating files:
+When `NODE_ENV=production`, the logger emits machine-parseable JSON by default (one JSON object per line). You can route these logs to your aggregator of choice (Filebeat/Fluentd, Logstash, or a hosted provider).
 
-| File | Content |
-|------|---------|
-| `logs/app-YYYY-MM-DD.log` | All levels |
-| `logs/error-YYYY-MM-DD.log` | Errors only |
+Recommended deployment options:
 
-Configure via environment variables:
+- ELK (Elasticsearch + Logstash + Kibana): ship the service stdout to a log collector (Filebeat/Logstash) and configure an index pattern such as `mentorminds-%{+yyyy.MM.dd}`.
+- Datadog / New Relic: use their log ingestion agent or HTTP API to collect JSON lines from stdout.
 
-```
-LOG_FILE_PATH=logs   # directory (default: "logs")
-LOG_MAX_SIZE=20m     # max file size before rotation
-LOG_MAX_FILES=14d    # retention period
-```
+Configuration knobs are available via environment variables (see `.env.example` and `src/config/env.ts`). If you enable `ELASTICSEARCH_ENABLED=true`, the app provides helpers and example index syncing scripts under `scripts/`.
 
 ---
 
@@ -140,4 +121,21 @@ Run logging-related tests:
 
 ```bash
 npx jest --testPathPattern="logger|correlation-id|request-logger" --verbose
+
+---
+
+**Advanced features implemented**
+
+- Structured JSON logging with automatic redaction and PII masking (`src/utils/logger.ts`).
+- AsyncLocalStorage-based trace propagation (`src/middleware/tracing.middleware.ts`).
+- Request logger middleware using `pino-http` with correlation IDs (`src/middleware/request-logger.middleware.ts`).
+- A sampling helper for high-volume events (`src/utils/log-sampler.ts`).
+
+**Integration & operations guidance**
+
+- Use Filebeat or Fluent Bit to tail container stdout and forward to Elasticsearch or Datadog.
+- In Elasticsearch/Kibana, create index lifecycle policies (ILM) to set retention and rollover rules. Example policy: hot for 7 days, warm for 14 days, delete after 90 days.
+- Configure alerting in Kibana or Datadog: create alerts on `error`/`fatal` rate increases, high latency (responseTimeMs), or specific monitored exceptions.
+
+If you want, I can add optional sample Filebeat/Logstash config and an example Kibana dashboard template next.
 ```

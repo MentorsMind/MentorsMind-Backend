@@ -1,0 +1,20 @@
+{
+  "title": "MentorMinds - Service Logs Overview",
+  "panels": [
+    {
+      "type": "visualization",
+      "title": "Error Rate",
+      "id": "error-rate-chart"
+    },
+    {
+      "type": "visualization",
+      "title": "Requests by Endpoint",
+      "id": "requests-by-endpoint"
+    },
+    {
+      "type": "visualization",
+      "title": "Latency (P50/P95)",
+      "id": "latency-chart"
+    }
+  ]
+}

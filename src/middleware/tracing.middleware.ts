@@ -50,14 +50,21 @@ export const tracingMiddleware = (
   (req as any).requestId = requestId;
   (req as any).correlationId = correlationId;
 
+  // Also expose on res.locals so other middleware (e.g. pino-http) can read it
+  if ((res as any).locals) {
+    (res as any).locals.requestId = requestId;
+    (res as any).locals.correlationId = correlationId;
+  }
+
   // 4. Attach to response headers
   res.setHeader('X-Request-Id', requestId);
   res.setHeader('X-Correlation-Id', correlationId);
 
-  // 5. Track response time
+  // 5. Track response time and make it available for logging (do not set header in 'finish')
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    res.setHeader('X-Response-Time', `${duration}ms`);
+    // store on res.locals so request logger middleware can include it in logs
+    if ((res as any).locals) (res as any).locals.responseTimeMs = duration;
   });
 
   // 6. Run downstream logic within the trace context

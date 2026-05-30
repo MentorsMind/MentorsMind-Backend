@@ -157,6 +157,9 @@ export function withCorrelationId(correlationId: string): pino.Logger {
   return logger.child({ correlationId });
 }
 
+// Re-export sampling helper for convenience
+export { sampleLog } from './log-sampler';
+
 // ---------------------------------------------------------------------------
 // Sensitive-field redaction helper (kept for backward-compat)
 // ---------------------------------------------------------------------------
