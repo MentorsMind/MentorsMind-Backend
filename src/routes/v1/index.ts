@@ -110,4 +110,12 @@ import tenantRoutes from "../tenant.routes";
 // Multi-tenant routes
 router.use("/tenants", tenantRoutes);
 
+// Dynamic Pricing Engine (issue #560)
+import dynamicPricingRoutes from "../dynamic-pricing.routes";
+router.use("/pricing", dynamicPricingRoutes);
+
+// Mentor Onboarding Automation (issue #562)
+import mentorOnboardingRoutes from "../mentor-onboarding.routes";
+router.use("/onboarding", mentorOnboardingRoutes);
+
 export default router;

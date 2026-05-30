@@ -23,36 +23,16 @@ export const WebhooksController = {
       filter_statuses,
     );
 
-    return ResponseUtil.created(
-      res,
-      {
-        webhook: {
-          id: webhook.id,
-          url: webhook.url,
-          event_types: webhook.event_types,
-          resource_types: webhook.resource_types,
-          filter_statuses: webhook.filter_statuses,
-          is_active: webhook.is_active,
-          description: webhook.description,
-          created_at: webhook.created_at,
-          // Shown once — store it securely
-          secret: webhook.secret_plain,
-        },
-      },
-      'Webhook registered. Store the secret securely — it will not be shown again.',
-    );
-    const webhook = await WebhookService.create(userId, url, event_types, description);
-
-    // Return the plain secret only on creation — never again
     return ResponseUtil.created(res, {
       webhook: {
         id: webhook.id,
         url: webhook.url,
         event_types: webhook.event_types,
+        resource_types: webhook.resource_types,
+        filter_statuses: webhook.filter_statuses,
         is_active: webhook.is_active,
         description: webhook.description,
         created_at: webhook.created_at,
-        // Shown once — store it securely
         secret: webhook.secret_plain,
         api_key: webhook.api_key_plain,
       },
