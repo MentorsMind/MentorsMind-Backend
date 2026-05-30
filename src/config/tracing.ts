@@ -46,15 +46,12 @@
 // The project may not yet have the OTel packages installed. We use dynamic
 // requires and fall back to no-ops so that unrelated code paths are unaffected.
 
-/* eslint-disable @typescript-eslint/no-var-requires */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { env } from './env';
-import { logger } from '../utils/logger.utils';
+import { env } from "./env";
+import { logger } from "../utils/logger.utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type SpanStatus = 'ok' | 'error';
+export type SpanStatus = "ok" | "error";
 
 export interface SpanOptions {
   /** Additional key-value attributes attached to the span. */
@@ -71,10 +68,9 @@ let tracingInitialized = false;
  */
 export function initTracing(): void {
   if (tracingInitialized) return;
-  if (env.NODE_ENV === 'test') return; // never trace in test runs
+  if (env.NODE_ENV === "test") return; // never trace in test runs
 
-  const exporterType =
-    (process.env.OTEL_EXPORTER ?? 'jaeger').toLowerCase();
+  const exporterType = (process.env.OTEL_EXPORTER ?? "jaeger").toLowerCase();
 
   // Attempt to load OTel packages — skip gracefully if not installed
   let NodeSDK: any;
@@ -86,78 +82,103 @@ export function initTracing(): void {
   let SpanExporter: any;
 
   try {
-    ({ NodeSDK } = require('@opentelemetry/sdk-node'));
-    ({ getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node'));
-    ({ Resource } = require('@opentelemetry/resources'));
-    const semconv = require('@opentelemetry/semantic-conventions');
-    SEMRESATTRS_SERVICE_NAME = semconv.SEMRESATTRS_SERVICE_NAME ?? 'service.name';
-    SEMRESATTRS_SERVICE_VERSION = semconv.SEMRESATTRS_SERVICE_VERSION ?? 'service.version';
-    SEMRESATTRS_DEPLOYMENT_ENVIRONMENT = semconv.SEMRESATTRS_DEPLOYMENT_ENVIRONMENT ?? 'deployment.environment';
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ({ NodeSDK } = require("@opentelemetry/sdk-node"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ({
+      getNodeAutoInstrumentations,
+    } = require("@opentelemetry/auto-instrumentations-node"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ({ Resource } = require("@opentelemetry/resources"));
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const semconv = require("@opentelemetry/semantic-conventions");
+    SEMRESATTRS_SERVICE_NAME =
+      semconv.SEMRESATTRS_SERVICE_NAME ?? "service.name";
+    SEMRESATTRS_SERVICE_VERSION =
+      semconv.SEMRESATTRS_SERVICE_VERSION ?? "service.version";
+    SEMRESATTRS_DEPLOYMENT_ENVIRONMENT =
+      semconv.SEMRESATTRS_DEPLOYMENT_ENVIRONMENT ?? "deployment.environment";
   } catch {
     logger.warn(
-      '[Tracing] @opentelemetry packages not installed — tracing disabled. ' +
-      'Run: npm install @opentelemetry/sdk-node @opentelemetry/api ' +
-      '@opentelemetry/auto-instrumentations-node @opentelemetry/resources ' +
-      '@opentelemetry/semantic-conventions',
+      "[Tracing] @opentelemetry packages not installed — tracing disabled. " +
+        "Run: npm install @opentelemetry/sdk-node @opentelemetry/api " +
+        "@opentelemetry/auto-instrumentations-node @opentelemetry/resources " +
+        "@opentelemetry/semantic-conventions",
     );
     return;
   }
 
   // Pick exporter
   try {
-    if (exporterType === 'jaeger') {
-      const { JaegerExporter } = require('@opentelemetry/exporter-jaeger');
+    if (exporterType === "jaeger") {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { JaegerExporter } = require("@opentelemetry/exporter-jaeger");
       const jaegerEndpoint =
-        process.env.JAEGER_ENDPOINT ?? 'http://localhost:14268/api/traces';
+        process.env.JAEGER_ENDPOINT ?? "http://localhost:14268/api/traces";
       SpanExporter = new JaegerExporter({ endpoint: jaegerEndpoint });
       logger.info(`[Tracing] Using Jaeger exporter → ${jaegerEndpoint}`);
     } else {
       // Datadog Agent or any OTLP collector (set OTEL_EXPORTER_OTLP_ENDPOINT)
-      const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const {
+        OTLPTraceExporter,
+      } = require("@opentelemetry/exporter-trace-otlp-grpc");
       const otlpEndpoint =
-        process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4317';
+        process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "http://localhost:4317";
       SpanExporter = new OTLPTraceExporter({ url: otlpEndpoint });
       logger.info(`[Tracing] Using OTLP exporter → ${otlpEndpoint}`);
     }
-  } catch (err) {
+  } catch {
     logger.warn(
       `[Tracing] Could not load exporter for "${exporterType}" — tracing disabled. ` +
-      'Install the relevant @opentelemetry/exporter-* package.',
+        "Install the relevant @opentelemetry/exporter-* package.",
     );
     return;
   }
 
   const sdk = new NodeSDK({
     resource: new Resource({
-      [SEMRESATTRS_SERVICE_NAME]: 'mentorminds-backend',
-      [SEMRESATTRS_SERVICE_VERSION]: process.env.npm_package_version ?? '1.0.0',
+      [SEMRESATTRS_SERVICE_NAME]: "mentorminds-backend",
+      [SEMRESATTRS_SERVICE_VERSION]: process.env.npm_package_version ?? "1.0.0",
       [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]: env.NODE_ENV,
     }),
     traceExporter: SpanExporter,
     instrumentations: [
       getNodeAutoInstrumentations({
         // HTTP spans — capture incoming + outgoing (Stellar Horizon, external APIs)
-        '@opentelemetry/instrumentation-http': { enabled: true },
+        "@opentelemetry/instrumentation-http": { enabled: true },
         // Express routing spans (middleware, route handlers)
-        '@opentelemetry/instrumentation-express': { enabled: true },
+        "@opentelemetry/instrumentation-express": { enabled: true },
         // PostgreSQL pg Pool queries
-        '@opentelemetry/instrumentation-pg': { enabled: true },
+        "@opentelemetry/instrumentation-pg": { enabled: true },
         // ioredis calls (cache, queue, pub/sub)
-        '@opentelemetry/instrumentation-ioredis': { enabled: true },
+        "@opentelemetry/instrumentation-ioredis": { enabled: true },
         // fs, dns — disabled to reduce noise
-        '@opentelemetry/instrumentation-fs': { enabled: false },
-        '@opentelemetry/instrumentation-dns': { enabled: false },
+        "@opentelemetry/instrumentation-fs": { enabled: false },
+        "@opentelemetry/instrumentation-dns": { enabled: false },
       }),
     ],
   });
 
   sdk.start();
   tracingInitialized = true;
-  logger.info('[Tracing] OpenTelemetry SDK started');
+  logger.info("[Tracing] OpenTelemetry SDK started");
 
   // Flush spans on graceful shutdown
-  process.on('SIGTERM', () => sdk.shutdown().catch((e: Error) => logger.error('[Tracing] Shutdown error', { error: e })));
-  process.on('SIGINT',  () => sdk.shutdown().catch((e: Error) => logger.error('[Tracing] Shutdown error', { error: e })));
+  process.on("SIGTERM", () =>
+    sdk
+      .shutdown()
+      .catch((e: Error) =>
+        logger.error("[Tracing] Shutdown error", { error: e }),
+      ),
+  );
+  process.on("SIGINT", () =>
+    sdk
+      .shutdown()
+      .catch((e: Error) =>
+        logger.error("[Tracing] Shutdown error", { error: e }),
+      ),
+  );
 }
 
 // ─── Manual span helper ───────────────────────────────────────────────────────
@@ -190,8 +211,9 @@ export async function wrapWithSpan<T>(
   let api: any;
 
   try {
-    api = require('@opentelemetry/api');
-    tracer = api.trace.getTracer('mentorminds');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    api = require("@opentelemetry/api");
+    tracer = api.trace.getTracer("mentorminds");
   } catch {
     // OTel not installed — run fn directly
     return fn(null);
@@ -226,8 +248,9 @@ export async function wrapWithSpan<T>(
  */
 export function getTracer(): any | null {
   try {
-    const api = require('@opentelemetry/api');
-    return api.trace.getTracer('mentorminds');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const api = require("@opentelemetry/api");
+    return api.trace.getTracer("mentorminds");
   } catch {
     return null;
   }

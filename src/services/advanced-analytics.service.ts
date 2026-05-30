@@ -63,8 +63,8 @@ export interface DemandForecast {
 
 export interface Insight {
   id: string;
-  type: 'trend' | 'anomaly' | 'recommendation';
-  severity: 'info' | 'warning' | 'critical';
+  type: "trend" | "anomaly" | "recommendation";
+  severity: "info" | "warning" | "critical";
   title: string;
   description: string;
   metricName?: string;
@@ -81,59 +81,65 @@ export interface CurrencyBreakdown {
 }
 
 export class AdvancedAnalyticsError extends Error {
-  constructor(message: string, public code: string) {
+  constructor(
+    message: string,
+    public code: string,
+  ) {
     super(message);
-    this.name = 'AdvancedAnalyticsError';
+    this.name = "AdvancedAnalyticsError";
   }
 }
 
 export class InsufficientDataError extends AdvancedAnalyticsError {
-  constructor(message: string = 'Insufficient data for analysis') {
-    super(message, 'INSUFFICIENT_DATA');
+  constructor(message: string = "Insufficient data for analysis") {
+    super(message, "INSUFFICIENT_DATA");
   }
 }
 
 const CACHE_TTL = 300; // 5 minutes
 const DASHBOARD_CACHE_TTL = 180; // 3 minutes for dashboard
-const QUERY_TIMEOUT = 30000; // 30 seconds
+const _QUERY_TIMEOUT = 30000; // 30 seconds
 
 export const AdvancedAnalyticsService = {
   /**
    * Get comprehensive dashboard data
    * Orchestrates calls to multiple services and caches result
    */
-  async getDashboard(userId: string, period: string = '30d'): Promise<AnalyticsDashboard> {
+  async getDashboard(
+    userId: string,
+    period: string = "30d",
+  ): Promise<AnalyticsDashboard> {
     const cacheKey = `analytics:dashboard:${userId}:${period}`;
-    
+
     return CacheService.wrap(cacheKey, DASHBOARD_CACHE_TTL, async () => {
       try {
         // Ensure views are available
         await AnalyticsService.ensureViewsAvailable();
-        
+
         const [metrics, predictions, insights] = await Promise.all([
           this.getMetrics(userId, period),
           this.getPredictions(userId),
-          this.getInsights(userId, false)
+          this.getInsights(userId, false),
         ]);
-        
+
         const dashboard: AnalyticsDashboard = {
           userId,
           metrics,
           predictions,
           insights,
-          lastUpdated: new Date().toISOString()
+          lastUpdated: new Date().toISOString(),
         };
-        
-        logger.debug('Dashboard data compiled', { 
-          userId, 
-          period, 
+
+        logger.debug("Dashboard data compiled", {
+          userId,
+          period,
           metricsCount: Object.keys(metrics).length,
-          insightsCount: insights.length 
+          insightsCount: insights.length,
         });
-        
+
         return dashboard;
       } catch (error) {
-        logger.error('Failed to get dashboard data', { error, userId, period });
+        logger.error("Failed to get dashboard data", { error, userId, period });
         throw error;
       }
     });
@@ -141,12 +147,15 @@ export const AdvancedAnalyticsService = {
   /**
    * Get real-time metrics (bypasses cache)
    */
-  async getRealTimeMetrics(userId: string, period: string = '30d'): Promise<AnalyticsDashboard['metrics']> {
+  async getRealTimeMetrics(
+    userId: string,
+    period: string = "30d",
+  ): Promise<AnalyticsDashboard["metrics"]> {
     try {
       await AnalyticsService.ensureViewsAvailable();
       return await this.getMetrics(userId, period);
     } catch (error) {
-      logger.error('Failed to get real-time metrics', { error, userId });
+      logger.error("Failed to get real-time metrics", { error, userId });
       throw error;
     }
   },
@@ -154,16 +163,19 @@ export const AdvancedAnalyticsService = {
   /**
    * Get comprehensive metrics
    */
-  async getMetrics(userId: string, period: string): Promise<AnalyticsDashboard['metrics']> {
+  async getMetrics(
+    userId: string,
+    period: string,
+  ): Promise<AnalyticsDashboard["metrics"]> {
     const days = AnalyticsService.parsePeriod(period);
-    
+
     const [revenue, sessions, students, growth] = await Promise.all([
       this.getRevenueMetrics(days),
       this.getSessionMetrics(days),
       this.getStudentMetrics(days),
-      this.getGrowthMetrics(days)
+      this.getGrowthMetrics(days),
     ]);
-    
+
     return { revenue, sessions, students, growth };
   },
 
@@ -225,12 +237,12 @@ export const AdvancedAnalyticsService = {
     const row = rows[0] || {};
 
     return {
-      totalAmount: parseFloat(row.total_amount || '0'),
-      platformFee: parseFloat(row.total_platform_fee || '0'),
-      transactionCount: parseInt(row.transaction_count || '0'),
-      avgTransactionValue: parseFloat(row.avg_amount || '0'),
-      growthRate: parseFloat(row.growth_rate || '0'),
-      currencyBreakdown: row.currency_breakdown || []
+      totalAmount: parseFloat(row.total_amount || "0"),
+      platformFee: parseFloat(row.total_platform_fee || "0"),
+      transactionCount: parseInt(row.transaction_count || "0"),
+      avgTransactionValue: parseFloat(row.avg_amount || "0"),
+      growthRate: parseFloat(row.growth_rate || "0"),
+      currencyBreakdown: row.currency_breakdown || [],
     };
   },
   /**
@@ -273,12 +285,12 @@ export const AdvancedAnalyticsService = {
     const row = rows[0] || {};
 
     return {
-      totalSessions: parseInt(row.total_sessions || '0'),
-      completedSessions: parseInt(row.completed_sessions || '0'),
-      completionRate: parseFloat(row.completion_rate || '0'),
-      avgDuration: parseFloat(row.avg_duration || '0'),
-      cancelledSessions: parseInt(row.cancelled_sessions || '0'),
-      upcomingSessions: parseInt(row.upcoming_count || '0')
+      totalSessions: parseInt(row.total_sessions || "0"),
+      completedSessions: parseInt(row.completed_sessions || "0"),
+      completionRate: parseFloat(row.completion_rate || "0"),
+      avgDuration: parseFloat(row.avg_duration || "0"),
+      cancelledSessions: parseInt(row.cancelled_sessions || "0"),
+      upcomingSessions: parseInt(row.upcoming_count || "0"),
     };
   },
 
@@ -345,11 +357,11 @@ export const AdvancedAnalyticsService = {
     const row = rows[0] || {};
 
     return {
-      totalStudents: parseInt(row.total_students || '0'),
-      activeStudents: parseInt(row.active_count || '0'),
-      newStudents: parseInt(row.new_students || '0'),
-      retentionRate: parseFloat(row.retention_rate || '0'),
-      avgSessionsPerStudent: parseFloat(row.avg_sessions_per_student || '0')
+      totalStudents: parseInt(row.total_students || "0"),
+      activeStudents: parseInt(row.active_count || "0"),
+      newStudents: parseInt(row.new_students || "0"),
+      retentionRate: parseFloat(row.retention_rate || "0"),
+      avgSessionsPerStudent: parseFloat(row.avg_sessions_per_student || "0"),
     };
   },
   /**
@@ -413,37 +425,40 @@ export const AdvancedAnalyticsService = {
     const row = rows[0] || {};
 
     return {
-      userGrowthRate: parseFloat(row.user_growth_rate || '0'),
-      revenueGrowthRate: parseFloat(row.revenue_growth_rate || '0'),
-      sessionGrowthRate: parseFloat(row.session_growth_rate || '0'),
-      mentorGrowthRate: parseFloat(row.mentor_growth_rate || '0')
+      userGrowthRate: parseFloat(row.user_growth_rate || "0"),
+      revenueGrowthRate: parseFloat(row.revenue_growth_rate || "0"),
+      sessionGrowthRate: parseFloat(row.session_growth_rate || "0"),
+      mentorGrowthRate: parseFloat(row.mentor_growth_rate || "0"),
     };
   },
 
   /**
    * Get predictions
    */
-  async getPredictions(userId: string): Promise<AnalyticsDashboard['predictions']> {
+  async getPredictions(
+    _userId: string,
+  ): Promise<AnalyticsDashboard["predictions"]> {
     try {
-      const { PredictiveEngineService } = await import('./predictive-engine.service');
-      
+      const { PredictiveEngineService } =
+        await import("./predictive-engine.service");
+
       // Get revenue forecast for next month
       const revenueForecasts = await PredictiveEngineService.forecastRevenue(1);
-      const nextMonthRevenue = revenueForecasts.length > 0 ? 
-        revenueForecasts[0].predictedRevenue : 0;
-      
+      const nextMonthRevenue =
+        revenueForecasts.length > 0 ? revenueForecasts[0].predictedRevenue : 0;
+
       // Get demand forecast for next 7 days
       const demandForecast = await PredictiveEngineService.forecastDemand(7);
-      
+
       return {
         nextMonthRevenue,
-        demandForecast
+        demandForecast,
       };
     } catch (error) {
-      logger.warn('Failed to get predictions, returning empty', { error });
+      logger.warn("Failed to get predictions, returning empty", { error });
       return {
         nextMonthRevenue: 0,
-        demandForecast: []
+        demandForecast: [],
       };
     }
   },
@@ -451,12 +466,16 @@ export const AdvancedAnalyticsService = {
   /**
    * Get insights
    */
-  async getInsights(userId: string, unreadOnly: boolean = false): Promise<Insight[]> {
+  async getInsights(
+    userId: string,
+    unreadOnly: boolean = false,
+  ): Promise<Insight[]> {
     try {
-      const { InsightGeneratorService } = await import('./insight-generator.service');
+      const { InsightGeneratorService } =
+        await import("./insight-generator.service");
       return await InsightGeneratorService.getInsights(userId, unreadOnly);
     } catch (error) {
-      logger.warn('Failed to get insights, returning empty', { error });
+      logger.warn("Failed to get insights, returning empty", { error });
       return [];
     }
   },
@@ -467,11 +486,11 @@ export const AdvancedAnalyticsService = {
    */
   async refreshAnalytics(): Promise<void> {
     try {
-      await pool.query('SELECT refresh_advanced_analytics_views()');
-      await CacheService.invalidate('analytics:*');
-      logger.info('Advanced analytics refreshed successfully');
+      await pool.query("SELECT refresh_advanced_analytics_views()");
+      await CacheService.invalidate("analytics:*");
+      logger.info("Advanced analytics refreshed successfully");
     } catch (error) {
-      logger.error('Failed to refresh advanced analytics', { error });
+      logger.error("Failed to refresh advanced analytics", { error });
       throw error;
     }
   },
@@ -483,17 +502,17 @@ export const AdvancedAnalyticsService = {
     metricType: string,
     startDate: Date,
     endDate: Date,
-    filters?: Record<string, any>
+    _filters?: Record<string, any>,
   ): Promise<any[]> {
     const cacheKey = `analytics:metrics:${metricType}:${startDate.toISOString()}:${endDate.toISOString()}`;
-    
+
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        let query = '';
-        let params: any[] = [startDate, endDate];
+        let query = "";
+        const params: any[] = [startDate, endDate];
 
         switch (metricType) {
-          case 'revenue':
+          case "revenue":
             query = `
               SELECT date, currency, total_amount, transaction_count
               FROM mv_daily_revenue
@@ -501,7 +520,7 @@ export const AdvancedAnalyticsService = {
               ORDER BY date DESC
             `;
             break;
-          case 'sessions':
+          case "sessions":
             query = `
               SELECT date, status, session_count, avg_duration_minutes
               FROM mv_session_stats
@@ -509,7 +528,7 @@ export const AdvancedAnalyticsService = {
               ORDER BY date DESC
             `;
             break;
-          case 'users':
+          case "users":
             query = `
               SELECT date, role, new_users, verified_users
               FROM mv_daily_users
@@ -518,13 +537,21 @@ export const AdvancedAnalyticsService = {
             `;
             break;
           default:
-            throw new AdvancedAnalyticsError(`Unknown metric type: ${metricType}`, 'INVALID_METRIC_TYPE');
+            throw new AdvancedAnalyticsError(
+              `Unknown metric type: ${metricType}`,
+              "INVALID_METRIC_TYPE",
+            );
         }
 
         const { rows } = await pool.query(query, params);
         return rows;
       } catch (error) {
-        logger.error('Failed to get metrics by date range', { error, metricType, startDate, endDate });
+        logger.error("Failed to get metrics by date range", {
+          error,
+          metricType,
+          startDate,
+          endDate,
+        });
         throw error;
       }
     });
@@ -534,13 +561,13 @@ export const AdvancedAnalyticsService = {
    * Initialize advanced analytics service
    */
   async initialize(): Promise<void> {
-    logger.info('Initializing AdvancedAnalyticsService...');
+    logger.info("Initializing AdvancedAnalyticsService...");
     try {
       await AnalyticsService.initialize();
-      logger.info('AdvancedAnalyticsService initialized successfully');
+      logger.info("AdvancedAnalyticsService initialized successfully");
     } catch (error) {
-      logger.error('Failed to initialize AdvancedAnalyticsService', { error });
+      logger.error("Failed to initialize AdvancedAnalyticsService", { error });
       throw error;
     }
-  }
+  },
 };
