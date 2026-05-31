@@ -1,6 +1,6 @@
 /**
  * Database Maintenance Job
- * 
+ *
  * Scheduled jobs for regular database maintenance:
  * - Weekly VACUUM
  * - Weekly ANALYZE
@@ -8,8 +8,8 @@
  * - Weekly table bloat monitoring
  */
 
-import databaseMaintenanceManager from '../utils/database-maintenance.utils';
-import { logInfo, logWarning, logError } from '../utils/error.utils';
+import databaseMaintenanceManager from "../utils/database-maintenance.utils";
+import { logInfo, logWarning, logError } from "../utils/error.utils";
 
 // Declare require for dynamic imports
 declare const require: any;
@@ -26,7 +26,7 @@ class DatabaseMaintenanceJob {
     this.startMonthlyIndexRebuildJob();
     this.startWeeklyBloatCheckJob();
 
-    logInfo('Database maintenance jobs initialized', {
+    logInfo("Database maintenance jobs initialized", {
       jobCount: this.jobs.size,
     });
   }
@@ -37,17 +37,16 @@ class DatabaseMaintenanceJob {
    */
   private startWeeklyVacuumJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 2 * * 0', async () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 2 * * 0", async () => {
         await this.executeVacuum();
       });
 
       job.start();
-      this.jobs.set('weekly-vacuum', job);
-      logInfo('Weekly VACUUM job started (Sunday 2 AM UTC)');
+      this.jobs.set("weekly-vacuum", job);
+      logInfo("Weekly VACUUM job started (Sunday 2 AM UTC)");
     } catch (error) {
-      logWarning('Failed to start weekly VACUUM job', {
+      logWarning("Failed to start weekly VACUUM job", {
         error: (error as Error).message,
       });
     }
@@ -59,17 +58,16 @@ class DatabaseMaintenanceJob {
    */
   private startWeeklyAnalyzeJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 3 * * 0', async () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 3 * * 0", async () => {
         await this.executeAnalyze();
       });
 
       job.start();
-      this.jobs.set('weekly-analyze', job);
-      logInfo('Weekly ANALYZE job started (Sunday 3 AM UTC)');
+      this.jobs.set("weekly-analyze", job);
+      logInfo("Weekly ANALYZE job started (Sunday 3 AM UTC)");
     } catch (error) {
-      logWarning('Failed to start weekly ANALYZE job', {
+      logWarning("Failed to start weekly ANALYZE job", {
         error: (error as Error).message,
       });
     }
@@ -81,18 +79,19 @@ class DatabaseMaintenanceJob {
    */
   private startMonthlyIndexRebuildJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
+      const { CronJob } = require("cron");
       // First Sunday of month: 0 4 1-7 * 0
-      const job = new CronJob('0 4 1-7 * 0', async () => {
+      const job = new CronJob("0 4 1-7 * 0", async () => {
         await this.executeIndexRebuild();
       });
 
       job.start();
-      this.jobs.set('monthly-index-rebuild', job);
-      logInfo('Monthly index rebuild job started (First Sunday of month at 4 AM UTC)');
+      this.jobs.set("monthly-index-rebuild", job);
+      logInfo(
+        "Monthly index rebuild job started (First Sunday of month at 4 AM UTC)",
+      );
     } catch (error) {
-      logWarning('Failed to start monthly index rebuild job', {
+      logWarning("Failed to start monthly index rebuild job", {
         error: (error as Error).message,
       });
     }
@@ -104,17 +103,16 @@ class DatabaseMaintenanceJob {
    */
   private startWeeklyBloatCheckJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 1 * * 1', async () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 1 * * 1", async () => {
         await this.executeBloatCheck();
       });
 
       job.start();
-      this.jobs.set('weekly-bloat-check', job);
-      logInfo('Weekly bloat check job started (Monday 1 AM UTC)');
+      this.jobs.set("weekly-bloat-check", job);
+      logInfo("Weekly bloat check job started (Monday 1 AM UTC)");
     } catch (error) {
-      logWarning('Failed to start weekly bloat check job', {
+      logWarning("Failed to start weekly bloat check job", {
         error: (error as Error).message,
       });
     }
@@ -125,15 +123,15 @@ class DatabaseMaintenanceJob {
    */
   private async executeVacuum(): Promise<void> {
     try {
-      logInfo('Executing scheduled VACUUM operation');
+      logInfo("Executing scheduled VACUUM operation");
       const stats = await databaseMaintenanceManager.runVacuum(false);
-      logInfo('Scheduled VACUUM completed', {
+      logInfo("Scheduled VACUUM completed", {
         duration: stats.duration,
         status: stats.status,
       });
     } catch (error) {
-      logError(error as Error, 'high', {
-        operation: 'scheduled_vacuum',
+      logError(error as Error, "high", {
+        operation: "scheduled_vacuum",
       });
     }
   }
@@ -143,15 +141,15 @@ class DatabaseMaintenanceJob {
    */
   private async executeAnalyze(): Promise<void> {
     try {
-      logInfo('Executing scheduled ANALYZE operation');
+      logInfo("Executing scheduled ANALYZE operation");
       const stats = await databaseMaintenanceManager.runAnalyze();
-      logInfo('Scheduled ANALYZE completed', {
+      logInfo("Scheduled ANALYZE completed", {
         duration: stats.duration,
         status: stats.status,
       });
     } catch (error) {
-      logError(error as Error, 'high', {
-        operation: 'scheduled_analyze',
+      logError(error as Error, "high", {
+        operation: "scheduled_analyze",
       });
     }
   }
@@ -161,16 +159,16 @@ class DatabaseMaintenanceJob {
    */
   private async executeIndexRebuild(): Promise<void> {
     try {
-      logInfo('Executing scheduled index rebuild operation');
+      logInfo("Executing scheduled index rebuild operation");
       const stats = await databaseMaintenanceManager.rebuildFragmentedIndexes();
-      logInfo('Scheduled index rebuild completed', {
+      logInfo("Scheduled index rebuild completed", {
         duration: stats.duration,
         status: stats.status,
         details: stats.details,
       });
     } catch (error) {
-      logError(error as Error, 'high', {
-        operation: 'scheduled_index_rebuild',
+      logError(error as Error, "high", {
+        operation: "scheduled_index_rebuild",
       });
     }
   }
@@ -180,16 +178,16 @@ class DatabaseMaintenanceJob {
    */
   private async executeBloatCheck(): Promise<void> {
     try {
-      logInfo('Executing scheduled table bloat check');
+      logInfo("Executing scheduled table bloat check");
       const stats = await databaseMaintenanceManager.checkTableBloat();
-      logInfo('Scheduled bloat check completed', {
+      logInfo("Scheduled bloat check completed", {
         duration: stats.duration,
         status: stats.status,
         details: stats.details,
       });
     } catch (error) {
-      logError(error as Error, 'high', {
-        operation: 'scheduled_bloat_check',
+      logError(error as Error, "high", {
+        operation: "scheduled_bloat_check",
       });
     }
   }

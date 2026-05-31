@@ -1,4 +1,5 @@
 import { Router } from "express";
+import backupRoutes from "./admin/backup.routes";
 import { AdminController } from "../controllers/admin.controller";
 import { AnalyticsController } from "../controllers/analytics.controller";
 import { VerificationController } from "../controllers/verification.controller";
@@ -8,7 +9,7 @@ import { authenticate } from "../middleware/auth.middleware";
 import { requireAdmin } from "../middleware/admin-auth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { adminAllowlistMiddleware } from "../middleware/ipFilter.middleware";
+import { adminAllowlistMiddleware as _adminAllowlistMiddleware } from "../middleware/ipFilter.middleware";
 import { auditLogMiddleware } from "../middleware/audit-log.middleware";
 import { AuditAction } from "../utils/log-formatter.utils";
 import {
@@ -1295,7 +1296,10 @@ router.post(
   "/webhooks/:deliveryId/retry",
   auditLogMiddleware({
     action: AuditAction.ADMIN_ACTION,
-    getEntityDetails: (req) => ({ type: "WEBHOOK_DELIVERY", id: req.params.deliveryId }),
+    getEntityDetails: (req) => ({
+      type: "WEBHOOK_DELIVERY",
+      id: req.params.deliveryId,
+    }),
   }),
   asyncHandler(AdminController.retryWebhookDelivery),
 );
@@ -1322,5 +1326,7 @@ router.get(
   requireAdmin,
   asyncHandler(ConsentController.getConsentStats),
 );
+
+router.use("/backup", backupRoutes);
 
 export default router;
