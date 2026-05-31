@@ -111,23 +111,54 @@ jobs:
         run: npm outdated || true
 
   sast-scan:
-    name: SAST Scan (ESLint Security)
+    name: SAST Scan (Semgrep)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Run Semgrep SAST
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/nodejs
+            p/typescript
+            p/owasp-top-ten
+            p/jwt
+            p/sql-injection
+          generateSarif: '1'
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+
+      - name: Run ESLint with security rules
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run ESLint with security rules
-        run: npm run lint
+      - run: npm ci
+      - run: npm run lint
         continue-on-error: true
+
+  secrets-detection:
+    name: Secrets Detection (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
   owasp-zap:
     name: OWASP ZAP Baseline Scan
@@ -287,10 +318,31 @@ jobs:
             echo "⚠ Warning: Running as root found in Helm chart"
           fi
 
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [npm-audit, security-tests, dependency-check, sast-scan, secrets-detection]
+    if: always()
+    steps:
+      - name: Evaluate security score
+        run: |
+          SCORE=100
+          [ "${{ needs.npm-audit.result }}" = "failure" ] && SCORE=$((SCORE - 30))
+          [ "${{ needs.security-tests.result }}" = "failure" ] && SCORE=$((SCORE - 20))
+          [ "${{ needs.dependency-check.result }}" = "failure" ] && SCORE=$((SCORE - 20))
+          [ "${{ needs.sast-scan.result }}" = "failure" ] && SCORE=$((SCORE - 20))
+          [ "${{ needs.secrets-detection.result }}" = "failure" ] && SCORE=$((SCORE - 30))
+          echo "Security score: $SCORE"
+          if [ "$SCORE" -lt 80 ]; then
+            echo "::error::Security score $SCORE is below threshold (80). Blocking merge."
+            exit 1
+          fi
+          echo "::notice::Security score $SCORE/100 — gate passed."
+
   report:
     name: Security Report
     runs-on: ubuntu-latest
-    needs: [npm-audit, security-tests, dependency-check, sast-scan]
+    needs: [npm-audit, security-tests, dependency-check, sast-scan, secrets-detection]
     if: always()
     steps:
       - name: Download all artifacts
@@ -335,5 +387,7 @@ jobs:
         if: |
           needs.npm-audit.result == 'failure' ||
           needs.security-tests.result == 'failure' ||
-          needs.dependency-check.result == 'failure'
+          needs.dependency-check.result == 'failure' ||
+          needs.sast-scan.result == 'failure' ||
+          needs.secrets-detection.result == 'failure'
         run: exit 1
