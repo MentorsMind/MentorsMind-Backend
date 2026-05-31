@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ResponseUtil } from "../utils/response.utils";
+import cdnRoutes from "./cdn.routes";
 import authRoutes from "./auth.routes";
 import usersRoutes from "./users.routes";
 import exportRoutes from "./export.routes";
@@ -54,6 +55,7 @@ notificationCleanupService.initialize().catch((err: unknown) => {
 
 // Mount route modules
 router.use("/auth", authRoutes);
+router.use("/cdn", cdnRoutes);
 router.use("/users", usersRoutes);
 router.use("/admin", adminRoutes);
 router.use("/admin/moderation", moderationRoutes);
