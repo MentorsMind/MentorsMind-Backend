@@ -53,7 +53,7 @@
   "type": "commonjs",
   "lint-staged": {
     "*.ts": [
-      "eslint --fix",
+      "node --max-old-space-size=4096 ./node_modules/.bin/eslint --fix",
       "prettier --write"
     ]
   },
