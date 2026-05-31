@@ -1,17 +1,17 @@
 /**
  * Stale Data Cleanup Job
- * 
+ *
  * Scheduled job for automatic cleanup of stale data:
  * - Delete old notifications (>90 days)
  * - Delete expired refresh tokens
  * - Delete old audit logs (keep 7 years)
  * - Archive old sessions (>2 years)
- * 
+ *
  * Runs daily at 3 AM UTC
  */
 
-import staleDataCleanupManager from '../utils/stale-data-cleanup.utils';
-import { logInfo, logWarning, logError } from '../utils/error.utils';
+import staleDataCleanupManager from "../utils/stale-data-cleanup.utils";
+import { logInfo, logWarning, logError } from "../utils/error.utils";
 
 // Declare require for dynamic imports
 declare const require: any;
@@ -32,16 +32,15 @@ class StaleDataCleanupJob {
    */
   private startDailyCleanupJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      this.job = new CronJob('0 3 * * *', async () => {
+      const { CronJob } = require("cron");
+      this.job = new CronJob("0 3 * * *", async () => {
         await this.executeCleanup();
       });
 
       this.job.start();
-      logInfo('Daily stale data cleanup job started (3 AM UTC)');
+      logInfo("Daily stale data cleanup job started (3 AM UTC)");
     } catch (error) {
-      logWarning('Failed to start daily cleanup job', {
+      logWarning("Failed to start daily cleanup job", {
         error: (error as Error).message,
       });
     }
@@ -52,14 +51,20 @@ class StaleDataCleanupJob {
    */
   private async executeCleanup(): Promise<void> {
     try {
-      logInfo('Executing scheduled stale data cleanup');
+      logInfo("Executing scheduled stale data cleanup");
 
       const results = await staleDataCleanupManager.runFullCleanupCycle();
 
       const summary = {
         operationsCompleted: results.length,
-        totalRecordsDeleted: results.reduce((sum, r) => sum + r.recordsDeleted, 0),
-        totalRecordsArchived: results.reduce((sum, r) => sum + r.recordsArchived, 0),
+        totalRecordsDeleted: results.reduce(
+          (sum, r) => sum + r.recordsDeleted,
+          0,
+        ),
+        totalRecordsArchived: results.reduce(
+          (sum, r) => sum + r.recordsArchived,
+          0,
+        ),
         totalDuration: results.reduce((sum, r) => sum + r.duration, 0),
         operations: results.map((r) => ({
           type: r.operation,
@@ -69,10 +74,10 @@ class StaleDataCleanupJob {
         })),
       };
 
-      logInfo('Scheduled cleanup completed', summary);
+      logInfo("Scheduled cleanup completed", summary);
     } catch (error) {
-      logError(error as Error, 'high', {
-        operation: 'scheduled_cleanup',
+      logError(error as Error, "high", {
+        operation: "scheduled_cleanup",
       });
     }
   }
@@ -83,7 +88,7 @@ class StaleDataCleanupJob {
   stop(): void {
     if (this.job) {
       this.job.stop();
-      logInfo('Stale data cleanup job stopped');
+      logInfo("Stale data cleanup job stopped");
     }
   }
 
@@ -94,7 +99,7 @@ class StaleDataCleanupJob {
     if (!this.job) {
       return {
         running: false,
-        message: 'Job not initialized',
+        message: "Job not initialized",
       };
     }
 

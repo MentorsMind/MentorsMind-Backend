@@ -1,6 +1,6 @@
 /**
  * Deprecation Maintenance Job
- * 
+ *
  * Scheduled job to handle deprecation-related tasks:
  * - Send notifications for upcoming sunsets
  * - Send final warnings
@@ -8,10 +8,13 @@
  * - Clean up sunset endpoints
  */
 
-import deprecationManager from '../utils/deprecation.utils';
-import deprecationNotificationService from '../services/deprecation-notification.service';
-import { logInfo, logWarning } from '../utils/error.utils';
-import { getUpcomingSunsets, getSunsetEndpoints } from '../config/deprecation-registry';
+import deprecationManager from "../utils/deprecation.utils";
+import deprecationNotificationService from "../services/deprecation-notification.service";
+import { logInfo, logWarning } from "../utils/error.utils";
+import {
+  getUpcomingSunsets,
+  getSunsetEndpoints,
+} from "../config/deprecation-registry";
 
 // Declare require for dynamic imports
 declare const require: any;
@@ -28,7 +31,7 @@ class DeprecationMaintenanceJob {
     this.startFinalWarningJob();
     this.startSunsetCleanupJob();
 
-    logInfo('Deprecation maintenance jobs initialized', {
+    logInfo("Deprecation maintenance jobs initialized", {
       jobCount: this.jobs.size,
     });
   }
@@ -39,17 +42,16 @@ class DeprecationMaintenanceJob {
    */
   private startDailyMetricsJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 2 * * *', () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 2 * * *", () => {
         this.logDeprecationMetrics();
       });
 
       job.start();
-      this.jobs.set('daily-metrics', job);
-      logInfo('Daily metrics job started');
+      this.jobs.set("daily-metrics", job);
+      logInfo("Daily metrics job started");
     } catch (error) {
-      logWarning('Failed to start daily metrics job', {
+      logWarning("Failed to start daily metrics job", {
         error: (error as Error).message,
       });
     }
@@ -61,17 +63,16 @@ class DeprecationMaintenanceJob {
    */
   private startWeeklyNotificationJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 9 * * 1', () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 9 * * 1", () => {
         this.sendUpcomingSunsetNotifications();
       });
 
       job.start();
-      this.jobs.set('weekly-notifications', job);
-      logInfo('Weekly notification job started');
+      this.jobs.set("weekly-notifications", job);
+      logInfo("Weekly notification job started");
     } catch (error) {
-      logWarning('Failed to start weekly notification job', {
+      logWarning("Failed to start weekly notification job", {
         error: (error as Error).message,
       });
     }
@@ -83,17 +84,16 @@ class DeprecationMaintenanceJob {
    */
   private startFinalWarningJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 10 * * *', () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 10 * * *", () => {
         this.sendFinalWarnings();
       });
 
       job.start();
-      this.jobs.set('final-warnings', job);
-      logInfo('Final warning job started');
+      this.jobs.set("final-warnings", job);
+      logInfo("Final warning job started");
     } catch (error) {
-      logWarning('Failed to start final warning job', {
+      logWarning("Failed to start final warning job", {
         error: (error as Error).message,
       });
     }
@@ -105,17 +105,16 @@ class DeprecationMaintenanceJob {
    */
   private startSunsetCleanupJob(): void {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { CronJob } = require('cron');
-      const job = new CronJob('0 3 * * *', () => {
+      const { CronJob } = require("cron");
+      const job = new CronJob("0 3 * * *", () => {
         this.cleanupSunsetEndpoints();
       });
 
       job.start();
-      this.jobs.set('sunset-cleanup', job);
-      logInfo('Sunset cleanup job started');
+      this.jobs.set("sunset-cleanup", job);
+      logInfo("Sunset cleanup job started");
     } catch (error) {
-      logWarning('Failed to start sunset cleanup job', {
+      logWarning("Failed to start sunset cleanup job", {
         error: (error as Error).message,
       });
     }
@@ -126,10 +125,10 @@ class DeprecationMaintenanceJob {
    */
   private logDeprecationMetrics(): void {
     const status = deprecationManager.getDeprecationStatus();
-    const deprecated = status.filter((s) => s.status === 'deprecated');
-    const sunset = status.filter((s) => s.status === 'sunset');
+    const deprecated = status.filter((s) => s.status === "deprecated");
+    const sunset = status.filter((s) => s.status === "sunset");
 
-    logInfo('Deprecation metrics', {
+    logInfo("Deprecation metrics", {
       totalDeprecated: deprecated.length,
       totalSunset: sunset.length,
       upcoming: getUpcomingSunsets().length,
@@ -149,7 +148,7 @@ class DeprecationMaintenanceJob {
       const upcoming = getUpcomingSunsets();
 
       if (upcoming.length === 0) {
-        logInfo('No upcoming sunsets to notify');
+        logInfo("No upcoming sunsets to notify");
         return;
       }
 
@@ -160,17 +159,19 @@ class DeprecationMaintenanceJob {
       const recipients = await this.getNotificationRecipients();
 
       if (recipients.length === 0) {
-        logWarning('No recipients found for deprecation notifications');
+        logWarning("No recipients found for deprecation notifications");
         return;
       }
 
-      await deprecationNotificationService.sendUpcomingSunsetNotifications(recipients);
+      await deprecationNotificationService.sendUpcomingSunsetNotifications(
+        recipients,
+      );
 
       logInfo(`Notifications sent to ${recipients.length} users`, {
         endpointCount: upcoming.length,
       });
     } catch (error) {
-      logWarning('Failed to send upcoming sunset notifications', {
+      logWarning("Failed to send upcoming sunset notifications", {
         error: (error as Error).message,
       });
     }
@@ -186,7 +187,8 @@ class DeprecationMaintenanceJob {
         if (!deprecation) return false;
 
         const daysUntilSunset = Math.ceil(
-          (deprecation.sunsetDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+          (deprecation.sunsetDate.getTime() - new Date().getTime()) /
+            (1000 * 60 * 60 * 24),
         );
 
         return daysUntilSunset <= 7;
@@ -210,7 +212,7 @@ class DeprecationMaintenanceJob {
         endpointCount: upcoming.length,
       });
     } catch (error) {
-      logWarning('Failed to send final warnings', {
+      logWarning("Failed to send final warnings", {
         error: (error as Error).message,
       });
     }
@@ -242,7 +244,7 @@ class DeprecationMaintenanceJob {
         // 4. Remove from active endpoints list
       }
     } catch (error) {
-      logWarning('Failed to clean up sunset endpoints', {
+      logWarning("Failed to clean up sunset endpoints", {
         error: (error as Error).message,
       });
     }

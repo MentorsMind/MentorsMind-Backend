@@ -96,13 +96,16 @@ const RETENTION_WHITELIST: Record<
     dateColumn: "created_at",
     anonymizeSql:
       "UPDATE sessions SET ip_address = NULL, user_agent = NULL WHERE created_at < $1",
-    softDeleteSql: "UPDATE sessions SET revoked_at = NOW() WHERE created_at < $1",
+    softDeleteSql:
+      "UPDATE sessions SET revoked_at = NOW() WHERE created_at < $1",
   },
   consent_records: {
     tableName: "consent_records",
     dateColumn: "consent_timestamp",
-    anonymizeSql: "UPDATE consent_records SET ip_address = NULL, user_agent = NULL WHERE consent_timestamp < $1",
-    softDeleteSql: "UPDATE consent_records SET deleted_at = NOW() WHERE consent_timestamp < $1",
+    anonymizeSql:
+      "UPDATE consent_records SET ip_address = NULL, user_agent = NULL WHERE consent_timestamp < $1",
+    softDeleteSql:
+      "UPDATE consent_records SET deleted_at = NOW() WHERE consent_timestamp < $1",
   },
   audit_logs: {
     tableName: "audit_logs",
@@ -135,7 +138,14 @@ export const ComplianceService = {
       RETURNING *
     `;
 
-    const values = [userId, type, "pending", JSON.stringify(metadata), ipAddress, userAgent];
+    const values = [
+      userId,
+      type,
+      "pending",
+      JSON.stringify(metadata),
+      ipAddress,
+      userAgent,
+    ];
     const { rows } = await pool.query<DataSubjectRequest>(query, values);
     const record = rows[0];
 
@@ -181,7 +191,10 @@ export const ComplianceService = {
       WHERE id = $1
       RETURNING *
     `;
-    const { rows } = await pool.query<DataSubjectRequest>(updateQuery, [requestId, JSON.stringify(data)]);
+    const { rows } = await pool.query<DataSubjectRequest>(updateQuery, [
+      requestId,
+      JSON.stringify(data),
+    ]);
     const record = rows[0];
     if (!record) {
       throw new Error("Data subject request not found");
@@ -222,7 +235,14 @@ export const ComplianceService = {
       RETURNING *
     `;
 
-    const values = [userId, consentType, granted, ipAddress, userAgent, version];
+    const values = [
+      userId,
+      consentType,
+      granted,
+      ipAddress,
+      userAgent,
+      version,
+    ];
     const { rows } = await pool.query<ConsentRecord>(query, values);
     const record = rows[0];
 
@@ -250,7 +270,9 @@ export const ComplianceService = {
     return rows[0] || null;
   },
 
-  async addRetentionPolicy(policy: DataRetentionPolicy): Promise<DataRetentionPolicy> {
+  async addRetentionPolicy(
+    policy: DataRetentionPolicy,
+  ): Promise<DataRetentionPolicy> {
     const query = `
       INSERT INTO retention_policies (
         data_type,
@@ -319,7 +341,14 @@ export const ComplianceService = {
       RETURNING *
     `;
 
-    const values = [userId, dataType, sourceSystem, destinationSystem, description, JSON.stringify(metadata)];
+    const values = [
+      userId,
+      dataType,
+      sourceSystem,
+      destinationSystem,
+      description,
+      JSON.stringify(metadata),
+    ];
     const { rows } = await pool.query<DataLineageEvent>(query, values);
     return rows[0];
   },
@@ -328,7 +357,12 @@ export const ComplianceService = {
     userId?: string,
     page = 1,
     limit = 50,
-  ): Promise<{ events: DataLineageEvent[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    events: DataLineageEvent[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const conditions: string[] = [];
     const values: any[] = [];
     let index = 1;
@@ -338,7 +372,8 @@ export const ComplianceService = {
       values.push(userId);
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const totalResult = await pool.query<{ count: string }>(
       `SELECT COUNT(*) AS count FROM data_lineage_events ${whereClause}`,
       values,
@@ -373,8 +408,17 @@ export const ComplianceService = {
         AND ($2::timestamptz IS NULL OR requested_at <= $2)
         AND ($3::uuid IS NULL OR user_id = $3)
     `;
-    const dsarValues = [filters.startDate || null, filters.endDate || null, filters.userId || null];
-    const dsarResult = await pool.query<{ pending: string; processing: string; completed: string; total: string }>(dsarQuery, dsarValues);
+    const dsarValues = [
+      filters.startDate || null,
+      filters.endDate || null,
+      filters.userId || null,
+    ];
+    const dsarResult = await pool.query<{
+      pending: string;
+      processing: string;
+      completed: string;
+      total: string;
+    }>(dsarQuery, dsarValues);
     const dsarCounts = dsarResult.rows[0];
 
     const lineageQuery = `
@@ -384,8 +428,15 @@ export const ComplianceService = {
         AND ($2::timestamptz IS NULL OR event_timestamp <= $2)
         AND ($3::uuid IS NULL OR user_id = $3)
     `;
-    const lineageValues = [filters.startDate || null, filters.endDate || null, filters.userId || null];
-    const lineageResult = await pool.query<{ total: string }>(lineageQuery, lineageValues);
+    const lineageValues = [
+      filters.startDate || null,
+      filters.endDate || null,
+      filters.userId || null,
+    ];
+    const lineageResult = await pool.query<{ total: string }>(
+      lineageQuery,
+      lineageValues,
+    );
     const lineageTotal = parseInt(lineageResult.rows[0]?.total || "0", 10);
 
     const lineageEvents = await pool.query<DataLineageEvent>(
@@ -420,10 +471,20 @@ export const ComplianceService = {
   async enforceRetentionPolicies(): Promise<{
     applied: number;
     skipped: number;
-    details: Array<{ dataType: string; action: string; affected: number; skippedReason?: string }>;
+    details: Array<{
+      dataType: string;
+      action: string;
+      affected: number;
+      skippedReason?: string;
+    }>;
   }> {
     const policies = await this.getRetentionPolicies();
-    const details: Array<{ dataType: string; action: string; affected: number; skippedReason?: string }> = [];
+    const details: Array<{
+      dataType: string;
+      action: string;
+      affected: number;
+      skippedReason?: string;
+    }> = [];
 
     for (const policy of policies) {
       const mapping = RETENTION_WHITELIST[policy.dataType];
@@ -441,7 +502,7 @@ export const ComplianceService = {
       cutoff.setUTCDate(cutoff.getUTCDate() - policy.retentionPeriod);
       const cutoffIso = cutoff.toISOString();
       let resultCount = 0;
-      let action = policy.deletionMethod;
+      const action = policy.deletionMethod;
 
       try {
         if (policy.deletionMethod === "hard") {
@@ -451,10 +512,17 @@ export const ComplianceService = {
           );
           resultCount = rowCount ?? 0;
         } else if (policy.deletionMethod === "soft" && mapping.softDeleteSql) {
-          const { rowCount } = await pool.query(mapping.softDeleteSql, [cutoffIso]);
+          const { rowCount } = await pool.query(mapping.softDeleteSql, [
+            cutoffIso,
+          ]);
           resultCount = rowCount ?? 0;
-        } else if (policy.deletionMethod === "anonymize" && mapping.anonymizeSql) {
-          const { rowCount } = await pool.query(mapping.anonymizeSql, [cutoffIso]);
+        } else if (
+          policy.deletionMethod === "anonymize" &&
+          mapping.anonymizeSql
+        ) {
+          const { rowCount } = await pool.query(mapping.anonymizeSql, [
+            cutoffIso,
+          ]);
           resultCount = rowCount ?? 0;
         } else {
           details.push({
@@ -495,7 +563,9 @@ export const ComplianceService = {
     });
 
     return {
-      applied: details.filter((item) => item.action !== "skipped" && item.action !== "failed").length,
+      applied: details.filter(
+        (item) => item.action !== "skipped" && item.action !== "failed",
+      ).length,
       skipped: details.filter((item) => item.action === "skipped").length,
       details,
     };
