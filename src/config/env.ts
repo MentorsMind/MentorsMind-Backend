@@ -191,6 +191,19 @@ const envSchema = z.object({
   IOS_APP_STORE_URL: z.string().url().optional(),
   ANDROID_PLAY_STORE_URL: z.string().url().optional(),
 
+  // CDN
+  CDN_PROVIDER: z.enum(["cloudfront", "cloudflare", "fastly"]).optional(),
+  CDN_BASE_URL: z.string().url().optional(),
+  CDN_DOMAINS: z.string().optional(), // Comma-separated list of domains
+  CDN_IMAGE_RESIZE: z.enum(["true", "false"]).default("true"),
+  CDN_WEBP_CONVERSION: z.enum(["true", "false"]).default("true"),
+  CDN_COMPRESSION: z.enum(["true", "false"]).default("true"),
+  CDN_CLOUDFRONT_DISTRIBUTION_ID: z.string().optional(),
+  CDN_CLOUDFLARE_ZONE_ID: z.string().optional(),
+  CDN_CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CDN_FASTLY_SERVICE_ID: z.string().optional(),
+  CDN_FASTLY_API_KEY: z.string().optional(),
+
   // Elasticsearch
   ELASTICSEARCH_URL: z.string().url().default("http://localhost:9200"),
   ELASTICSEARCH_USERNAME: z.string().optional(),
@@ -225,6 +238,8 @@ const SENSITIVE_KEYS = new Set([
   "ELASTICSEARCH_PASSWORD",
   "ELASTICSEARCH_API_KEY",
   "AGORA_APP_CERTIFICATE",
+  "CDN_CLOUDFLARE_API_TOKEN",
+  "CDN_FASTLY_API_KEY",
 ]);
 
 function validateEnv() {
