@@ -1,136 +1,43 @@
 import { Router } from "express";
 import { ReferralController } from "../controllers/referral.controller";
 import { authenticate } from "../middleware/auth.middleware";
-import { requireRole as authorize } from "../middleware/rbac.middleware";
-import { validate } from "../middleware/validation.middleware";
-import {
-  createReferralCodeSchema,
-  referralCodeParamSchema,
-  applyReferralCodeSchema,
-  listUserReferralsSchema,
-  referralStatsQuerySchema,
-  referralIdParamSchema,
-  updateReferralSchema,
-  createAffiliateProfileSchema,
-  affiliateUserIdParamSchema,
-  updateAffiliateProfileSchema,
-  requestPayoutSchema,
-} from "../validators/schemas/referral.schemas";
+
+/**
+ * Referral Routes
+ * API endpoints for referral code management and statistics
+ */
 
 const router = Router();
 
-// All referral routes require authentication
+// All routes require authentication
 router.use(authenticate);
 
 /**
- * Referral Code Management Routes
+ * @route   GET /api/v1/referrals/code
+ * @desc    Get or create referral code for authenticated user
+ * @access  Private
  */
-
-// Create referral code
-// POST /api/v1/referrals/codes
-router.post("/codes", validate(createReferralCodeSchema), ReferralController.createReferralCode);
-
-// Get user's referral codes
-// GET /api/v1/referrals/codes
-router.get("/codes", ReferralController.getUserReferralCodes);
-
-// Validate referral code
-// GET /api/v1/referrals/codes/:code/validate
-router.get(
-  "/codes/:code/validate",
-  validate(referralCodeParamSchema),
-  ReferralController.validateReferralCode,
-);
+router.get("/code", ReferralController.getMyReferralCode);
 
 /**
- * Referral Tracking Routes
+ * @route   POST /api/v1/referrals/apply
+ * @desc    Apply referral code during signup
+ * @access  Private
  */
-
-// Apply referral code (create referral)
-// POST /api/v1/referrals/apply
-router.post("/apply", validate(applyReferralCodeSchema), ReferralController.applyReferralCode);
-
-// Get user's referrals
-// GET /api/v1/referrals
-router.get("/", validate(listUserReferralsSchema), ReferralController.getUserReferrals);
-
-// Get referral statistics
-// GET /api/v1/referrals/stats
-router.get("/stats", validate(referralStatsQuerySchema), ReferralController.getReferralStats);
-
-// Update referral status (admin only)
-// PUT /api/v1/referrals/:referralId
-router.put(
-  "/:referralId",
-  authorize("admin"),
-  validate(updateReferralSchema),
-  ReferralController.updateReferral,
-);
+router.post("/apply", ReferralController.applyReferralCode);
 
 /**
- * Affiliate Program Routes
+ * @route   GET /api/v1/referrals/stats
+ * @desc    Get referral statistics (total earnings, pending, paid)
+ * @access  Private
  */
-
-// Create affiliate profile
-// POST /api/v1/referrals/affiliate
-router.post(
-  "/affiliate",
-  validate(createAffiliateProfileSchema),
-  ReferralController.createAffiliateProfile,
-);
-
-// Get affiliate profile
-// GET /api/v1/referrals/affiliate/:userId
-router.get(
-  "/affiliate/:userId",
-  validate(affiliateUserIdParamSchema),
-  ReferralController.getAffiliateProfile,
-);
-
-// Update affiliate profile
-// PUT /api/v1/referrals/affiliate/:userId
-router.put(
-  "/affiliate/:userId",
-  validate(updateAffiliateProfileSchema),
-  ReferralController.updateAffiliateProfile,
-);
-
-// Get affiliate dashboard
-// GET /api/v1/referrals/affiliate/:userId/dashboard
-router.get(
-  "/affiliate/:userId/dashboard",
-  validate(affiliateUserIdParamSchema),
-  ReferralController.getAffiliateDashboard,
-);
-
-// Approve affiliate profile (admin only)
-// POST /api/v1/referrals/affiliate/:userId/approve
-router.post(
-  "/affiliate/:userId/approve",
-  authorize("admin"),
-  validate(affiliateUserIdParamSchema),
-  ReferralController.approveAffiliateProfile,
-);
+router.get("/stats", ReferralController.getReferralStats);
 
 /**
- * Reward Tier Routes
+ * @route   GET /api/v1/referrals/history
+ * @desc    Get referral event history
+ * @access  Private
  */
-
-// Get reward tiers
-// GET /api/v1/referrals/tiers
-router.get("/tiers", ReferralController.getRewardTiers);
-
-/**
- * Payout Routes
- */
-
-// Request payout (admin only for now)
-// POST /api/v1/referrals/affiliate/:userId/payout
-router.post(
-  "/affiliate/:userId/payout",
-  authorize("admin"),
-  validate(requestPayoutSchema),
-  ReferralController.requestPayout,
-);
+router.get("/history", ReferralController.getReferralHistory);
 
 export default router;
