@@ -109,6 +109,10 @@ const config = {
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
   },
+  referral: {
+    rewardAmount: env.REFERRAL_REWARD_XLM || "5.0",
+    holdDays: env.REFERRAL_HOLD_DAYS || "7",
+  },
 } as const;
 
 export default config;

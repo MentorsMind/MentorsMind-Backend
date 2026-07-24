@@ -480,6 +480,29 @@ export const BookingsService = {
       });
     });
 
+    // Fire-and-forget: Process referral reward for both mentee and mentor
+    const { EnhancedReferralService } = await import("./referral-enhanced.service");
+    EnhancedReferralService.processReferralReward(bookingId, booking.mentee_id).catch((err) => {
+      logger.warn("Failed to process mentee referral reward", {
+        bookingId,
+        menteeId: booking.mentee_id,
+        error: err,
+      });
+    });
+    EnhancedReferralService.processReferralReward(bookingId, booking.mentor_id).catch((err) => {
+      logger.warn("Failed to process mentor referral reward", {
+        bookingId,
+        mentorId: booking.mentor_id,
+        error: err,
+      });
+    });
+      logger.warn("Failed to accrue loyalty points", {
+        bookingId,
+        menteeId: booking.mentee_id,
+        error: err,
+      });
+    });
+
     // Fire-and-forget: Generate AI session summary
     SessionSummaryModel.generateAndStore({
       bookingId,

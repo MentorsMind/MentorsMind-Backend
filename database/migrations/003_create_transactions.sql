@@ -12,7 +12,8 @@ CREATE TYPE transaction_type AS ENUM (
     'platform_fee',
     'mentor_payout',
     'escrow_hold',
-    'escrow_release'
+    'escrow_release',
+    'referral_reward'
 );
 
 CREATE TYPE transaction_status AS ENUM (
