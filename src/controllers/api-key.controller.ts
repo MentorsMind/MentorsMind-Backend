@@ -36,6 +36,35 @@ export const ApiKeyController = {
     res.json({ success: true, message: "API key revoked" });
   },
 
+  async rotate(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const result = await ApiKeyService.rotate(
+      req.params.id as string,
+      req.user!.userId
+    );
+
+    res.json({
+      success: true,
+      data: {
+        ...result.apiKey,
+        key: result.plainKey,
+      },
+      message:
+        "API key rotated successfully. The old key will remain valid for 24 hours. Store the new key securely — it will not be shown again.",
+    });
+  },
+
+  async usage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const stats = await ApiKeyService.getUsageStats(
+      req.params.id as string,
+      req.user!.userId
+    );
+
+    res.json({
+      success: true,
+      data: stats,
+    });
+  },
+
   async listScopes(_req: AuthenticatedRequest, res: Response): Promise<void> {
     res.json({ success: true, data: ApiKeyService.listScopes() });
   },

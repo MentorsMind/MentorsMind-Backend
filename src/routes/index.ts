@@ -29,6 +29,7 @@ import sessionRecordingRoutes from "./session-recording.routes";
 import subscriptionRoutes from "./subscriptions.routes";
 import taxRoutes from "./tax.routes";
 import oracleRoutes from "./oracle.routes";
+import apiKeysRoutes from "./api-keys.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -98,6 +99,7 @@ router.use("/developer", developerRoutes);
 router.use("/subscriptions", subscriptionRoutes);
 router.use("/tax", taxRoutes);
 router.use("/oracle", oracleRoutes);
+router.use("/api-keys", apiKeysRoutes);
 router.use("/", exportRoutes);
 
 // JWKS public endpoint — no auth required
@@ -127,6 +129,7 @@ router.get("/", (_req, res) => {
         auth: "/api/v1/auth",
         users: "/api/v1/users",
         bookings: "/api/v1/bookings",
+        apiKeys: "/api/v1/api-keys",
       },
       documentation: "/api/v1/docs",
     },

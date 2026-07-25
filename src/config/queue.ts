@@ -51,6 +51,7 @@ export const QUEUE_NAMES = {
   TRANSCRIPTION: "transcription-queue",
   BULK: "bulk-queue",
   DOMAIN_EVENTS: "domain-events-queue",
+  REFERRAL_REWARD: "referral-reward-queue",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
