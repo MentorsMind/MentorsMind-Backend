@@ -45,6 +45,16 @@ export const updateReviewSchema = z
     },
   );
 
+export const reviewResponseSchema = z.object({
+  body: z.object({
+    response_text: z
+      .string()
+      .trim()
+      .min(1, "Response must not be empty")
+      .max(1000, "Response must not exceed 1000 characters"),
+  }),
+});
+
 export const flagReviewSchema = z.object({
   body: z.object({
     reason: z.string().min(10, "Reason must be at least 10 characters"),
@@ -98,6 +108,7 @@ export const paginationQuerySchema = z.object({
 
 export type CreateReviewInput = z.infer<typeof createReviewSchema>["body"];
 export type UpdateReviewInput = z.infer<typeof updateReviewSchema>["body"];
+export type ReviewResponseInput = z.infer<typeof reviewResponseSchema>["body"];
 export type FlagReviewInput = z.infer<typeof flagReviewSchema>["body"];
 
 // ---------------------------------------------------------------------------

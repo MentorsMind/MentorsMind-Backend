@@ -1,6 +1,11 @@
 import { PoolClient } from "pg";
 import pool from "../config/database";
 import { createError } from "../middleware/errorHandler";
+import { env } from "../config/env";
+import { UsersService } from "./users.service";
+import { InAppNotificationService } from "./inAppNotification.service";
+import { emailService } from "./email.service";
+import { ModerationService } from "./moderation.service";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +27,7 @@ export interface ReviewRecord {
 
 export interface ReviewWithReviewer extends ReviewRecord {
   reviewer_display_name: string;
+  mentor_response?: MentorResponseRecord | null;
 }
 
 export interface PaginationMeta {
@@ -52,6 +58,10 @@ export interface UpdateReviewPayload {
 export interface RatingSummary {
   average_rating: number | null;
   total_reviews: number;
+  mentor_response: {
+    response_count: number;
+    latest_response_at: Date | null;
+  };
   rating_distribution: {
     1: number;
     2: number;
@@ -68,6 +78,88 @@ export interface FlagRecord {
   reason: string;
   status: string;
   created_at: Date;
+}
+
+export interface MentorResponseRecord {
+  id: string;
+  review_id: string;
+  mentor_id: string;
+  response_text: string;
+  is_published: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface ReviewRowWithMentorResponse extends ReviewRecord {
+  reviewer_display_name: string;
+  response_id?: string | null;
+  response_mentor_id?: string | null;
+  response_text?: string | null;
+  response_is_published?: boolean | null;
+  response_created_at?: Date | string | null;
+  response_updated_at?: Date | string | null;
+}
+
+function toDate(value: Date | string | null | undefined): Date {
+  if (value instanceof Date) {
+    return value;
+  }
+
+  return new Date(value ?? Date.now());
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function mapMentorResponse(
+  row: Pick<
+    ReviewRowWithMentorResponse,
+    | "id"
+    | "response_id"
+    | "response_mentor_id"
+    | "response_text"
+    | "response_is_published"
+    | "response_created_at"
+    | "response_updated_at"
+  >,
+): MentorResponseRecord | null {
+  if (!row.response_id || !row.response_text || !row.response_mentor_id) {
+    return null;
+  }
+
+  return {
+    id: row.response_id,
+    review_id: row.id,
+    mentor_id: row.response_mentor_id,
+    response_text: row.response_text,
+    is_published: row.response_is_published ?? true,
+    created_at: toDate(row.response_created_at),
+    updated_at: toDate(row.response_updated_at),
+  };
+}
+
+function mapReviewRow(row: ReviewRowWithMentorResponse): ReviewWithReviewer {
+  return {
+    id: row.id,
+    booking_id: row.booking_id,
+    reviewer_id: row.reviewer_id,
+    reviewee_id: row.reviewee_id,
+    rating: row.rating,
+    comment: row.comment,
+    is_published: row.is_published,
+    is_flagged: row.is_flagged,
+    helpful_count: row.helpful_count,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    reviewer_display_name: row.reviewer_display_name,
+    mentor_response: mapMentorResponse(row),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +190,74 @@ async function recalculateMentorRating(
     `UPDATE users SET average_rating = $1, total_reviews = $2, updated_at = NOW() WHERE id = $3`,
     [avgRating, count, mentorId],
   );
+}
+
+async function notifyReviewerAboutMentorResponse(
+  review: Pick<ReviewRecord, "id" | "reviewer_id" | "reviewee_id">,
+  response: MentorResponseRecord,
+): Promise<void> {
+  const [reviewer, mentor] = await Promise.all([
+    UsersService.findById(review.reviewer_id),
+    UsersService.findById(review.reviewee_id),
+  ]);
+
+  if (!reviewer?.email) {
+    return;
+  }
+
+  const mentorName = mentor
+    ? `${mentor.first_name} ${mentor.last_name}`.trim()
+    : "your mentor";
+  const subject = `${mentorName} responded to your review`;
+  const actionUrl = `${env.APP_CLIENT_URL}/mentors/${review.reviewee_id}`;
+  const reviewUrl = `${actionUrl}#review-${review.id}`;
+  const safeMentorName = escapeHtml(mentorName);
+  const safeSubject = escapeHtml(subject);
+  const safeResponseText = escapeHtml(response.response_text);
+
+  const notificationPayload = {
+    userId: review.reviewer_id,
+    type: "review_response" as const,
+    title: subject,
+    message: `${mentorName} replied to your review.`,
+    data: {
+      review_id: review.id,
+      mentor_id: review.reviewee_id,
+      response_id: response.id,
+      response_text: response.response_text,
+    },
+    actionUrl,
+  };
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+      <h2 style="margin: 0 0 16px;">${safeSubject}</h2>
+      <p>${safeMentorName} replied to your review:</p>
+      <blockquote style="border-left: 4px solid #d1d5db; margin: 16px 0; padding: 12px 16px; background: #f9fafb;">
+        ${safeResponseText}
+      </blockquote>
+      <p><a href="${reviewUrl}">View the review discussion</a></p>
+    </div>
+  `;
+
+  const textContent = [
+    subject,
+    "",
+    `${mentorName} replied to your review:`,
+    response.response_text,
+    "",
+    `View the review discussion: ${reviewUrl}`,
+  ].join("\n");
+
+  await Promise.allSettled([
+    InAppNotificationService.create(notificationPayload),
+    emailService.sendEmail({
+      to: [reviewer.email],
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -219,12 +379,21 @@ export const ReviewsService = {
         throw createError("Invalid cursor", 400);
       }
 
-      const { rows } = await pool.query<ReviewWithReviewer>(
+      const { rows } = await pool.query<ReviewRowWithMentorResponse>(
         `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
                 r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
-                (u.first_name || ' ' || u.last_name) AS reviewer_display_name
+                (u.first_name || ' ' || u.last_name) AS reviewer_display_name,
+                rr.id AS response_id,
+                rr.mentor_id AS response_mentor_id,
+                rr.response_text AS response_text,
+                rr.is_published AS response_is_published,
+                rr.created_at AS response_created_at,
+                rr.updated_at AS response_updated_at
          FROM reviews r
          JOIN users u ON r.reviewer_id = u.id
+         LEFT JOIN review_responses rr
+           ON rr.review_id = r.id
+          AND rr.is_published = TRUE
          WHERE r.reviewee_id = $1
            AND (r.created_at, r.id) < ($2, $3)
          ORDER BY r.created_at DESC, r.id DESC
@@ -233,7 +402,7 @@ export const ReviewsService = {
       );
 
       const has_more = rows.length > limit;
-      const data = has_more ? rows.slice(0, limit) : rows;
+      const data = (has_more ? rows.slice(0, limit) : rows).map(mapReviewRow);
 
       const lastItem = data[data.length - 1];
       const next_cursor =
@@ -262,12 +431,21 @@ export const ReviewsService = {
     // Offset-based fallback when cursor is absent
     const offset = (page - 1) * limit;
 
-    const reviewsResult = await pool.query<ReviewWithReviewer>(
+    const reviewsResult = await pool.query<ReviewRowWithMentorResponse>(
       `SELECT r.id, r.booking_id, r.reviewer_id, r.reviewee_id, r.rating, r.comment,
               r.is_published, r.is_flagged, r.helpful_count, r.created_at, r.updated_at,
-              (u.first_name || ' ' || u.last_name) AS reviewer_display_name
+              (u.first_name || ' ' || u.last_name) AS reviewer_display_name,
+              rr.id AS response_id,
+              rr.mentor_id AS response_mentor_id,
+              rr.response_text AS response_text,
+              rr.is_published AS response_is_published,
+              rr.created_at AS response_created_at,
+              rr.updated_at AS response_updated_at
        FROM reviews r
        JOIN users u ON r.reviewer_id = u.id
+       LEFT JOIN review_responses rr
+         ON rr.review_id = r.id
+        AND rr.is_published = TRUE
        WHERE r.reviewee_id = $1
        ORDER BY r.created_at DESC
        LIMIT $2 OFFSET $3`,
@@ -277,7 +455,7 @@ export const ReviewsService = {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      reviews: reviewsResult.rows,
+      reviews: reviewsResult.rows.map(mapReviewRow),
       pagination: {
         page,
         limit,
@@ -368,6 +546,141 @@ export const ReviewsService = {
 
       await client.query("COMMIT");
       return updatedReview;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+  },
+
+  // -------------------------------------------------------------------------
+  // Mentor response
+  // -------------------------------------------------------------------------
+  async createMentorResponse(
+    reviewId: string,
+    mentorId: string,
+    responseText: string,
+  ): Promise<MentorResponseRecord> {
+    const trimmedResponse = responseText.trim();
+    if (!trimmedResponse) {
+      throw createError("Response text is required", 400);
+    }
+    if (trimmedResponse.length > 1000) {
+      throw createError("Response text must not exceed 1000 characters", 400);
+    }
+
+    const client = await pool.connect();
+    let response: MentorResponseRecord | null = null;
+    let review: Pick<ReviewRecord, "id" | "reviewer_id" | "reviewee_id"> | null =
+      null;
+
+    try {
+      await client.query("BEGIN");
+
+      const reviewResult = await client.query<Pick<
+        ReviewRecord,
+        "id" | "reviewer_id" | "reviewee_id"
+      >>(
+        `SELECT id, reviewer_id, reviewee_id
+         FROM reviews
+         WHERE id = $1`,
+        [reviewId],
+      );
+
+      if (reviewResult.rows.length === 0) {
+        throw createError("Review not found", 404);
+      }
+
+      review = reviewResult.rows[0];
+
+      if (review.reviewee_id !== mentorId) {
+        throw createError("You are not authorized to respond to this review", 403);
+      }
+
+      const moderationResult = await ModerationService.screenContent(
+        reviewId,
+        "review",
+        trimmedResponse,
+      );
+
+      const upsertResult = await client.query<MentorResponseRecord>(
+        `INSERT INTO review_responses (
+           review_id,
+           mentor_id,
+           response_text,
+           is_published
+         )
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (review_id)
+         DO UPDATE SET
+           mentor_id = EXCLUDED.mentor_id,
+           response_text = EXCLUDED.response_text,
+           is_published = EXCLUDED.is_published,
+           updated_at = NOW()
+         RETURNING id, review_id, mentor_id, response_text, is_published, created_at, updated_at`,
+        [reviewId, mentorId, trimmedResponse, moderationResult.action !== "block"],
+      );
+
+      response = upsertResult.rows[0];
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    if (response && review && response.is_published) {
+      await notifyReviewerAboutMentorResponse(review, response);
+    }
+
+    if (!response) {
+      throw createError("Failed to create review response", 500);
+    }
+
+    return response;
+  },
+
+  async deleteMentorResponse(
+    reviewId: string,
+    mentorId: string,
+  ): Promise<void> {
+    const client = await pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const reviewResult = await client.query<Pick<
+        ReviewRecord,
+        "id" | "reviewee_id"
+      >>(
+        `SELECT id, reviewee_id
+         FROM reviews
+         WHERE id = $1`,
+        [reviewId],
+      );
+
+      if (reviewResult.rows.length === 0) {
+        throw createError("Review not found", 404);
+      }
+
+      if (reviewResult.rows[0].reviewee_id !== mentorId) {
+        throw createError("You are not authorized to delete this response", 403);
+      }
+
+      const deleteResult = await client.query(
+        `DELETE FROM review_responses
+         WHERE review_id = $1 AND mentor_id = $2`,
+        [reviewId, mentorId],
+      );
+
+      if ((deleteResult.rowCount ?? 0) === 0) {
+        throw createError("Review response not found", 404);
+      }
+
+      await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;
@@ -545,9 +858,30 @@ export const ReviewsService = {
     const avgRating =
       total === 0 ? null : Math.round(parseFloat(row.avg_rating!) * 100) / 100;
 
+    const responseSummary = await pool.query<{
+      response_count: string;
+      latest_response_at: Date | string | null;
+    }>(
+      `SELECT
+         COUNT(*)::text AS response_count,
+         MAX(created_at) AS latest_response_at
+       FROM review_responses
+       WHERE mentor_id = $1
+         AND is_published = TRUE`,
+      [mentorId],
+    );
+
+    const responseRow = responseSummary.rows[0];
+
     return {
       average_rating: avgRating,
       total_reviews: total,
+      mentor_response: {
+        response_count: parseInt(responseRow.response_count, 10),
+        latest_response_at: responseRow.latest_response_at
+          ? toDate(responseRow.latest_response_at)
+          : null,
+      },
       rating_distribution: {
         1: parseInt(row.count_1, 10),
         2: parseInt(row.count_2, 10),

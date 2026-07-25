@@ -5,6 +5,9 @@ import { notificationCleanupQueue } from "../queues/notificationCleanup.queue";
 import { maintenanceQueue } from "../queues/maintenance.queue";
 import { VerificationService } from "../services/verification.service";
 import { accountDeletionJob } from "../jobs/accountDeletion.job";
+import databaseMaintenanceJob from "../jobs/database-maintenance.job";
+import staleDataCleanupJob from "../jobs/stale-data-cleanup.job";
+import deprecationMaintenanceJob from "../jobs/deprecation-maintenance.job";
 import { logger } from "../utils/logger.utils";
 import config from "../config";
 import { AuditLogModel } from "../models/audit-log.model";
@@ -117,12 +120,19 @@ export async function startScheduler(): Promise<void> {
     },
   );
 
+  databaseMaintenanceJob.initialize();
+  staleDataCleanupJob.initialize();
+  deprecationMaintenanceJob.initialize();
+
   logger.info(
-    "Job scheduler started — weekly earnings, session reminders, escrow check, notification cleanup, and daily maintenance registered",
+    "Job scheduler started — weekly earnings, session reminders, escrow check, notification cleanup, daily maintenance, and database cleanup jobs registered",
   );
 }
 
 export async function stopScheduler(): Promise<void> {
+  databaseMaintenanceJob.stopAll();
+  staleDataCleanupJob.stop();
+  deprecationMaintenanceJob.stopAll();
   logger.info("Job scheduler stopped");
 }
 
@@ -174,5 +184,20 @@ export async function runMaintenanceTasks(): Promise<void> {
     }
   } catch (error) {
     logger.error("Maintenance: error cleaning up expired exports", { error });
+  }
+
+  try {
+    const cleanupResult = await staleDataCleanupJob.triggerCleanup();
+    logger.info("Maintenance: stale data cleanup completed", {
+      dryRun: cleanupResult.dryRun,
+      durationMs: cleanupResult.durationMs,
+      operations: cleanupResult.operations.map((operation) => ({
+        table: operation.table,
+        rowsDeleted: operation.rowsDeleted,
+        status: operation.status,
+      })),
+    });
+  } catch (error) {
+    logger.error("Maintenance: error running stale data cleanup", { error });
   }
 }

@@ -1,12 +1,13 @@
 import { Router, IRouter } from "express";
 import { ReviewsController } from "../controllers/reviews.controller";
 import { authenticate } from "../middleware/auth.middleware";
-import { requireAdmin } from "../middleware/rbac.middleware";
+import { requireAdmin, requireRole } from "../middleware/rbac.middleware";
 import { screenReview } from "../middleware/content-moderation.middleware";
 import {
   validate,
   createReviewSchema,
   updateReviewSchema,
+  reviewResponseSchema,
   flagReviewSchema,
   reviewIdParamSchema,
   mentorIdParamSchema,
@@ -238,6 +239,125 @@ router.post(
   validate(reviewIdParamSchema),
   validate(flagReviewSchema),
   ReviewsController.flagReview,
+);
+
+/**
+ * @swagger
+ * /reviews/{id}/response:
+ *   post:
+ *     summary: Create a public response to a review
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [response_text]
+ *             properties:
+ *               response_text: { type: string, maxLength: 1000 }
+ *     responses:
+ *       201:
+ *         description: Mentor response created
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Mentor can only respond to their own reviews
+ *       404:
+ *         description: Review not found
+ *       422:
+ *         description: Validation error
+ */
+router.post(
+  "/:id/response",
+  authenticate,
+  requireRole("mentor"),
+  validate(reviewIdParamSchema),
+  validate(reviewResponseSchema),
+  ReviewsController.createMentorResponse,
+);
+
+/**
+ * @swagger
+ * /reviews/{id}/response:
+ *   put:
+ *     summary: Update a public response to a review
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [response_text]
+ *             properties:
+ *               response_text: { type: string, maxLength: 1000 }
+ *     responses:
+ *       200:
+ *         description: Mentor response updated
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Mentor can only update their own responses
+ *       404:
+ *         description: Review not found
+ *       422:
+ *         description: Validation error
+ */
+router.put(
+  "/:id/response",
+  authenticate,
+  requireRole("mentor"),
+  validate(reviewIdParamSchema),
+  validate(reviewResponseSchema),
+  ReviewsController.updateMentorResponse,
+);
+
+/**
+ * @swagger
+ * /reviews/{id}/response:
+ *   delete:
+ *     summary: Delete a public response to a review
+ *     tags: [Reviews]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       204:
+ *         description: Mentor response deleted
+ *       401:
+ *         description: Authentication required
+ *       403:
+ *         description: Mentor can only delete their own response
+ *       404:
+ *         description: Review response not found
+ *       422:
+ *         description: Validation error
+ */
+router.delete(
+  "/:id/response",
+  authenticate,
+  requireRole("mentor"),
+  validate(reviewIdParamSchema),
+  ReviewsController.deleteMentorResponse,
 );
 
 export default router;

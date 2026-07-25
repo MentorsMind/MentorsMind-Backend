@@ -36,6 +36,7 @@ export enum NotificationType {
   MESSAGE_RECEIVED = "message_received",
   SESSION_CANCELLED = "session_cancelled",
   CALENDAR_CONNECTION_EXPIRED = "calendar_connection_expired",
+  REVIEW_RESPONSE = "review_response",
 }
 
 export enum NotificationChannel {

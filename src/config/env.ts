@@ -239,6 +239,21 @@ const envSchema = z.object({
   RETENTION_AUDIT_LOGS_YEARS: z.string().regex(/^\d+$/).default("7"),
   RETENTION_PAYMENTS_YEARS: z.string().regex(/^\d+$/).default("7"),
   RETENTION_SESSIONS_YEARS: z.string().regex(/^\d+$/).default("2"),
+  AUDIT_LOG_RETENTION_DAYS: z.string().regex(/^\d+$/).default("365"),
+  PUSH_TOKEN_RETENTION_DAYS: z.string().regex(/^\d+$/).default("30"),
+  NOTIFICATION_DELIVERY_RETENTION_DAYS: z
+    .string()
+    .regex(/^\d+$/)
+    .default("90"),
+  WEBHOOK_DELIVERY_RETENTION_DAYS: z
+    .string()
+    .regex(/^\d+$/)
+    .default("60"),
+  CHATBOT_MESSAGE_RETENTION_DAYS: z
+    .string()
+    .regex(/^\d+$/)
+    .default("180"),
+  STALE_CLEANUP_DRY_RUN: z.enum(["true", "false"]).default("false"),
 });
 
 // ---------------------------------------------------------------------------

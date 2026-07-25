@@ -900,6 +900,38 @@ The MentorMinds Team
   },
 
   /**
+   * Screen content before publishing without mutating the target entity.
+   * Returns the moderation result unless the content is blocked.
+   */
+  async screenContent(
+    contentId: string,
+    contentType: ContentType,
+    text: string,
+    _authorId?: string,
+  ): Promise<ModerationResult> {
+    const result = await AIModerationService.scan(contentId, contentType, text);
+
+    this.persistAIResult(result).catch((err) =>
+      logger.error("ModerationService: failed to persist AI result", {
+        err,
+        contentId,
+      }),
+    );
+
+    if (result.action === "block") {
+      const error: any = new Error(
+        "Your content was blocked by our automated moderation system. " +
+          "Please review our community guidelines.",
+      );
+      error.statusCode = 422;
+      error.moderationResult = result;
+      throw error;
+    }
+
+    return result;
+  },
+
+  /**
    * Get AI moderation results for a specific content item.
    */
   async getAIResults(

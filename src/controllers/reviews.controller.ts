@@ -61,6 +61,55 @@ export const ReviewsController = {
   ),
 
   /**
+   * POST /api/v1/reviews/:id/response
+   * Create or replace a mentor response for a review
+   */
+  createMentorResponse: asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const reviewId = req.params.id as string;
+      const mentorId = req.user!.id;
+      const { response_text } = req.body;
+      const response = await ReviewsService.createMentorResponse(
+        reviewId,
+        mentorId,
+        response_text,
+      );
+      return ResponseUtil.created(res, response);
+    },
+  ),
+
+  /**
+   * PUT /api/v1/reviews/:id/response
+   * Update the mentor response for a review
+   */
+  updateMentorResponse: asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const reviewId = req.params.id as string;
+      const mentorId = req.user!.id;
+      const { response_text } = req.body;
+      const response = await ReviewsService.createMentorResponse(
+        reviewId,
+        mentorId,
+        response_text,
+      );
+      return ResponseUtil.success(res, response);
+    },
+  ),
+
+  /**
+   * DELETE /api/v1/reviews/:id/response
+   * Delete a mentor response from a review
+   */
+  deleteMentorResponse: asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+      const reviewId = req.params.id as string;
+      const mentorId = req.user!.id;
+      await ReviewsService.deleteMentorResponse(reviewId, mentorId);
+      return ResponseUtil.noContent(res);
+    },
+  ),
+
+  /**
    * DELETE /api/v1/reviews/:id
    * Admin-only: permanently delete a review
    */

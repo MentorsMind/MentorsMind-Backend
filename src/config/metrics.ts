@@ -123,6 +123,13 @@ export const dbCircuitBreakerOpenTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
+export const dbTableSizeBytes = new Gauge<string>({
+  name: "db_table_size_bytes",
+  help: "Current total relation size in bytes for each tracked table",
+  labelNames: ["table_name"],
+  registers: [metricsRegistry],
+});
+
 // ─── Redis ────────────────────────────────────────────────────────────────────
 
 export const redisCallDurationSeconds = new Histogram<string>({

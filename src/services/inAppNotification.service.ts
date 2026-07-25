@@ -16,7 +16,8 @@ export type InAppNotificationType =
   | "payment_failed"
   | "escrow_released"
   | "meeting_confirmed"
-  | "system_alert";
+  | "system_alert"
+  | "review_response";
 
 export interface InAppNotification {
   id: string;
