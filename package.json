@@ -27,6 +27,8 @@
     "migrate:create": "node-pg-migrate create --migrations-dir database/migrations",
     "migrate:validate": "ts-node database/validate-migrations.ts",
     "migrate:renumber": "ts-node database/renumber-migrations.ts",
+    "validate:migrations": "ts-node --transpile-only scripts/validate-migrations.ts",
+    "check:sunsets": "ts-node --transpile-only scripts/check-sunset-readiness.ts",
     "test:e2e": "jest --config jest.e2e.config.ts --forceExit",
     "test:e2e:verbose": "E2E_VERBOSE=1 jest --config jest.e2e.config.ts --forceExit --verbose",
     "test:e2e:single": "jest --config jest.e2e.config.ts --forceExit",

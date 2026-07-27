@@ -1,0 +1,35 @@
+{
+  "description": "Deprecation metadata for migrations",
+  "schema": {
+    "migrationNumber": "Migration sequence number",
+    "description": "What the migration does",
+    "deprecatedVersions": "List of API versions affected (if this migration changes a versioned API)",
+    "deprecationPlan": "Plan for deprecating the changed endpoints",
+    "sunsetDate": "When the old endpoints will be removed (minimum 6 months notice)",
+    "replacementEndpoints": "New endpoints clients should migrate to"
+  },
+  "example": {
+    "migrationNumber": 100,
+    "description": "Add new_field to users table",
+    "deprecatedVersions": ["v1"],
+    "deprecationPlan": {
+      "v1": {
+        "oldEndpoint": "GET /api/v1/users/:id",
+        "newEndpoint": "GET /api/v2/users/:id",
+        "reason": "User schema changed - new fields added",
+        "sunsetDate": "2027-01-01T00:00:00Z",
+        "migrationGuide": "https://docs.mentorminds.com/migration/v1-to-v2-users"
+      }
+    }
+  },
+  "migrations": {
+    "001_create_users.sql": {
+      "description": "Initial users table creation",
+      "deprecatedVersions": []
+    },
+    "002_create_wallets.sql": {
+      "description": "Initial wallets table creation",
+      "deprecatedVersions": []
+    }
+  }
+}

@@ -14,3 +14,6 @@ export * from './stellar.types';
 
 // Wallet types
 export * from './wallet.types';
+
+// Error types
+export * from './errors.types';
