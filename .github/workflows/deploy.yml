@@ -54,6 +54,10 @@ jobs:
       - name: Validate migrations
         run: pnpm run migrate:validate
 
+      - name: Validate API sunset configurations
+        run: pnpm run validate:api-sunsets
+        continue-on-error: false
+
       - name: Build
         run: pnpm run build
 
