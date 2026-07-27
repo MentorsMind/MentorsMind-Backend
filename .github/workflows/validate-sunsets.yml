@@ -1,0 +1,113 @@
+name: API Sunset Validation
+
+# Run on every push and PR to catch sunset violations early
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # Validate API sunset configurations
+  validate-sunsets:
+    name: Validate API Sunset Dates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Main validation check
+      - name: Validate API sunset configurations
+        run: pnpm run validate:api-sunsets
+        continue-on-error: false
+
+      # Optional: Check for deprecated endpoint references in migrations
+      - name: Check migrations for sunset compliance
+        run: |
+          echo "Checking database migrations for sunset API version references..."
+          # This would be a custom script that checks migration files
+          # For now, just verify the migration directory exists
+          if [ -d "database/migrations" ]; then
+            echo "✓ Database migrations directory found"
+            echo "Migration files: $(ls database/migrations | wc -l)"
+          fi
+
+      # Optional: Generate sunset report
+      - name: Generate sunset status report
+        if: always()
+        run: |
+          cat > sunset-status-report.txt << 'EOF'
+          API Sunset Status Report
+          ========================
+          Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          
+          Current Status:
+          EOF
+          # Report details would be added by validate script
+          echo "Report generated at sunset-status-report.txt"
+
+      - name: Upload sunset status report (if present)
+        if: failure() && hashFiles('sunset-status-report.txt') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunset-status-report
+          path: sunset-status-report.txt
+          retention-days: 30
+
+  # This job blocks deployment if critical sunset issues are found
+  deployment-gate:
+    name: Sunset Enforcement Gate
+    runs-on: ubuntu-latest
+    needs: validate-sunsets
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Final gate: Check if any versions have passed sunset
+      - name: Check for sunset API violations (deployment blocker)
+        run: |
+          pnpm run validate:api-sunsets 2>&1 | tee validation-output.log
+          
+          # Check if validation indicated CRITICAL or SUNSET status
+          if grep -q "CRITICAL\|SUNSET" validation-output.log; then
+            echo "::error::API sunset violations detected. Deployment blocked."
+            echo "Sunset APIs detected - immediate action required before deployment"
+            exit 1
+          fi
+        continue-on-error: false
+
+      - name: Log sunset validation passed
+        run: |
+          echo "✓ API sunset validation passed"
+          echo "✓ Ready for deployment"
