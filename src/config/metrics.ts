@@ -227,7 +227,14 @@ export const rateLimitExceededTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Goals ──────────────────────────────────────────────────────────…[...]
+export const stellarVerificationAttemptsTotal = new Counter<string>({
+  name: "stellar_verification_attempts_total",
+  help: "Total Stellar transaction verification attempts by outcome",
+  labelNames: ["outcome"],
+  registers: [metricsRegistry],
+});
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
 
 export const goalRemindersSentTotal = new Counter<string>({
   name: "goal_reminders_sent_total",

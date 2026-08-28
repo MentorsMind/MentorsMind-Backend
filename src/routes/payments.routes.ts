@@ -26,6 +26,7 @@ import {
   getPaymentByIdSchema,
 } from "../validators/schemas/payments.schemas";
 import { FeeEstimateController } from "../controllers/feeEstimate.controller";
+import { stellarVerificationRateLimit } from "../middleware/stellar-rate-limit.middleware";
 
 const router = Router();
 
@@ -314,6 +315,7 @@ router.get(
  */
 router.post(
   "/:id/confirm",
+  stellarVerificationRateLimit,
   requireIdempotency,
   validate(confirmPaymentSchema),
   asyncHandler(PaymentsController.confirmPayment),
