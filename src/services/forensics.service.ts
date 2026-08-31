@@ -25,6 +25,7 @@ import {
   type EvidenceType,
   type IncidentEvidence,
 } from "../models/security-incident.model";
+import { StorageService } from "./storage.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,14 +126,21 @@ export const ForensicsService = {
    * Runs all collection tasks concurrently and attaches each artifact to the
    * incident's evidence chain in the DB.
    *
+   * For incidents with severity 'high' or 'critical', the assembled bundle is
+   * automatically uploaded to S3 (forensics/incidents/{incidentId}/{timestamp}.json)
+   * with server-side encryption (AES256) and 7-year COMPLIANCE object lock.
+   * The resulting S3 URI is stored on the incident record.
+   *
    * @param incidentId  - Target incident
    * @param userId      - Affected user ID
    * @param collectedBy - Identifier of the collecting system or analyst
+   * @param severity    - Incident severity; triggers S3 upload when 'high' or 'critical'
    */
   async collectForIncident(
     incidentId: string,
     userId: string,
     collectedBy = "forensics-service",
+    severity?: string,
   ): Promise<ForensicSnapshot> {
     const collectedAt = new Date();
     const evidenceItems: IncidentEvidence[] = [];
@@ -200,6 +208,29 @@ export const ForensicsService = {
       collectedBy,
       { artifactCount: evidenceItems.length, errors },
     );
+
+    // Resolve effective severity: use provided value or look up the incident
+    let effectiveSeverity = severity;
+    if (!effectiveSeverity) {
+      try {
+        const incident = await SecurityIncidentModel.findById(incidentId);
+        effectiveSeverity = incident?.severity;
+      } catch (err) {
+        logger.warn({ incidentId, error: (err as Error).message }, "Could not resolve incident severity for S3 check");
+      }
+    }
+
+    // Automatically upload evidence bundle to S3 for high/critical incidents
+    if (effectiveSeverity === "high" || effectiveSeverity === "critical") {
+      try {
+        const bundle = await this.buildBundle(incidentId);
+        await this.uploadBundleToS3(bundle);
+      } catch (err) {
+        const uploadErr = `s3_upload: ${(err as Error).message}`;
+        errors.push(uploadErr);
+        logger.warn({ incidentId, error: (err as Error).message }, "Forensics S3 upload failed");
+      }
+    }
 
     logger.info(
       { incidentId, artifactCount: evidenceItems.length, errors: errors.length },
@@ -489,6 +520,85 @@ export const ForensicsService = {
       chainHash = computeChainHash(chainHash, item.hash ?? expectedHash);
     }
     return chainHash === bundle.hashChain;
+  },
+
+  // ── Raw evidence attachment ─────────────────────────────────────────────────
+
+  /**
+   * Upload a forensic evidence bundle to S3.
+   *
+   * The bundle items are serialized to JSON and uploaded to:
+   *   forensics/incidents/{incidentId}/{timestamp}.json
+   *
+   * Server-side encryption (AES256) is applied via StorageService.uploadFile(),
+   * which always sets ServerSideEncryption: "AES256".  For 7-year COMPLIANCE
+   * object lock the upload is delegated to uploadFileWithRetention().
+   *
+   * On success:
+   *  - The S3 URI is persisted on the incident record (s3_uri column).
+   *  - A FORENSICS_S3_UPLOADED timeline event is appended.
+   *
+   * @param bundle - The assembled ForensicBundle to upload.
+   * @returns The S3 URI of the uploaded object.
+   */
+  async uploadBundleToS3(bundle: ForensicBundle): Promise<string> {
+    const timestamp = bundle.generatedAt.getTime();
+    const key = StorageService.buildForensicsKey(bundle.incidentId, timestamp);
+
+    // Serialize the bundle (items + metadata) to a JSON buffer — no extra deps
+    const payload: Record<string, unknown> = {
+      incidentId: bundle.incidentId,
+      generatedAt: bundle.generatedAt.toISOString(),
+      evidenceCount: bundle.evidenceCount,
+      hashChain: bundle.hashChain,
+      items: bundle.items,
+    };
+    const body = Buffer.from(JSON.stringify(payload, null, 2), "utf8");
+
+    // 7-year COMPLIANCE retention (2557 days ≈ 7 years)
+    const retainUntilDate = new Date(timestamp + 7 * 365 * 24 * 60 * 60 * 1000);
+
+    const { url: s3Uri } = await StorageService.uploadFileWithRetention(
+      key,
+      body,
+      "application/json",
+      retainUntilDate,
+      {
+        incidentId: bundle.incidentId,
+        evidenceCount: String(bundle.evidenceCount),
+        hashChain: bundle.hashChain,
+      },
+    );
+
+    logger.info({ incidentId: bundle.incidentId, s3Uri, key }, "Forensics bundle uploaded to S3");
+
+    // Persist the S3 URI on the incident record
+    await SecurityIncidentModel.setS3Uri(bundle.incidentId, s3Uri);
+
+    // Record the upload on the incident timeline
+    await SecurityIncidentModel.addTimelineEvent(
+      bundle.incidentId,
+      "FORENSICS_S3_UPLOADED",
+      `Evidence bundle uploaded to S3: ${s3Uri} (${bundle.evidenceCount} items, AES256 SSE, 7-year COMPLIANCE lock)`,
+      "forensics-service",
+      { s3Uri, key, evidenceCount: bundle.evidenceCount, hashChain: bundle.hashChain },
+    );
+
+    return s3Uri;
+  },
+
+  /**
+   * Alias for collectForIncident() for backward compatibility.
+   * Callers that already pass a severity string receive automatic S3 upload
+   * behavior for high/critical incidents.
+   */
+  async collectForensicSnapshot(
+    incidentId: string,
+    userId: string,
+    collectedBy = "forensics-service",
+    severity?: string,
+  ): Promise<ForensicSnapshot> {
+    return this.collectForIncident(incidentId, userId, collectedBy, severity);
   },
 
   // ── Raw evidence attachment ─────────────────────────────────────────────────
