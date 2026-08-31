@@ -1,0 +1,59 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sonarcloud:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint with report output
+        run: pnpm run lint -- --format json -o eslint-report.json
+        continue-on-error: true # Keep going even if there are lint errors so SonarQube can track them
+
+      - name: Run Unit Tests with coverage
+        run: pnpm run test:unit -- --coverage --coverageDirectory=coverage
+        env:
+          NODE_ENV: test
+          JWT_SECRET: "ci-e2e-jwt-secret-at-least-32-characters-long!!!"
+          JWT_REFRESH_SECRET: "ci-e2e-refresh-secret-at-least-32-char!!!!"
+          ENCRYPTION_KEY: "ci-e2e-encryption-key-exactly-32b!!"
+          FILE_SIGNING_SECRET: "ci-e2e-file-signing-secret-32b!!!"
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@v2.0.2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }} # Leave blank if using SonarCloud
+
+      - name: SonarQube Quality Gate Check
+        uses: sonarsource/sonarqube-quality-gate-action@v1.1.0
+        # Force PR builds to fail if Quality Gate fails
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
