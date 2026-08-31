@@ -308,6 +308,98 @@ export const BookingsController = {
       "Booking event history retrieved",
     );
   }),
+
+  /**
+   * Update video mode for an active session.
+   * Called by participants to switch between video and audio-only modes —
+   * typically triggered via the `session:audio_fallback_suggested` WebSocket event.
+   *
+   * PATCH /api/v1/bookings/:id/video-mode
+   * Body: { mode: 'audio_only' | 'video' }
+   */
+  updateVideoMode: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid session ID", 400);
+    }
+
+    const { mode } = req.body as { mode?: string };
+    const VALID_MODES = ["audio_only", "video"] as const;
+    type VideoMode = (typeof VALID_MODES)[number];
+
+    if (!mode || !(VALID_MODES as readonly string[]).includes(mode)) {
+      return ResponseUtil.error(
+        res,
+        "Invalid mode. Must be 'audio_only' or 'video'.",
+        400,
+      );
+    }
+
+    const session = await SessionModel.findById(id);
+    if (!session) {
+      return ResponseUtil.error(res, "Session not found", 404);
+    }
+
+    // Only participants of the session may change the video mode
+    const requestingUserId =
+      (req as any).user?.id || (req as any).user?.userId;
+    if (
+      requestingUserId !== session.mentor_id &&
+      requestingUserId !== session.mentee_id
+    ) {
+      return ResponseUtil.error(
+        res,
+        "You are not a participant of this session",
+        403,
+      );
+    }
+
+    // Session must be in progress (confirmed) to change video mode
+    if (session.status !== "confirmed") {
+      return ResponseUtil.error(
+        res,
+        "Video mode can only be changed for confirmed sessions",
+        400,
+      );
+    }
+
+    // Persist the video mode in the notes metadata field as a lightweight
+    // solution (no DB migration required). In production, add a dedicated
+    // `video_mode` column to the sessions table.
+    const videoMode = mode as VideoMode;
+    const currentNotes = session.notes ?? "";
+    const VIDEO_MODE_TAG_RE = /\[video_mode:[^\]]+\]/;
+    const newNotes = VIDEO_MODE_TAG_RE.test(currentNotes)
+      ? currentNotes.replace(VIDEO_MODE_TAG_RE, `[video_mode:${videoMode}]`)
+      : `${currentNotes}[video_mode:${videoMode}]`.trim();
+
+    await SessionModel.updateStatus(id, session.status); // touch updated_at via a benign update
+    // Use a direct query to write the notes field with the embedded mode tag
+    const pool = (await import("../config/database")).default;
+    await pool.query(
+      `UPDATE sessions SET notes = $1, updated_at = NOW() WHERE id = $2`,
+      [newNotes, id],
+    );
+
+    logger.info(
+      { sessionId: id, videoMode, requestingUserId },
+      "Session video mode updated",
+    );
+
+    return ResponseUtil.success(
+      res,
+      {
+        sessionId: id,
+        videoMode,
+        message:
+          videoMode === "audio_only"
+            ? "Session switched to audio-only mode"
+            : "Session switched back to full video mode",
+      },
+      "Video mode updated successfully",
+    );
+  }),
 };
 
 export default BookingsController;
