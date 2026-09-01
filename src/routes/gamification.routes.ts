@@ -209,4 +209,65 @@ router.post(
   GamificationController.adminCreateAchievement,
 );
 
+/**
+ * @swagger
+ * /api/v1/gamification/users/{userId}/achievements:
+ *   get:
+ *     summary: List a user's earned achievement badges (issue #984)
+ *     tags: [Gamification]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       200:
+ *         description: User achievement badges
+ */
+router.get('/users/:userId/achievements', authenticate as any, GamificationController.getUserAchievements);
+
+/**
+ * @swagger
+ * /api/v1/gamification/me/streaks:
+ *   get:
+ *     summary: Get the current user's streak summary (issue #984)
+ *     tags: [Gamification]
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200:
+ *         description: Current user's streak summary
+ */
+router.get('/me/streaks', authenticate as any, GamificationController.getMyStreaks);
+
+/**
+ * @swagger
+ * /api/v1/gamification/leaderboard/categorized:
+ *   get:
+ *     summary: Get leaderboard by category & period (issue #984)
+ *     tags: [Gamification]
+ *     security: [{ bearerAuth: [] }]
+ *     parameters:
+ *       - in: query
+ *         name: category
+ *         schema:
+ *           type: string
+ *           example: sessions
+ *       - in: query
+ *         name: period
+ *         schema:
+ *           type: string
+ *           example: monthly
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Leaderboard entries
+ */
+router.get('/leaderboard/categorized', authenticate as any, GamificationController.getGamificationLeaderboard);
+
 export default router;

@@ -60,6 +60,31 @@ export const getPlatformKeypair = (): StellarSdk.Keypair | null => {
     logger.warn("Platform secret key not configured");
     return null;
   }
+
+  // Prefer HSM-backed signing. When the HSM is enabled (aws_cloudhsm or
+  // pkcs11 provider), the private key must NOT be materialised in process
+  // memory from an env var. In that case we return null here — callers must
+  // use `HsmStellarSigner.signStellarTransaction` instead, which delegates
+  // the actual Ed25519 signature to the HSM token.
+  try {
+    const hsmConfig = require("./hsm.config").default;
+    if (hsmConfig.enabled) {
+      logger.info(
+        { provider: hsmConfig.provider },
+        "HSM is enabled — deferring Stellar signing to HSM-backed signer",
+      );
+      return null;
+    }
+  } catch {
+    // hsm config module unavailable — fall through to env-based keypair.
+  }
+
+  // Development fallback: only reachable when HSM is disabled AND we are in a
+  // development/test environment. The HsmStellarSigner enforces the env guard.
+  logger.warn(
+    "⚠️  HSM NOT ENABLED — constructing platform keypair from PLAINTEXT " +
+      "STEALLAR_FUNDING_SECRET. This is only acceptable in development.",
+  );
   return StellarSdk.Keypair.fromSecret(secretKey);
 };
 

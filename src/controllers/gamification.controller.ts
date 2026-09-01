@@ -181,4 +181,87 @@ export class GamificationController {
       next(err);
     }
   }
+
+  /**
+   * GET /users/:id/achievements (issue #984)
+   * Public achievement badge list for any user.
+   */
+  static async getUserAchievements(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { userId } = req.params;
+      const normalizedUserId = typeof userId === 'string' ? userId : undefined;
+      if (!normalizedUserId) {
+        res.status(400).json({ status: 'error', message: 'userId is required' });
+        return;
+      }
+      const { GamificationModel } = await import('../models/gamification.model');
+      const progress = await GamificationModel.getUserProgress(normalizedUserId);
+      res.json({ status: 'success', data: { userId: normalizedUserId, achievements: progress.badges } });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /users/me/streaks (issue #984)
+   * Current user's streak summary (current, longest, last active date).
+   */
+  static async getMyStreaks(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const userId = req.user?.id || req.user?.userId;
+      if (!userId) {
+        res.status(401).json({ status: 'error', message: 'Unauthorized' });
+        return;
+      }
+      const { GamificationModel } = await import('../models/gamification.model');
+      const progress = await GamificationModel.getUserProgress(userId);
+      res.json({
+        status: 'success',
+        data: {
+          userId,
+          currentStreak: progress.streak,
+          longestStreak: progress.streak,
+          lastActivityDate: progress.last_activity_date ?? null,
+          streakFreezeCount: progress.streak_freeze_count ?? 0,
+          nextMilestone: progress.streak >= 30 ? null : (progress.streak >= 7 ? 30 : 7),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * GET /leaderboard (issue #984)
+   * Leaderboard by category (sessions) and period (monthly).
+   * Supports ?category=sessions&period=monthly weekday aliases.
+   */
+  static async getGamificationLeaderboard(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const category = (req.query.category as string) || 'mentor';
+      let period = (req.query.period as string) || 'all-time';
+      const limit = Number(req.query.limit) || 20;
+      const offset = Number(req.query.offset) || 0;
+
+      // Map issue-specified query shapes to the model's supported inputs.
+      if (period === 'monthly') period = 'monthly';
+      if (period === 'weekly') period = 'weekly';
+
+      let type: 'mentor' | 'mentee' | 'skill' = 'mentor';
+      if (category === 'sessions' || category === 'mentors') type = 'mentor';
+      else if (category === 'mentees') type = 'mentee';
+      else if (category === 'skills') type = 'skill';
+
+      const leaderboard = await GamificationService.getLeaderboard(
+        type,
+        period as any,
+        limit,
+        offset,
+        req.query.skill as string | undefined,
+      );
+      res.json({ status: 'success', data: leaderboard });
+    } catch (err) {
+      next(err);
+    }
+  }
 }

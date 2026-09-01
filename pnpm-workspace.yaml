@@ -9,5 +9,6 @@ allowBuilds:
   cpu-features: true
   'msgpackr-extract': true
   'protobufjs': true
+  puppeteer: set this to true or false
   'sharp': true
   ssh2: true

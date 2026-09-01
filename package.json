@@ -12,6 +12,8 @@
     "start:worker": "node dist/worker-bootstrap.js",
     "lint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js .",
     "test:unit": "jest --config jest.unit.config.ts --runInBand",
+    "test:integration": "jest --config jest.integration.config.ts --runInBand",
+    "test:tenant-isolation": "jest --config tests/integration/jest.tenant-isolation.config.ts --runInBand --forceExit",
     "test:validators": "ts-node --transpile-only src/validators/__tests__/run.ts",
     "test:cors": "ts-node --transpile-only src/middleware/__tests__/run.ts",
     "test:cache": "ts-node --transpile-only src/middleware/__tests__/run-cache.ts",

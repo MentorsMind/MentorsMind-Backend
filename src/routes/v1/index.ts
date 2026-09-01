@@ -56,6 +56,8 @@ import errorsRoutes from "../errors.routes";
 import developerRoutes from "../developer.routes";
 import taxRoutes from "../tax.routes";
 import emailWebhookRoutes from "../emailWebhook.routes";
+import gamificationRoutes from "../gamification.routes";
+import leaderboardRoutes from "../leaderboard.routes";
 
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
@@ -166,5 +168,8 @@ router.use("/credentials", credentialsRoutes);
 
 // Gamification & Achievement System
 router.use("/gamification", gamificationRoutes);
+
+// Public leaderboard (issue #984): /api/v1/leaderboard?category=sessions&period=monthly
+router.use("/leaderboard", leaderboardRoutes);
 
 export default router;

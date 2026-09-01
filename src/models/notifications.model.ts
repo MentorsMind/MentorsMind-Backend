@@ -33,6 +33,8 @@ export enum NotificationType {
   GOAL_DEADLINE_REMINDER = "goal_deadline_reminder",
   GOAL_OVERDUE = "goal_overdue",
   DISPUTE_CREATED = "dispute_created",
+  SESSION_NO_SHOW = "session_no_show",
+  NO_SHOW_DISPUTE = "no_show_dispute",
   SYSTEM_ALERT = "system_alert",
   MEETING_CONFIRMED = "meeting_confirmed",
   MESSAGE_RECEIVED = "message_received",

@@ -855,4 +855,193 @@ export const BookingsService = {
 
     return updated;
   },
+
+  /**
+   * Dispute a recorded no-show within the configured dispute window (default 24h).
+   * Only the offender for this booking may dispute, and only while the dispute
+   * deadline has not elapsed.
+   */
+  async disputeNoShow(
+    bookingId: string,
+    userId: string,
+    reason: string,
+  ): Promise<BookingRecord> {
+    const { rows } = await db.query(
+      `SELECT id, status, no_show_offender_role, no_show_dispute_status,
+              no_show_dispute_deadline, mentor_id, mentee_id, no_show_penalty_points
+       FROM bookings WHERE id = $1`,
+      [bookingId],
+    );
+
+    const booking = rows[0] as {
+      id: string;
+      status: string;
+      no_show_offender_role: "mentor" | "mentee" | null;
+      no_show_dispute_status: "none" | "pending" | "approved" | "dismissed";
+      no_show_dispute_deadline: Date | null;
+      mentor_id: string;
+      mentee_id: string;
+      no_show_penalty_points: number;
+    };
+
+    if (!booking) {
+      throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
+    }
+
+    if (booking.status !== "no_show") {
+      throw createError(ErrorCode.BOOKING_INVALID_STATUS, 400);
+    }
+
+    if (!booking.no_show_offender_role || !booking.no_show_dispute_deadline) {
+      throw createError(ErrorCode.BOOKING_INVALID_STATUS, 400);
+    }
+
+    // Only the offender can dispute the no-show marking.
+    const offenderUserId =
+      booking.no_show_offender_role === "mentor"
+        ? booking.mentor_id
+        : booking.mentee_id;
+    if (userId !== offenderUserId) {
+      throw createError(ErrorCode.AUTHZ_FORBIDDEN, 403);
+    }
+
+    // Dispute window must still be open.
+    if (new Date(booking.no_show_dispute_deadline).getTime() < Date.now()) {
+      throw createError(ErrorCode.BOOKING_INVALID_STATUS, 400);
+    }
+
+    // Must not already be in a pending/resolved dispute.
+    if (booking.no_show_dispute_status !== "none") {
+      throw createError(ErrorCode.BOOKING_INVALID_STATUS, 400);
+    }
+
+    const updated = await BookingModel.update(bookingId, {
+      noShowDisputeStatus: "pending",
+      noShowDisputedAt: new Date(),
+      noShowDisputeReason: reason,
+    });
+
+    if (!updated) {
+      throw createError(ErrorCode.BOOKING_UPDATE_FAILED, 500);
+    }
+
+    // Reflect the pending dispute on the in-app notification + audit trail.
+    try {
+      await NotificationService.sendNotification({
+        userId: offenderUserId,
+        type: NotificationType.NO_SHOW_DISPUTE,
+        title: "No-Show Dispute Submitted",
+        message: `Your dispute for booking ${bookingId} has been received and is pending review.`,
+        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP],
+        priority: NotificationPriority.NORMAL,
+        data: { bookingId, reason },
+      });
+    } catch (notificationError) {
+      logger.warn("Dispute confirmation notification failed", {
+        bookingId,
+        error:
+          notificationError instanceof Error
+            ? notificationError.message
+            : notificationError,
+      });
+    }
+
+    await publishBookingDomainEvent(
+      bookingId,
+      BookingProjectionEventType.BookingStatusChanged,
+      {
+        previousStatus: "no_show",
+        status: "no_show",
+        disputeStatus: "pending",
+      },
+      userId,
+    );
+
+    return updated;
+  },
+
+  /**
+   * Resolve a pending no-show dispute. On approval the penalty strike is wiped
+   * and the offender's penalty points are refunded; on dismissal the penalty
+   * stands.
+   */
+  async resolveNoShowDispute(
+    bookingId: string,
+    adminUserId: string,
+    decision: "approved" | "dismissed",
+    resolutionNote?: string,
+  ): Promise<BookingRecord> {
+    const { rows } = await db.query(
+      `SELECT id, status, no_show_offender_role, no_show_dispute_status,
+              no_show_penalty_points, mentor_id, mentee_id
+       FROM bookings WHERE id = $1`,
+      [bookingId],
+    );
+
+    const booking = rows[0] as {
+      id: string;
+      status: string;
+      no_show_offender_role: "mentor" | "mentee" | null;
+      no_show_dispute_status: "none" | "pending" | "approved" | "dismissed";
+      no_show_penalty_points: number;
+      mentor_id: string;
+      mentee_id: string;
+    };
+
+    if (!booking) {
+      throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
+    }
+
+    if (booking.status !== "no_show" || booking.no_show_dispute_status !== "pending") {
+      throw createError(ErrorCode.BOOKING_INVALID_STATUS, 400);
+    }
+
+    const offenderId =
+      booking.no_show_offender_role === "mentor"
+        ? booking.mentor_id
+        : booking.mentee_id;
+
+    const updated = await BookingModel.update(bookingId, {
+      noShowDisputeStatus: decision,
+      noShowDisputeReason: resolutionNote,
+    });
+
+    if (!updated) {
+      throw createError(ErrorCode.BOOKING_UPDATE_FAILED, 500);
+    }
+
+    // Update the penalty ledger + user aggregates based on the decision.
+    try {
+      if (decision === "approved") {
+        // Wipe the strike and refund the penalty points.
+        await db.query(
+          `UPDATE no_show_penalties
+           SET status = 'waived', resolution = $1, resolved_by = $2, resolved_at = NOW()
+           WHERE booking_id = $3`,
+          [resolutionNote || "approved", adminUserId, bookingId],
+        );
+        await db.query(
+          `UPDATE users
+           SET active_penalty_points = GREATEST(0, active_penalty_points - $1)
+           WHERE id = $2`,
+          [booking.no_show_penalty_points, offenderId],
+        );
+      } else {
+        await db.query(
+          `UPDATE no_show_penalties
+           SET status = 'served', resolution = $1, resolved_by = $2, resolved_at = NOW()
+           WHERE booking_id = $3`,
+          [resolutionNote || "dismissed", adminUserId, bookingId],
+        );
+      }
+    } catch (penaltyError) {
+      logger.warn("Failed to update no-show penalty on dispute resolution", {
+        bookingId,
+        error:
+          penaltyError instanceof Error ? penaltyError.message : penaltyError,
+      });
+    }
+
+    return updated;
+  },
 };

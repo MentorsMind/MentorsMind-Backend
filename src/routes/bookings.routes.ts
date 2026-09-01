@@ -472,4 +472,90 @@ router.post("/:id/join", authenticate, joinSession);
  */
 router.get("/:id/presence", authenticate, getSessionPresence);
 
+/**
+ * @swagger
+ * /api/v1/bookings/{id}/no-show/dispute:
+ *   post:
+ *     summary: Dispute a recorded no-show within the dispute window
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [reason]
+ *             properties:
+ *               reason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dispute submitted
+ *       400:
+ *         description: Not eligible or dispute window closed
+ *       403:
+ *         description: Only the offender may dispute
+ *       404:
+ *         description: Booking not found
+ */
+router.post(
+  "/:id/no-show/dispute",
+  authenticate,
+  BookingsController.disputeNoShow,
+);
+
+/**
+ * @swagger
+ * /api/v1/bookings/{id}/no-show/dispute/resolve:
+ *   post:
+ *     summary: Resolve a pending no-show dispute (admin only)
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [decision]
+ *             properties:
+ *               decision:
+ *                 type: string
+ *                 enum: [approved, dismissed]
+ *               note:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Dispute resolved
+ *       400:
+ *         description: Booking not pending or invalid decision
+ *       404:
+ *         description: Booking not found
+ */
+router.post(
+  "/:id/no-show/dispute/resolve",
+  authenticate,
+  requireAdmin,
+  BookingsController.resolveNoShowDispute,
+);
+
 export default router;

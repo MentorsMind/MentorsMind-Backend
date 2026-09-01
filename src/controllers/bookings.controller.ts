@@ -308,6 +308,65 @@ export const BookingsController = {
       "Booking event history retrieved",
     );
   }),
+
+  /**
+   * POST /api/v1/bookings/:id/no-show/dispute
+   * File a dispute against a recorded no-show within the dispute window.
+   */
+  disputeNoShow: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const { reason } = req.body;
+
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!reason || typeof reason !== "string" || !reason.trim()) {
+      return ResponseUtil.error(res, "Dispute reason is required", 400);
+    }
+
+    const booking = await BookingsService.disputeNoShow(id, userId, reason.trim());
+    return ResponseUtil.success(
+      res,
+      { booking },
+      "No-show dispute submitted and pending review",
+    );
+  }),
+
+  /**
+   * POST /api/v1/bookings/:id/no-show/dispute/resolve
+   * Admin resolves a pending no-show dispute (approved | dismissed).
+   */
+  resolveNoShowDispute: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const adminUserId = (req as any).user?.id || (req as any).user?.userId;
+    const { decision, note } = req.body;
+
+    if (!adminUserId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!["approved", "dismissed"].includes(decision)) {
+      return ResponseUtil.error(res, "Decision must be 'approved' or 'dismissed'", 400);
+    }
+
+    const booking = await BookingsService.resolveNoShowDispute(
+      id,
+      adminUserId,
+      decision as "approved" | "dismissed",
+      typeof note === "string" && note.trim() ? note.trim() : undefined,
+    );
+    return ResponseUtil.success(
+      res,
+      { booking },
+      "No-show dispute resolved",
+    );
+  }),
 };
 
 export default BookingsController;
