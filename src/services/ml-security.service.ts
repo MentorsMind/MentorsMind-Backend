@@ -15,7 +15,16 @@
  * cheap to unit test and safe to call from request-hot paths or workers.
  * Nobody should read "ml-security" as a claim of deep learning; it is a
  * heuristic/statistical anomaly-detection utility.
+ *
+ * scoreDeviationForUser() is the one non-pure export here: it wraps
+ * scoreDeviation() with the Redis-backed rolling baseline from
+ * baseline-store.service.ts, so callers on the hot path (e.g.
+ * threat-detection.service.ts) no longer need to assemble their own
+ * historicalSamples on every call. Pass `override` to bypass the store
+ * entirely (e.g. in tests, or when a caller already has samples in hand).
  */
+
+import { BaselineStore } from "./baseline-store.service";
 
 /** Clamp a number into the inclusive [min, max] range. */
 function clamp(value: number, min: number, max: number): number {
@@ -96,5 +105,22 @@ export const MlSecurityService = {
       (countInWindow - threshold) / (saturationCount - threshold || 1);
 
     return clamp(ratio * 100, 0, 100);
+  },
+
+  /**
+   * Same scoring as scoreDeviation(), but sources historicalSamples from the
+   * Redis-backed rolling baseline (BaselineStore) when `override` is not
+   * supplied, instead of requiring the caller to gather them per-request.
+   *
+   * Pass `override` to skip the Redis lookup and score against explicit
+   * samples (mirrors the old scoreDeviation() call signature).
+   */
+  async scoreDeviationForUser(
+    userId: string,
+    current: number,
+    override?: number[],
+  ): Promise<number> {
+    const samples = override ?? (await BaselineStore.getSamples(userId));
+    return MlSecurityService.scoreDeviation(current, samples);
   },
 };
