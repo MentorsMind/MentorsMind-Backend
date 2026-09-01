@@ -38,6 +38,7 @@
     "test:e2e:verbose": "E2E_VERBOSE=1 jest --config jest.e2e.config.ts --forceExit --verbose",
     "test:e2e:single": "jest --config jest.e2e.config.ts --forceExit",
     "test:chaos": "jest --config chaos-tests/jest.config.ts --runInBand",
+    "test:load": "bash scripts/performance/run-load-tests.sh",
     "docker:build": "docker compose build",
     "docker:dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build",
     "sync:elasticsearch": "ts-node scripts/sync-elasticsearch.ts",
