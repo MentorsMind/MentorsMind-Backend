@@ -1,0 +1,17 @@
+{
+  "validBooking": {
+    "durationMinutes": 60,
+    "topic": "Soroban Smart Contract Auditing",
+    "notes": "Looking to review security constraints on vesting contract"
+  },
+  "invalidBookingPast": {
+    "durationMinutes": 30,
+    "topic": "Past Session Test",
+    "notes": "This should fail because scheduledAt is in the past"
+  },
+  "invalidBookingDuration": {
+    "durationMinutes": -10,
+    "topic": "Invalid Duration Test",
+    "notes": "This should fail because duration is negative"
+  }
+}

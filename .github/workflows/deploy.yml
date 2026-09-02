@@ -396,12 +396,13 @@ jobs:
         run: pnpm exec jest --config jest.e2e.config.ts --forceExit
         timeout-minutes: 10
 
-      - name: Upload E2E test results (on failure)
-        if: failure()
+      - name: Upload E2E test results & report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-test-results
           path: |
+            reports/e2e-report.html
             coverage-e2e/
             tests/e2e/setup/.container-state.json
           retention-days: 7
