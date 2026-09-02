@@ -183,7 +183,7 @@ export const PaymentsService = {
        WHERE t.id = $1 AND t.user_id = $2`,
       [paymentId, userId],
     );
-    if (!rows[0]) throw createError("Payment not found", 404);
+    if (!rows[0]) throw createError(ErrorCode.PAYMENT_NOT_FOUND, 404);
     return rows[0];
   },
 
@@ -213,17 +213,14 @@ export const PaymentsService = {
     const payment = await this.getPaymentById(paymentId, userId);
 
     if (payment.status === "completed")
-      throw createError("Payment already confirmed", 409);
+      throw createError(ErrorCode.PAYMENT_ALREADY_CONFIRMED, 409);
     if (!["pending", "processing"].includes(payment.status)) {
-      throw createError(
-        `Cannot confirm payment in ${payment.status} status`,
-        400,
-      );
+      throw createError(ErrorCode.PAYMENT_INVALID_STATUS, 400);
     }
 
     // Validate stellarTxHash format
     if (!stellarTxHash || typeof stellarTxHash !== 'string' || stellarTxHash.length !== 64 || !/^[a-fA-F0-9]+$/.test(stellarTxHash)) {
-      throw createError("Invalid Stellar transaction hash format", 400);
+      throw createError(ErrorCode.PAYMENT_INVALID_TX_HASH, 400);
     }
 
     // 1. Check idempotency: ensure this tx hash hasn't been used for another payment
@@ -232,7 +229,7 @@ export const PaymentsService = {
       [stellarTxHash, paymentId]
     );
     if (idempotencyCheck.rows.length > 0) {
-      throw createError("This transaction hash has already been used for another payment", 409);
+      throw createError(ErrorCode.PAYMENT_REFERENCE_ALREADY_USED, 409);
     }
 
     // 2. Verify transaction on Stellar network with timeout
@@ -241,23 +238,23 @@ export const PaymentsService = {
       tx = await stellarService.getTransaction(stellarTxHash);
     } catch (error) {
       logger.error("Failed to fetch Stellar transaction", { stellarTxHash, error });
-      throw createError("Unable to verify transaction on Stellar network", 400);
+      throw createError(ErrorCode.PAYMENT_TX_VERIFICATION_FAILED, 400);
     }
     
     if (!tx.successful) {
-      throw createError("Stellar transaction was not successful", 400);
+      throw createError(ErrorCode.PAYMENT_TX_NOT_SUCCESSFUL, 400);
     }
     
     // Verify transaction is recent (within 24 hours)
     const txCreatedAt = new Date(tx.created_at);
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     if (txCreatedAt < twentyFourHoursAgo) {
-      throw createError("Transaction is too old to confirm (must be within 24 hours)", 400);
+      throw createError(ErrorCode.PAYMENT_TX_TOO_OLD, 400);
     }
     
     if (payment.from_address && tx.source_account !== payment.from_address) {
       throw createError(
-        "Transaction source account does not match payment sender",
+        ErrorCode.PAYMENT_SOURCE_ACCOUNT_MISMATCH,
         400,
       );
     }
@@ -268,7 +265,7 @@ export const PaymentsService = {
       operations = await stellarService.getTransactionOperations(stellarTxHash);
     } catch (error) {
       logger.error("Failed to fetch transaction operations", { stellarTxHash, error });
-      throw createError("Unable to verify transaction operations", 400);
+      throw createError(ErrorCode.PAYMENT_TX_VERIFICATION_FAILED, 400);
     }
     
     const matchingPaymentOp = operations.find((op) => {
@@ -318,7 +315,7 @@ export const PaymentsService = {
         }))
       });
       throw createError(
-        "Transaction does not contain a matching payment operation",
+        ErrorCode.PAYMENT_NO_MATCHING_OPERATION,
         400,
       );
     }
@@ -354,7 +351,7 @@ export const PaymentsService = {
         [paymentId, stellarTxHash],
       );
 
-      if (!rows[0]) throw createError("Failed to confirm payment", 500);
+      if (!rows[0]) throw createError(ErrorCode.PAYMENT_CONFIRM_FAILED, 500);
 
       if (payment.booking_id) {
         await client.query(
@@ -516,9 +513,9 @@ export const PaymentsService = {
     const payment = await this.getPaymentById(paymentId, userId);
 
     if (payment.status === "refunded")
-      throw createError("Payment already refunded", 409);
+      throw createError(ErrorCode.PAYMENT_ALREADY_REFUNDED, 409);
     if (payment.status !== "completed")
-      throw createError("Only completed payments can be refunded", 400);
+      throw createError(ErrorCode.PAYMENT_REFUND_NOT_ALLOWED, 400);
 
     const client = await pool.connect();
     try {

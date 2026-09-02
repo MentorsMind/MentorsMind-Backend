@@ -1,0 +1,54 @@
+name: Performance Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Load pattern to execute
+        required: true
+        default: smoke
+        type: choice
+        options: [smoke, ramp, sustained, spike]
+  schedule:
+    - cron: "30 2 * * 1-5"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/performance/**"
+      - "scripts/load-testing/**"
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
+jobs:
+  benchmark:
+    name: Load test and regression gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:performance:unit
+      - name: Validate performance target
+        env:
+          PERF_BASE_URL: ${{ vars.PERF_BASE_URL }}
+        run: |
+          test -n "$PERF_BASE_URL" || (echo "Repository variable PERF_BASE_URL is required"; exit 1)
+          curl --fail --retry 3 "$PERF_BASE_URL/health/live"
+      - run: pnpm exec ts-node --transpile-only scripts/load-testing/run.ts
+        env:
+          PERF_SCENARIO: ${{ inputs.scenario || 'smoke' }}
+          PERF_BASE_URL: ${{ vars.PERF_BASE_URL }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-report
+          path: performance-report.*

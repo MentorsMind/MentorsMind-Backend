@@ -8,8 +8,8 @@
  * matching the approach in auditLog.service.ts for SOC 2 Type II compliance.
  */
 
-import crypto from "crypto";
-import { db } from "../config/database";
+import * as crypto from "crypto";
+import pool from "../config/database";
 import { logger } from "../utils/logger";
 
 // ── Hash helpers ─────────────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ export const AuditLogModel = {
     const createdAt = new Date();
     const createdAtIso = createdAt.toISOString();
 
-    const client = await db.connect();
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
@@ -167,7 +167,7 @@ export const AuditLogModel = {
    */
   async deleteOlderThanYears(years: number): Promise<number> {
     try {
-      const { rowCount } = await db.query(
+      const { rowCount } = await pool.query(
         `DELETE FROM audit_logs WHERE created_at < NOW() - ($1::int * INTERVAL '1 year') RETURNING id;`,
         [years],
       );

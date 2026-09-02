@@ -1,4 +1,4 @@
-import { cache } from '../config/cache';
+import { CacheService } from './cache.service';
 import { logger } from '../utils/logger';
 
 export interface DomainHealth {
@@ -40,7 +40,7 @@ export class CDNHealthService {
 
     try {
       // Check if circuit is open
-      const circuitOpenedAt = await cache.get(circuitOpenedAtKey);
+      const circuitOpenedAt = await CacheService.get(circuitOpenedAtKey);
       if (circuitOpenedAt) {
         const openedAtTime = parseInt(circuitOpenedAt as string, 10);
         const timeSinceOpen = Date.now() - openedAtTime;
@@ -60,35 +60,45 @@ export class CDNHealthService {
             circuitOpen: true,
           };
 
-          await cache.set(redisKey, JSON.stringify(health), 60); // Store for 60s
+          await CacheService.set(redisKey, JSON.stringify(health), 60); // Store for 60s
           return health;
         } else {
           // Circuit cooldown expired, try to close it
-          await cache.delete(circuitOpenedAtKey);
+          await CacheService.del(circuitOpenedAtKey);
         }
       }
 
-      // Make HEAD request to health-check endpoint
-      const response = await fetch(`${domain}/health-check-asset.txt`, {
-        method: 'HEAD',
-        timeout: HEALTH_CHECK_TIMEOUT,
-      });
+      // Make HEAD request to health-check endpoint with AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT);
+      
+      let response: Response | null = null;
+      try {
+        response = await fetch(`${domain}/health-check-asset.txt`, {
+          method: 'HEAD',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-      latencyMs = Date.now() - startTime;
-      healthy = response.ok && response.status >= 200 && response.status < 300;
+        latencyMs = Date.now() - startTime;
+        healthy = response.ok && response.status >= 200 && response.status < 300;
+      } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+      }
 
       // Reset failure count on successful check
       if (healthy) {
-        await cache.delete(failureKey);
+        await CacheService.del(failureKey);
       } else {
         // Increment failure count
-        const failureCount = parseInt((await cache.get(failureKey)) as string, 10) || 0;
+        const failureCount = parseInt((await CacheService.get(failureKey)) as string, 10) || 0;
         const newFailureCount = failureCount + 1;
-        await cache.set(failureKey, newFailureCount.toString(), CIRCUIT_BREAKER_COOLDOWN);
+        await CacheService.set(failureKey, newFailureCount.toString(), CIRCUIT_BREAKER_COOLDOWN);
 
         // Open circuit if threshold reached
         if (newFailureCount >= CIRCUIT_BREAKER_THRESHOLD) {
-          await cache.set(circuitOpenedAtKey, Date.now().toString(), CIRCUIT_BREAKER_COOLDOWN);
+          await CacheService.set(circuitOpenedAtKey, Date.now().toString(), CIRCUIT_BREAKER_COOLDOWN);
           logger.error(`CDN health check: circuit breaker opened for ${domain}`, {
             domain,
             failureCount: newFailureCount,
@@ -101,20 +111,20 @@ export class CDNHealthService {
         domain,
         healthy,
         latencyMs,
-        statusCode: response.status,
+        statusCode: response?.status || 0,
       });
     } catch (error) {
       latencyMs = Date.now() - startTime;
       healthy = false;
 
       // Increment failure count
-      const failureCount = parseInt((await cache.get(failureKey)) as string, 10) || 0;
+      const failureCount = parseInt((await CacheService.get(failureKey)) as string, 10) || 0;
       const newFailureCount = failureCount + 1;
-      await cache.set(failureKey, newFailureCount.toString(), CIRCUIT_BREAKER_COOLDOWN);
+      await CacheService.set(failureKey, newFailureCount.toString(), CIRCUIT_BREAKER_COOLDOWN);
 
       // Open circuit if threshold reached
       if (newFailureCount >= CIRCUIT_BREAKER_THRESHOLD) {
-        await cache.set(circuitOpenedAtKey, Date.now().toString(), CIRCUIT_BREAKER_COOLDOWN);
+        await CacheService.set(circuitOpenedAtKey, Date.now().toString(), CIRCUIT_BREAKER_COOLDOWN);
         logger.error(`CDN health check: circuit breaker opened for ${domain}`, {
           domain,
           failureCount: newFailureCount,
@@ -138,7 +148,7 @@ export class CDNHealthService {
     };
 
     // Store health info in Redis
-    await cache.set(redisKey, JSON.stringify(health), 60); // Expire after 60s
+    await CacheService.set(redisKey, JSON.stringify(health), 60); // Expire after 60s
 
     return health;
   }
@@ -156,7 +166,7 @@ export class CDNHealthService {
       domains.map(async (domain) => {
         try {
           const redisKey = `cdn:health:${domain}`;
-          const cached = await cache.get(redisKey);
+          const cached = await CacheService.get(redisKey);
           if (cached) {
             return JSON.parse(cached as string) as DomainHealth;
           }
@@ -202,7 +212,7 @@ export class CDNHealthService {
     for (const domain of domains) {
       try {
         const redisKey = `cdn:health:${domain}`;
-        const cached = await cache.get(redisKey);
+        const cached = await CacheService.get(redisKey);
         if (cached) {
           metrics[domain] = JSON.parse(cached as string) as DomainHealth;
         } else {
@@ -233,9 +243,9 @@ export class CDNHealthService {
     const circuitOpenedAtKey = `cdn:health:${domain}:circuit_opened_at`;
 
     await Promise.all([
-      cache.delete(redisKey),
-      cache.delete(failureKey),
-      cache.delete(circuitOpenedAtKey),
+      CacheService.del(redisKey),
+      CacheService.del(failureKey),
+      CacheService.del(circuitOpenedAtKey),
     ]);
 
     logger.info(`Cleared health status for ${domain}`, { domain });

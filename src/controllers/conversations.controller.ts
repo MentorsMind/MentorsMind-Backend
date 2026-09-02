@@ -138,7 +138,7 @@ export const ConversationsController = {
 
     const count = await MessagingService.markAsRead(id, userId);
     ResponseUtil.success(res, { markedRead: count }, 'Messages marked as read');
-  }
+  },
 
   /**
    * POST /api/v1/conversations/:id/messages/read

@@ -184,6 +184,8 @@ export async function revokeVestingSchedule(
       return;
     }
 
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+
     const scheduleId = parseInt(req.params.id);
 
     if (isNaN(scheduleId)) {
@@ -193,11 +195,11 @@ export async function revokeVestingSchedule(
 
     const reason = req.body.reason || 'Revoked by admin';
 
-    await VestingService.revoke(scheduleId, userId, reason);
+    await VestingService.revoke(scheduleId, userIdStr, reason);
 
     logger.info('Vesting schedule revoked', {
       scheduleId,
-      revokedBy: userId,
+      revokedBy: userIdStr,
       reason,
     });
 
@@ -290,6 +292,8 @@ export async function claimVesting(
       return;
     }
 
+    const walletAddressStr = Array.isArray(walletAddress) ? walletAddress[0] : walletAddress;
+
     const scheduleId = parseInt(req.params.id);
 
     if (isNaN(scheduleId)) {
@@ -297,11 +301,11 @@ export async function claimVesting(
       return;
     }
 
-    const claim = await VestingService.claim(scheduleId, walletAddress);
+    const claim = await VestingService.claim(scheduleId, walletAddressStr);
 
     logger.info('Vesting tokens claimed', {
       scheduleId,
-      beneficiary: walletAddress,
+      beneficiary: walletAddressStr,
       amount: claim.amountClaimed,
     });
 
@@ -351,6 +355,8 @@ export async function getVestingClaimHistory(
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
+
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
 
     const scheduleId = parseInt(req.params.id);
 
@@ -411,7 +417,9 @@ export async function getVestingSchedulesByAddress(
       return;
     }
 
-    const schedules = await VestingService.getSchedulesByBeneficiary(address);
+    const addressStr = Array.isArray(address) ? address[0] : address;
+
+    const schedules = await VestingService.getSchedulesByBeneficiary(addressStr);
 
     res.json({
       success: true,

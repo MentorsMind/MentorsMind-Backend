@@ -115,15 +115,15 @@ export const EventReplayAdminController = {
 
       ResponseUtil.success(
         res,
-        progress,
-        'Replay progress retrieved successfully',
-        200,
         {
+          ...progress,
           percentComplete,
           eta: progress.estimatedSecondsRemaining
             ? `${progress.estimatedSecondsRemaining}s`
             : 'calculating',
         },
+        'Replay progress retrieved successfully',
+        200,
       );
     } catch (error) {
       logger.error('Failed to get replay status', {

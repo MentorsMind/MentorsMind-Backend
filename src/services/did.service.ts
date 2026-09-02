@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { pool } from "../config/database";
 import { JwksService } from "./jwks.service";
 import { server, networkPassphrase, getPlatformKeypair } from "../config/stellar";
+import { signStellarTransaction } from "./hsmStellarSigner.service";
 import { logger } from "../utils/logger";
 import { TransactionBuilder, Memo } from "@stellar/stellar-sdk";
 
@@ -427,7 +428,33 @@ class DIDService {
   ): Promise<{ txHash: string; ledger: number }> {
     const keypair = getPlatformKeypair();
     if (!keypair) {
-      throw new Error("Platform Stellar keypair not configured");
+      // HSM is enabled — defer signing to the HSM-backed signer (issue #982).
+      logger.info("Platform Stellar keypair deferred to HSM-backed signer", {
+        anchor: hash.substring(0, 8),
+      });
+      const publicKey = (await import("./hsmStellarSigner.service"))
+        .getPlatformPublicKey();
+      if (!publicKey) {
+        throw new Error("Platform Stellar key not configured");
+      }
+      const account = await server.accounts().accountId(publicKey).call();
+      const txBuilder = new TransactionBuilder(account, {
+        fee: "100",
+        networkPassphrase,
+      });
+      const memoHash = hash.substring(0, 28);
+      txBuilder.addMemo(Memo.text(memoHash));
+      txBuilder.setTimeout(60);
+      const tx = txBuilder.build();
+      const signed = await signStellarTransaction(tx, {
+        operation: "stellar_anchor_did",
+        userId: "system",
+      });
+      if (!signed) {
+        throw new Error("HSM signing returned no signed transaction");
+      }
+      const result = await server.submitTransaction(signed);
+      return { txHash: result.hash, ledger: result.ledger };
     }
 
     const account = await server.accounts().accountId(keypair.publicKey()).call();

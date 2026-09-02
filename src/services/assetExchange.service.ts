@@ -13,8 +13,9 @@ import { Asset } from '@stellar/stellar-sdk';
 import { server } from '../config/stellar';
 import { CacheService } from './cache.service';
 import { OracleService } from './oracle.service';
-import { logger } from '../utils/logger.utils';
 import { createError } from '../middleware/errorHandler';
+import { ErrorCode } from '../errors/error-codes';
+import { logger } from '../utils/logger.utils';
 import { v4 as uuidv4 } from 'uuid';
 
 // ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ export interface PaymentQuote {
 function toStellarAsset(code: string): Asset {
   if (code === 'XLM') return Asset.native();
   const def = SUPPORTED_ASSETS[code];
-  if (!def || !def.issuer) throw createError(`Unsupported asset: ${code}`, 400);
+  if (!def || !def.issuer) throw createError(ErrorCode.ASSET_UNSUPPORTED, 400, { asset: code });
   return new Asset(def.code, def.issuer);
 }
 
@@ -165,7 +166,7 @@ export const AssetExchangeService = {
     this._assertSupported(to);
 
     const amount = parseFloat(sendAmount);
-    if (isNaN(amount) || amount <= 0) throw createError('Invalid send amount', 400);
+    if (isNaN(amount) || amount <= 0) throw createError(ErrorCode.ASSET_INVALID_SEND_AMOUNT, 400);
 
     const rate = await this.getRate(from, to);
     const receiveAmount = (amount * parseFloat(rate.rate)).toFixed(7);
@@ -199,10 +200,10 @@ export const AssetExchangeService = {
    */
   async validateQuote(quoteId: string): Promise<PaymentQuote> {
     const quote = await CacheService.get<PaymentQuote>(quoteKey(quoteId));
-    if (!quote) throw createError('Quote expired or not found', 400);
+    if (!quote) throw createError(ErrorCode.QUOTE_EXPIRED_OR_NOT_FOUND, 400);
 
     if (new Date() > new Date(quote.expiresAt)) {
-      throw createError('Quote has expired', 400);
+      throw createError(ErrorCode.QUOTE_EXPIRED, 400);
     }
 
     if (quote.from !== quote.to) {
@@ -213,8 +214,9 @@ export const AssetExchangeService = {
 
       if (movePct > RATE_STALE_PCT) {
         throw createError(
-          `Rate moved ${movePct.toFixed(2)}% since quote (max ${RATE_STALE_PCT}%). Please request a new quote.`,
+          ErrorCode.QUOTE_RATE_MOVED,
           409,
+          { movePct: movePct.toFixed(2), maxPct: RATE_STALE_PCT },
         );
       }
     }
@@ -267,7 +269,10 @@ export const AssetExchangeService = {
 
   _assertSupported(code: string): void {
     if (!SUPPORTED_ASSETS[code]) {
-      throw createError(`Unsupported asset: ${code}. Supported: ${Object.keys(SUPPORTED_ASSETS).join(', ')}`, 400);
+      throw createError(ErrorCode.ASSET_UNSUPPORTED, 400, { 
+        asset: code, 
+        supported: Object.keys(SUPPORTED_ASSETS).join(', ') 
+      });
     }
   },
 
@@ -358,7 +363,7 @@ export const AssetExchangeService = {
     const asks: Array<{ price: string; amount: string }> = orderbook.asks ?? [];
 
     if (!asks.length) {
-      throw createError(`No liquidity found on SDEX for ${from}/${to}`, 503);
+      throw createError(ErrorCode.SDEX_LIQUIDITY_UNAVAILABLE, 503, { from, to });
     }
 
     return {

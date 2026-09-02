@@ -44,7 +44,10 @@ export class InvoiceController {
 
   static async bulkExport(req: Request, res: Response): Promise<void> {
     const userId = (req as any).user?.id;
-    const { from, to } = req.query;
+    const fromParam = req.query.from;
+    const toParam = req.query.to;
+    const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
+    const to = Array.isArray(toParam) ? toParam[0] : toParam;
     const invoices = await InvoiceService.bulkExport(
       userId,
       new Date(from as string),
@@ -78,11 +81,12 @@ export class InvoiceController {
       }
 
       const downloadUrl = await InvoiceService.getDownloadUrl(invoiceId);
+      const downloadUrlStr = Array.isArray(downloadUrl) ? downloadUrl[0] : downloadUrl;
 
       res.json({
         success: true,
         data: {
-          downloadUrl,
+          downloadUrl: downloadUrlStr,
           expiresInSeconds: 3600,
           invoiceNumber: invoice.invoiceNumber,
         },

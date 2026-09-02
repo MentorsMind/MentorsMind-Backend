@@ -53,9 +53,9 @@ export type EmailAssetKey = keyof typeof EMAIL_ASSET_PATHS;
  * Falls back to APP_BASE_URL when CDN is not available so templates always
  * produce absolute (not relative) URLs — required by email clients.
  */
-function resolveAssetUrl(assetPath: string): string {
+async function resolveAssetUrl(assetPath: string): Promise<string> {
   // If CDN is configured, use it
-  const cdnUrl = CDNService.getAssetUrl(assetPath);
+  const cdnUrl = await CDNService.getAssetUrl(assetPath);
   if (cdnUrl !== assetPath) {
     return cdnUrl;
   }
@@ -66,11 +66,22 @@ function resolveAssetUrl(assetPath: string): string {
   return `${base}${path}`;
 }
 
+function resolveAssetUrlSync(assetPath: string): string {
+  // Synchronous fallback for Handlebars helpers - only uses base URL
+  const base = (env.CDN_BASE_URL || env.APP_BASE_URL || "").replace(/\/$/, "");
+  const path = assetPath.startsWith("/") ? assetPath : `/${assetPath}`;
+  return `${base}${path}`;
+}
+
 /**
  * Resolve a named email asset to its absolute CDN URL.
  */
-function resolveEmailAsset(key: EmailAssetKey): string {
-  return resolveAssetUrl(EMAIL_ASSET_PATHS[key]);
+async function resolveEmailAsset(key: EmailAssetKey): Promise<string> {
+  return await resolveAssetUrl(EMAIL_ASSET_PATHS[key]);
+}
+
+function resolveEmailAssetSync(key: EmailAssetKey): string {
+  return resolveAssetUrlSync(EMAIL_ASSET_PATHS[key]);
 }
 
 // ---------------------------------------------------------------------------
@@ -113,18 +124,18 @@ export interface EmailCDNVariables {
  *   const data = { ...cdnVars, ...userProvidedData };
  *   const html = await hbs.render(templatePath, data);
  */
-function getTemplateVariables(): EmailCDNVariables {
+async function getTemplateVariables(): Promise<EmailCDNVariables> {
   const vars: EmailCDNVariables = {
-    logoUrl: resolveEmailAsset("logo"),
-    logoWhiteUrl: resolveEmailAsset("logoWhite"),
-    twitterIconUrl: resolveEmailAsset("twitterIcon"),
-    linkedinIconUrl: resolveEmailAsset("linkedinIcon"),
-    facebookIconUrl: resolveEmailAsset("facebookIcon"),
-    instagramIconUrl: resolveEmailAsset("instagramIcon"),
-    checkIconUrl: resolveEmailAsset("checkIcon"),
-    warningIconUrl: resolveEmailAsset("warningIcon"),
-    calendarIconUrl: resolveEmailAsset("calendarIcon"),
-    avatarPlaceholderUrl: resolveEmailAsset("avatarPlaceholder"),
+    logoUrl: await resolveEmailAsset("logo"),
+    logoWhiteUrl: await resolveEmailAsset("logoWhite"),
+    twitterIconUrl: await resolveEmailAsset("twitterIcon"),
+    linkedinIconUrl: await resolveEmailAsset("linkedinIcon"),
+    facebookIconUrl: await resolveEmailAsset("facebookIcon"),
+    instagramIconUrl: await resolveEmailAsset("instagramIcon"),
+    checkIconUrl: await resolveEmailAsset("checkIcon"),
+    warningIconUrl: await resolveEmailAsset("warningIcon"),
+    calendarIconUrl: await resolveEmailAsset("calendarIcon"),
+    avatarPlaceholderUrl: await resolveEmailAsset("avatarPlaceholder"),
     platformUrl: env.APP_CLIENT_URL || env.FRONTEND_URL || env.APP_BASE_URL,
     supportUrl: `${env.APP_CLIENT_URL || env.APP_BASE_URL}/support`,
     privacyUrl: `${env.APP_CLIENT_URL || env.APP_BASE_URL}/privacy`,
@@ -165,7 +176,7 @@ function registerHandlebarsHelpers(hbs: {
       logger.warn("cdnAsset helper called with unknown key", { key });
       return "";
     }
-    return resolveEmailAsset(key as EmailAssetKey);
+    return resolveEmailAssetSync(key as EmailAssetKey);
   });
 
   hbs.registerHelper("cdnUrl", (path: unknown): string => {
@@ -173,7 +184,7 @@ function registerHandlebarsHelpers(hbs: {
       logger.warn("cdnUrl helper called with non-string path", { path });
       return "";
     }
-    return resolveAssetUrl(path);
+    return resolveAssetUrlSync(path);
   });
 
   logger.debug("Handlebars CDN helpers registered: cdnAsset, cdnUrl");
@@ -189,12 +200,12 @@ function registerHandlebarsHelpers(hbs: {
  * in base-layout.hbs so corporate email clients that block third-party image
  * CDNs will still render the icons.
  */
-function getSocialIconVariables(): Record<string, string> {
+async function getSocialIconVariables(): Promise<Record<string, string>> {
   return {
-    twitterIconUrl: resolveEmailAsset("twitterIcon"),
-    linkedinIconUrl: resolveEmailAsset("linkedinIcon"),
-    facebookIconUrl: resolveEmailAsset("facebookIcon"),
-    instagramIconUrl: resolveEmailAsset("instagramIcon"),
+    twitterIconUrl: await resolveEmailAsset("twitterIcon"),
+    linkedinIconUrl: await resolveEmailAsset("linkedinIcon"),
+    facebookIconUrl: await resolveEmailAsset("facebookIcon"),
+    instagramIconUrl: await resolveEmailAsset("instagramIcon"),
   };
 }
 

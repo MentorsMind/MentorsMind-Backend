@@ -2,6 +2,7 @@ import pool from "../config/database";
 import { CacheService } from "./cache.service";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   MentorCertification,
   CertificationType,
@@ -83,13 +84,13 @@ export const CertificationService = {
       );
 
       if (mentorRows.length === 0 || mentorRows[0].role !== 'mentor') {
-        throw createError("Mentor not found", 404);
+        throw createError(ErrorCode.MENTOR_NOT_FOUND, 404);
       }
 
       // Verify certification type exists
       const certType = await this.getCertificationTypeById(data.certificationTypeId);
       if (!certType) {
-        throw createError("Certification type not found", 404);
+        throw createError(ErrorCode.CERTIFICATION_TYPE_NOT_FOUND, 404);
       }
 
       // Check if certification already exists
@@ -99,7 +100,7 @@ export const CertificationService = {
       );
 
       if (existingRows.length > 0) {
-        throw createError("Certification already exists for this mentor", 409);
+        throw createError(ErrorCode.CERTIFICATION_ALREADY_EXISTS, 409);
       }
 
       // Calculate expiration date if applicable
@@ -227,7 +228,7 @@ export const CertificationService = {
     try {
       const existing = await this.getCertificationById(certificationId);
       if (!existing) {
-        throw createError("Certification not found", 404);
+        throw createError(ErrorCode.CERTIFICATION_NOT_FOUND, 404);
       }
 
       const setClauses: string[] = [];

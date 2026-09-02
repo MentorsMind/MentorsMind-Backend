@@ -7,11 +7,12 @@
     "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true,
+    "downlevelIteration": true,
     "declaration": false,
     "declarationMap": false,
     "sourceMap": true,
@@ -19,7 +20,7 @@
     "noUnusedParameters": false,
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*", "check-routers.ts"],
   "exclude": ["node_modules", "dist"]

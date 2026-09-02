@@ -15,7 +15,9 @@ export const BulkProgressController = {
         throw createError("Unauthorized", 401);
       }
 
-      const job = await BulkService.getJob(jobId, requestedBy);
+      const userId = Array.isArray(requestedBy) ? requestedBy[0] : requestedBy;
+
+      const job = await BulkService.getJob(jobId, userId);
       if (!job) {
         throw createError("Job not found", 404);
       }
@@ -63,7 +65,9 @@ export const BulkProgressController = {
         throw createError("Unauthorized", 401);
       }
 
-      const job = await BulkService.getJob(jobId, requestedBy);
+      const userId = Array.isArray(requestedBy) ? requestedBy[0] : requestedBy;
+
+      const job = await BulkService.getJob(jobId, userId);
       if (!job) {
         throw createError("Job not found", 404);
       }

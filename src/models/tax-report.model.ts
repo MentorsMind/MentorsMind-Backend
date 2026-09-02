@@ -12,6 +12,10 @@ export interface TaxReport {
   w9OnFile: boolean;
   withholdingAmount: string;
   isInternational: boolean;
+  jurisdiction?: string;
+  countryCode?: string;
+  vatRate?: string;
+  lastExportedAt?: Date | null;
   generatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +55,10 @@ function mapReport(row: any): TaxReport {
     w9OnFile: row.w9_on_file,
     withholdingAmount: row.withholding_amount,
     isInternational: row.is_international,
+    jurisdiction: row.jurisdiction ?? undefined,
+    countryCode: row.country_code ?? undefined,
+    vatRate: row.vat_rate ?? undefined,
+    lastExportedAt: row.last_exported_at ?? null,
     generatedAt: row.generated_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -67,19 +75,25 @@ export const TaxReportModel = {
       netEarnings: number;
       isInternational?: boolean;
       withholdingAmount?: number;
+      jurisdiction?: string;
+      countryCode?: string;
+      vatRate?: number;
     },
   ): Promise<TaxReport | null> {
     try {
       const { rows } = await pool.query(
         `INSERT INTO tax_reports
-           (mentor_id, tax_year, total_earnings, platform_fees, net_earnings, is_international, withholding_amount)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+           (mentor_id, tax_year, total_earnings, platform_fees, net_earnings, is_international, withholding_amount, jurisdiction, country_code, vat_rate)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (mentor_id, tax_year) DO UPDATE SET
            total_earnings     = EXCLUDED.total_earnings,
            platform_fees      = EXCLUDED.platform_fees,
            net_earnings       = EXCLUDED.net_earnings,
            is_international   = EXCLUDED.is_international,
            withholding_amount = EXCLUDED.withholding_amount,
+           jurisdiction       = COALESCE(EXCLUDED.jurisdiction, tax_reports.jurisdiction),
+           country_code       = COALESCE(EXCLUDED.country_code, tax_reports.country_code),
+           vat_rate           = COALESCE(EXCLUDED.vat_rate, tax_reports.vat_rate),
            updated_at         = NOW()
          RETURNING *`,
         [
@@ -90,6 +104,9 @@ export const TaxReportModel = {
           data.netEarnings,
           data.isInternational ?? false,
           data.withholdingAmount ?? 0,
+          data.jurisdiction ?? null,
+          data.countryCode ?? null,
+          data.vatRate ?? null,
         ],
       );
       return rows[0] ? mapReport(rows[0]) : null;
@@ -124,6 +141,39 @@ export const TaxReportModel = {
       return rows.map(mapReport);
     } catch (error) {
       logger.error("Failed to find tax reports:", error);
+      return [];
+    }
+  },
+
+  /** Record that a structured export was generated for a report. */
+  async markExported(mentorId: string, taxYear: number): Promise<boolean> {
+    try {
+      const { rowCount } = await pool.query(
+        `UPDATE tax_reports
+         SET last_exported_at = NOW(), updated_at = NOW()
+         WHERE mentor_id = $1 AND tax_year = $2`,
+        [mentorId, taxYear],
+      );
+      return (rowCount ?? 0) > 0;
+    } catch (error) {
+      logger.error("Failed to mark tax report exported:", error);
+      return false;
+    }
+  },
+
+  /**
+   * List distinct mentors who have generated tax reports for a given year.
+   * Used by the automated annual (January) pre-generation job.
+   */
+  async listMentorsForYear(taxYear: number): Promise<string[]> {
+    try {
+      const { rows } = await pool.query<{ mentor_id: string }>(
+        `SELECT DISTINCT mentor_id FROM tax_reports WHERE tax_year = $1`,
+        [taxYear],
+      );
+      return rows.map((r) => r.mentor_id);
+    } catch (error) {
+      logger.error("Failed to list mentors for tax year:", error);
       return [];
     }
   },

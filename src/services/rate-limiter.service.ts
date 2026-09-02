@@ -53,10 +53,11 @@ function slidingWindowMemory(key: string, windowMs: number, max: number): Slidin
 // Periodically clean up stale keys to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of memoryStore.entries()) {
-    const windowStart = now - entry.windowMs;
-    entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
-    if (entry.timestamps.length === 0) {
+  for (const entry of Array.from(memoryStore.entries())) {
+    const [key, entryValue] = entry;
+    const windowStart = now - entryValue.windowMs;
+    entryValue.timestamps = entryValue.timestamps.filter((t) => t > windowStart);
+    if (entryValue.timestamps.length === 0) {
       memoryStore.delete(key);
     }
   }

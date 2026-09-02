@@ -27,6 +27,7 @@ import { TraceController } from "../controllers/trace.controller";
 import { EscrowController } from "../controllers/escrow.controller";
 import { BackgroundCheckController } from "../controllers/background-check.controller";
 import { WalletReconciliationController } from "../controllers/wallet-reconciliation.controller";
+import { WebhookEventsController } from "../controllers/webhook-events.controller";
 import { getTraceSchema } from "../validators/schemas/trace.schemas";
 import {
   listAdminUsersSchema,
@@ -1831,4 +1832,14 @@ router.get("/impersonation", asyncHandler(AdminController.listActiveImpersonatio
 router.post(
   "/wallets/:id/sync",
   asyncHandler(WalletReconciliationController.syncWallet),
+);
+
+// Inbound webhook idempotency admin (issue #979)
+router.get(
+  "/webhooks/events",
+  asyncHandler(WebhookEventsController.list),
+);
+router.post(
+  "/webhooks/events/:id/replay",
+  asyncHandler(WebhookEventsController.replay),
 );

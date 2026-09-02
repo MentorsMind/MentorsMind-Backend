@@ -33,6 +33,7 @@ import {
   type CreateSecurityIncidentPayload,
 } from "../models/security-incident.model";
 import type { ThreatDetectionResult } from "./threat-detection.service";
+import { SiemAdapterService } from "./siem-adapter.service";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -587,81 +588,90 @@ export const IncidentResponseService = {
   // ── SIEM Integration ────────────────────────────────────────────────────────
 
   /**
-   * Push incident telemetry to the configured SIEM backend.
+   * Push incident telemetry to all configured SIEM backends via
+   * SiemAdapterService (Elastic + generic webhook adapters).
    *
-   * Integration strategy:
-   *   - If SIEM_WEBHOOK_URL is set, POST the payload as JSON (works with
-   *     Splunk HEC, Elastic Ingest, Sentinel webhook, Chronicle HTTPS feed)
-   *   - Falls back to structured log output parseable by SIEM log shippers
-   *     (Filebeat, Fluentd, etc.)
+   * On success: records a SIEM_PUSH_SUCCESS timeline event.
+   * On partial/full failure: adds each failed adapter to the dead-letter
+   *   queue (inside SiemAdapterService) and records a SIEM_PUSH_FAILED
+   *   timeline event so analysts can see the gap.
+   *
+   * This method is non-fatal — SIEM push errors never abort the playbook.
    */
   async pushToSiem(payload: SiemPushPayload): Promise<void> {
-    const siemWebhookUrl = process.env.SIEM_WEBHOOK_URL;
-    const siemApiKey = process.env.SIEM_API_KEY;
-    const siemSource = process.env.SIEM_SOURCE ?? "mentorminds-backend";
+    try {
+      const result = await SiemAdapterService.push(payload);
 
-    if (siemWebhookUrl) {
-      try {
-        // Use node-fetch / axios — project already has both; use global fetch (Node 18+)
-        const body = JSON.stringify({
-          source: siemSource,
-          sourcetype: "security_incident",
-          event: payload,
-          time: Date.now() / 1000,
-        });
-
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (siemApiKey) headers["Authorization"] = `Bearer ${siemApiKey}`;
-
-        const response = await (globalThis.fetch ?? require("node-fetch"))(
-          siemWebhookUrl,
-          { method: "POST", headers, body, signal: AbortSignal.timeout(5000) },
+      if (result.success) {
+        // Record success in the incident timeline
+        await SecurityIncidentModel.addTimelineEvent(
+          payload.incidentId,
+          "SIEM_PUSH_SUCCESS",
+          `Incident telemetry delivered to SIEM (adapters: ${result.delivered.join(", ")})`,
+          "siem-integration",
+          {
+            delivered: result.delivered,
+            incidentId: payload.incidentId,
+            severity: payload.severity,
+          },
         );
-
-        if (!response.ok) {
-          throw new Error(`SIEM responded ${response.status}`);
-        }
 
         logger.info(
-          { incidentId: payload.incidentId, siemUrl: siemWebhookUrl },
-          "Incident pushed to SIEM",
+          { incidentId: payload.incidentId, delivered: result.delivered },
+          "Incident pushed to SIEM successfully",
         );
-      } catch (err) {
-        // Non-fatal — fall back to structured log
-        logger.error(
-          { incidentId: payload.incidentId, error: (err as Error).message },
-          "SIEM push failed — falling back to structured log",
-        );
-        this._logSiemFallback(payload);
-      }
-    } else {
-      // Structured log fallback — parseable by Filebeat/Fluentd SIEM shippers
-      this._logSiemFallback(payload);
-    }
-  },
+      } else {
+        // At least one adapter failed — record each failure in the timeline
+        for (const failure of result.failed) {
+          await SecurityIncidentModel.addTimelineEvent(
+            payload.incidentId,
+            "SIEM_PUSH_FAILED",
+            `SIEM push failed for adapter '${failure.adapter}': ${failure.error}. Payload stored in dead-letter queue.`,
+            "siem-integration",
+            {
+              adapter: failure.adapter,
+              error: failure.error,
+              dlqStored: true,
+              incidentId: payload.incidentId,
+            },
+          );
+        }
 
-  /** Emit a structured SIEM-compatible log entry (fallback / audit trail). */
-  _logSiemFallback(payload: SiemPushPayload): void {
-    logger.warn(
-      {
-        siem_event: true,
-        incident_id: payload.incidentId,
-        incident_type: payload.incidentType,
-        severity: payload.severity,
-        category: payload.category,
-        mitre_tags: payload.mitreTags,
-        status: payload.status,
-        user_id: payload.userId,
-        source_ip: payload.sourceIp,
-        affected_resource: payload.affectedResource,
-        occurred_at: payload.occurredAt,
-        response_actions: payload.responseActions,
-        score: payload.score,
-      },
-      "[SIEM] Security incident event",
-    );
+        // If some adapters succeeded, also record partial success
+        if (result.delivered.length > 0) {
+          await SecurityIncidentModel.addTimelineEvent(
+            payload.incidentId,
+            "SIEM_PUSH_PARTIAL",
+            `SIEM push partially succeeded (delivered: ${result.delivered.join(", ")}; failed: ${result.failed.map((f) => f.adapter).join(", ")})`,
+            "siem-integration",
+            { delivered: result.delivered, failed: result.failed.map((f) => f.adapter) },
+          );
+        }
+
+        logger.error(
+          { incidentId: payload.incidentId, failed: result.failed, delivered: result.delivered },
+          "SIEM push failed for one or more adapters — see dead-letter queue",
+        );
+      }
+    } catch (err) {
+      // Unexpected error from SiemAdapterService itself — non-fatal, log and continue
+      const errMsg = err instanceof Error ? err.message : String(err);
+      logger.error(
+        { incidentId: payload.incidentId, error: errMsg },
+        "Unexpected error in pushToSiem — continuing playbook",
+      );
+      try {
+        await SecurityIncidentModel.addTimelineEvent(
+          payload.incidentId,
+          "SIEM_PUSH_FAILED",
+          `Unexpected SIEM push error: ${errMsg}. Incident telemetry may be incomplete.`,
+          "siem-integration",
+          { error: errMsg, dlqStored: false },
+        );
+      } catch {
+        // best-effort timeline update
+      }
+    }
   },
 
   // ── Incident Management ─────────────────────────────────────────────────────

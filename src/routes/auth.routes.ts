@@ -168,4 +168,42 @@ router.delete(
 // JWKS endpoint
 router.get("/jwks", asyncHandler(JwksController.getJwks));
 
+// ── WebAuthn / Passkey routes ─────────────────────────────────────────────
+
+// Registration flow (authenticated user adding a new passkey)
+router.post(
+  "/passkey/register/begin",
+  authenticate,
+  asyncHandler(AuthController.passkeyRegisterBegin),
+);
+router.post(
+  "/passkey/register/complete",
+  authenticate,
+  asyncHandler(AuthController.passkeyRegisterComplete),
+);
+
+// Authentication flow (public — rate limited to prevent abuse)
+router.post(
+  "/passkey/auth/begin",
+  authLimiter,
+  asyncHandler(AuthController.passkeyAuthBegin),
+);
+router.post(
+  "/passkey/auth/complete",
+  authLimiter,
+  asyncHandler(AuthController.passkeyAuthComplete),
+);
+
+// Device management (authenticated)
+router.get(
+  "/passkey/devices",
+  authenticate,
+  asyncHandler(AuthController.listPasskeyDevices),
+);
+router.delete(
+  "/passkey/devices/:id",
+  authenticate,
+  asyncHandler(AuthController.removePasskeyDevice),
+);
+
 export default router;

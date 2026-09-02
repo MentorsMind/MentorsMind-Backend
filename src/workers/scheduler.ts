@@ -8,6 +8,8 @@ import { recordingCleanupQueue } from "../queues/recordingCleanup.queue";
 import { analyticsRefreshQueue } from "../queues/analyticsRefresh.queue";
 import { insightGenerationQueue } from "../queues/insightGeneration.queue";
 import { qualityScoreQueue } from "../queues/quality-score.queue";
+import { onboardingNudgeQueue } from "../queues/onboarding-nudge.queue";
+import { taxReportingQueue } from "../queues/tax-reporting.queue";
 import { VerificationService } from "../services/verification.service";
 import { BackgroundCheckService } from "../services/background-check.service";
 import { EnrollmentService } from "../services/enrollment.service";

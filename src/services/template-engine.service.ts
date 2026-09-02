@@ -234,6 +234,31 @@ export const TemplateEngineService = {
   },
 
   /**
+   * Resolve template by ID and optional tenant ID
+   */
+  async resolveTemplate(
+    templateId: string,
+    tenantId?: string
+  ): Promise<NotificationTemplateRecord | null> {
+    // Create cache key including tenant ID if provided
+    const cacheKey = tenantId ? `${templateId}:${tenantId}` : templateId;
+    
+    // Try cache first
+    let template = this.cache.get(cacheKey);
+
+    if (!template) {
+      // Load from database by ID first
+      template = await NotificationTemplatesModel.getById(templateId);
+      
+      if (template) {
+        this.cache.set(cacheKey, template);
+      }
+    }
+
+    return template;
+  },
+
+  /**
    * Get template from cache or database
    */
   async getTemplate(

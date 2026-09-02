@@ -9,6 +9,7 @@ import { CacheService } from "./cache.service";
 import { CacheKeys } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   CompleteMilestoneData,
   MilestoneCompletion,
@@ -47,14 +48,11 @@ export const MilestoneCompletionService = {
       // Validate enrollment and milestone
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       if (enrollment.status !== "active") {
-        throw createError(
-          "Cannot complete milestone for inactive enrollment",
-          400,
-        );
+        throw createError(ErrorCode.ENROLLMENT_INACTIVE, 400);
       }
 
       const milestone = await MilestoneModel.findById(milestoneId);
@@ -62,7 +60,7 @@ export const MilestoneCompletionService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Check if already completed
@@ -73,7 +71,7 @@ export const MilestoneCompletionService = {
         );
 
       if (existingProgress?.status === "completed") {
-        throw createError("Milestone is already completed", 400);
+        throw createError(ErrorCode.MILESTONE_ALREADY_COMPLETED, 400);
       }
 
       // Validate completion criteria unless mentor override
@@ -85,10 +83,9 @@ export const MilestoneCompletionService = {
         );
 
         if (!validation.isValid) {
-          throw createError(
-            `Completion criteria not met: ${validation.message}`,
-            400,
-          );
+          throw createError(ErrorCode.MILESTONE_COMPLETION_CRITERIA_NOT_MET, 400, {
+            message: validation.message,
+          });
         }
       }
 
@@ -101,8 +98,9 @@ export const MilestoneCompletionService = {
 
       if (!prerequisiteValidation.isValid && !mentorOverride) {
         throw createError(
-          `Prerequisites not met: ${prerequisiteValidation.message}`,
+          ErrorCode.MILESTONE_PREREQUISITES_NOT_MET,
           400,
+          { message: prerequisiteValidation.message },
         );
       }
 
@@ -114,7 +112,7 @@ export const MilestoneCompletionService = {
       );
 
       if (!completedProgress) {
-        throw createError("Failed to complete milestone", 500);
+        throw createError(ErrorCode.MILESTONE_COMPLETION_FAILED, 500);
       }
 
       // Update overall enrollment progress
@@ -406,7 +404,7 @@ export const MilestoneCompletionService = {
       // Validate enrollment
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       // Validate milestone
@@ -415,13 +413,13 @@ export const MilestoneCompletionService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Check if milestone is required (only mentors can skip required milestones)
       if (milestone.is_required && !mentorId) {
         throw createError(
-          "Cannot skip required milestone without mentor approval",
+          ErrorCode.MILESTONE_SKIP_REQUIRES_MENTOR_APPROVAL,
           403,
         );
       }
@@ -480,14 +478,14 @@ export const MilestoneCompletionService = {
       // Validate mentor has access
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       const learningPath = await LearningPathModel.findById(
         enrollment.learning_path_id,
       );
       if (!learningPath || learningPath.mentor_id !== mentorId) {
-        throw createError("Access denied", 403);
+        throw createError(ErrorCode.AUTHZ_ACCESS_DENIED, 403);
       }
 
       // Reset progress to 0

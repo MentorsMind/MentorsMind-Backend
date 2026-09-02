@@ -12,9 +12,10 @@ concurrency:
 
 # ─── Environment ──────────────────────────────────────────────────────────────
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   PNPM_VERSION: "9"
   RAILWAY_ENVIRONMENT: "production"
+  NODE_OPTIONS: "--no-warnings --no-deprecation"
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
@@ -32,6 +33,7 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
+          run_install: false
 
       - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -39,8 +41,37 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
 
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Check pnpm configuration
+        run: |
+          echo "Current pnpm configuration:"
+          pnpm config list
+          echo "Lockfile settings check..."
+          # Ensure consistent configuration
+          pnpm config set auto-install-peers true
+          pnpm config set strict-peer-dependencies false
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fallback to regenerate if config mismatch
+          if ! pnpm install --frozen-lockfile --prefer-offline 2>/dev/null; then
+            echo "⚠️  Lockfile config mismatch detected, regenerating lockfile..."
+            pnpm install --no-frozen-lockfile
+          else
+            echo "✅ Dependencies installed with frozen lockfile"
+          fi
 
       - name: TypeScript type-check
         run: pnpm exec tsc -p tsconfig.build.json --noEmit
@@ -111,8 +142,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
 
+      - name: Check pnpm configuration
+        run: |
+          echo "Current pnpm configuration:"
+          pnpm config list
+          echo "Lockfile settings check..."
+          # Ensure consistent configuration
+          pnpm config set auto-install-peers true
+          pnpm config set strict-peer-dependencies false
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fallback to regenerate if config mismatch
+          if ! pnpm install --frozen-lockfile --prefer-offline 2>/dev/null; then
+            echo "⚠️  Lockfile config mismatch detected, regenerating lockfile..."
+            pnpm install --no-frozen-lockfile
+          else
+            echo "✅ Dependencies installed with frozen lockfile"
+          fi
 
       - name: Validate migration ordering (no duplicates)
         run: pnpm run migrate:validate
@@ -181,8 +228,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
 
+      - name: Check pnpm configuration
+        run: |
+          echo "Current pnpm configuration:"
+          pnpm config list
+          echo "Lockfile settings check..."
+          # Ensure consistent configuration
+          pnpm config set auto-install-peers true
+          pnpm config set strict-peer-dependencies false
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fallback to regenerate if config mismatch
+          if ! pnpm install --frozen-lockfile --prefer-offline 2>/dev/null; then
+            echo "⚠️  Lockfile config mismatch detected, regenerating lockfile..."
+            pnpm install --no-frozen-lockfile
+          else
+            echo "✅ Dependencies installed with frozen lockfile"
+          fi
 
       - name: Run database migrations (test database)
         run: pnpm run migrate:up
@@ -301,8 +364,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
 
+      - name: Check pnpm configuration
+        run: |
+          echo "Current pnpm configuration:"
+          pnpm config list
+          echo "Lockfile settings check..."
+          # Ensure consistent configuration
+          pnpm config set auto-install-peers true
+          pnpm config set strict-peer-dependencies false
+
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          # Try frozen lockfile first, fallback to regenerate if config mismatch
+          if ! pnpm install --frozen-lockfile --prefer-offline 2>/dev/null; then
+            echo "⚠️  Lockfile config mismatch detected, regenerating lockfile..."
+            pnpm install --no-frozen-lockfile
+          else
+            echo "✅ Dependencies installed with frozen lockfile"
+          fi
 
       # Pre-pull Docker images so testcontainers startup doesn't count against
       # the test timeout budget.

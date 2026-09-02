@@ -3,6 +3,8 @@ import {
   TaxReport,
   TaxDocument,
 } from "../models/tax-report.model";
+import { getTaxRate, resolveJurisdiction, getExportFormat } from "../jurisdictions/tax-jurisdictions";
+import { generateTaxExport } from "./tax-export.service";
 import { logger } from "../utils/logger";
 
 /** Threshold above which a 1099 must be generated (USD equivalent) */
@@ -29,10 +31,18 @@ export const TaxReportingService = {
       ? earnings.netEarnings * INTERNATIONAL_WITHHOLDING_RATE
       : 0;
 
+    // Jurisdiction-aware calculation: resolve country → jurisdiction → tax rate
+    const countryCode = taxInfo?.countryCode ?? null;
+    const jurisdiction = resolveJurisdiction(countryCode);
+    const vatRate = getTaxRate(countryCode);
+
     const report = await TaxReportModel.upsert(mentorId, taxYear, {
       ...earnings,
       isInternational,
       withholdingAmount,
+      jurisdiction,
+      countryCode,
+      vatRate,
     });
 
     if (!report) return null;
@@ -94,6 +104,75 @@ export const TaxReportingService = {
    */
   async listReports(mentorId: string): Promise<TaxReport[]> {
     return TaxReportModel.findByMentor(mentorId);
+  },
+
+  /**
+   * Resolve the tax jurisdiction and export format for a mentor's country.
+   */
+  async getJurisdiction(mentorId: string): Promise<{
+    countryCode: string | null;
+    jurisdiction: string;
+    exportFormat: string;
+    taxRate: number;
+  }> {
+    const taxInfo = await this.getTaxInfo(mentorId);
+    const countryCode = taxInfo?.countryCode ?? null;
+    const jurisdiction = resolveJurisdiction(countryCode);
+    return {
+      countryCode,
+      jurisdiction,
+      exportFormat: getExportFormat(countryCode),
+      taxRate: getTaxRate(countryCode),
+    };
+  },
+
+  /**
+   * Generate the jurisdiction-appropriate structured export (CSV / VAT / XML)
+   * for a mentor's tax report for a given year.
+   */
+  async generateExport(
+    mentorId: string,
+    taxYear: number,
+  ): Promise<{ format: string; fileName: string; data: string; mimeType: string } | null> {
+    const report = await TaxReportModel.findByMentorAndYear(mentorId, taxYear);
+    if (!report) return null;
+
+    const taxInfo = await this.getTaxInfo(mentorId);
+    const jurisdiction = resolveJurisdiction(taxInfo?.countryCode ?? null);
+    const exportFormat = getExportFormat(taxInfo?.countryCode ?? null);
+
+    const result = generateTaxExport(
+      {
+        mentorId,
+        mentorName: null,
+        countryCode: taxInfo?.countryCode ?? null,
+        taxYear,
+        totalEarnings: parseFloat(report.totalEarnings),
+        platformFees: parseFloat(report.platformFees),
+        netEarnings: parseFloat(report.netEarnings),
+        withholdingAmount: parseFloat(report.withholdingAmount),
+      },
+      exportFormat,
+    );
+
+    // Persist the generated CSV/XML as a tax document.
+    await TaxReportModel.createDocument(
+      report.id,
+      mentorId,
+      jurisdiction === "UK" ? "MTD-XML" : jurisdiction === "EU" ? "VAT-SUMMARY" : "1099-K",
+      taxYear,
+      result.fileName,
+    );
+    await TaxReportModel.markExported(mentorId, taxYear);
+
+    logger.info("Tax report export generated", {
+      mentorId,
+      taxYear,
+      jurisdiction,
+      format: result.format,
+    });
+
+    return result;
   },
 
   /**

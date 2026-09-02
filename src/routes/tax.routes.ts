@@ -24,6 +24,14 @@ router.get(
   TaxReportingController.getReport,
 );
 
+/** GET /api/v1/tax/reports/:year/export — jurisdiction export (CSV/VAT/XML) */
+router.get(
+  "/reports/:year/export",
+  authenticate,
+  validate(taxYearParamSchema),
+  TaxReportingController.exportReport,
+);
+
 /** POST /api/v1/tax/reports/:year/generate */
 router.post(
   "/reports/:year/generate",
@@ -34,6 +42,9 @@ router.post(
 
 /** GET /api/v1/tax/info */
 router.get("/info", authenticate, TaxReportingController.getTaxInfo);
+
+/** GET /api/v1/tax/jurisdiction */
+router.get("/jurisdiction", authenticate, TaxReportingController.getJurisdiction);
 
 /** PUT /api/v1/tax/info */
 router.put("/info", authenticate, TaxReportingController.saveTaxInfo);

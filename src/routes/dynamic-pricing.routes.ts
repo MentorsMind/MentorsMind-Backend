@@ -12,6 +12,8 @@ router.get('/recommendation', DynamicPricingController.getRecommendation);
 router.post('/recommendation/apply', DynamicPricingController.applyRecommendation);
 router.get('/experiments', DynamicPricingController.getExperiments);
 router.post('/experiments', DynamicPricingController.createExperiment);
+router.get('/experiments/:id', DynamicPricingController.getExperimentById);
+router.post('/experiments/:id/evaluate', DynamicPricingController.evaluateExperiment);
 router.patch('/experiments/:id/status', DynamicPricingController.updateExperimentStatus);
 router.get('/dashboard', DynamicPricingController.getDashboard);
 

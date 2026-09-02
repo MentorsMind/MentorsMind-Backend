@@ -23,6 +23,8 @@ const REQUIRED_QUEUE_NAMES = [
     'ANALYTICS_REFRESH',
     'INSIGHT_GENERATION',
     'INCIDENT_RESPONSE',
+    'ONBOARDING_NUDGE',
+    'TAX_REPORTING',
 ] as const;
 
 for (const queueKey of REQUIRED_QUEUE_NAMES) {
@@ -58,3 +60,5 @@ export { recordingCleanupWorker } from './recordingCleanup.worker';
 export { analyticsRefreshWorker } from './analyticsRefresh.worker';
 export { insightGenerationWorker } from './insight-generation.worker';
 export { incidentHandlerWorker } from './incident-handler.worker';
+export { onboardingNudgeWorker } from './onboardingNudge.worker';
+export { taxReportingWorker } from './tax-reporting.worker';

@@ -85,4 +85,41 @@ router.get(
   asyncHandler(ComplianceController.generateComplianceReport),
 );
 
+// ── SAR (Suspicious Activity Report) endpoints ───────────────────────────────
+
+router.post(
+  "/sar",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ComplianceController.fileSAR),
+);
+
+router.get(
+  "/sar",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ComplianceController.listSARQueue),
+);
+
+router.get(
+  "/sar/:id",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ComplianceController.getSAR),
+);
+
+router.patch(
+  "/sar/:id",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ComplianceController.updateSARStatus),
+);
+
+router.get(
+  "/sar/:id/export",
+  authenticate,
+  requireRole("admin"),
+  asyncHandler(ComplianceController.exportSAR),
+);
+
 export default router;

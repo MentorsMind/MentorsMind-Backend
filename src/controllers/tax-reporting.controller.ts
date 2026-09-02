@@ -169,4 +169,55 @@ export const TaxReportingController = {
 
     ResponseUtil.success(res, { w9OnFile: true }, "W-9 submitted successfully");
   }),
+
+  /**
+   * GET /api/v1/tax/jurisdiction
+   * Resolve the mentor's tax jurisdiction and applicable export format.
+   */
+  getJurisdiction: asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        ResponseUtil.error(res, "Unauthorized", 401);
+        return;
+      }
+
+      const jurisdiction = await TaxReportingService.getJurisdiction(userId);
+      ResponseUtil.success(res, jurisdiction);
+    },
+  ),
+
+  /**
+   * GET /api/v1/tax/reports/:year/export
+   * Generate the jurisdiction-appropriate structured export (1099-K CSV,
+   * EU VAT summary, or UK MTD XML) for the given tax year.
+   */
+  exportReport: asyncHandler(
+    async (req: Request, res: Response): Promise<void> => {
+      const userId = (req as any).user?.id;
+      if (!userId) {
+        ResponseUtil.error(res, "Unauthorized", 401);
+        return;
+      }
+
+      const taxYear = parseInt(req.params.year as string, 10);
+      if (isNaN(taxYear) || taxYear < 2020 || taxYear > currentYear) {
+        ResponseUtil.error(res, "Invalid tax year", 400);
+        return;
+      }
+
+      const exportData = await TaxReportingService.generateExport(userId, taxYear);
+      if (!exportData) {
+        ResponseUtil.error(res, "Tax report not found", 404);
+        return;
+      }
+
+      res.setHeader("Content-Type", exportData.mimeType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${exportData.fileName}"`,
+      );
+      res.send(exportData.data);
+    },
+  ),
 };

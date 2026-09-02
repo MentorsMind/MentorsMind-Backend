@@ -1,8 +1,14 @@
+packages:
+  - '.'
+
 allowBuilds:
-  '@apollo/protobufjs': set this to true or false
-  '@firebase/util': set this to true or false
-  '@scarf/scarf': set this to true or false
-  '@sentry-internal/node-cpu-profiler': set this to true or false
-  msgpackr-extract: set this to true or false
-  protobufjs: set this to true or false
-  sharp: set this to true or false
+  '@apollo/protobufjs': true
+  '@firebase/util': true
+  '@scarf/scarf': true
+  '@sentry-internal/node-cpu-profiler': true
+  cpu-features: true
+  'msgpackr-extract': true
+  'protobufjs': true
+  puppeteer: set this to true or false
+  'sharp': true
+  ssh2: true

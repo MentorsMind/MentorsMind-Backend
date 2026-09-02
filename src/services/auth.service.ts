@@ -71,7 +71,7 @@ export const AuthService = {
     return { ...tokens, userId: user.id };
   },
 
-  async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null): Promise<any> {
+  async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null, req?: any): Promise<any> {
     const { email, password } = input;
 
     const query = `
@@ -82,7 +82,9 @@ export const AuthService = {
     const { rows } = await pool.query(query, [email]);
 
     if (rows.length === 0) {
-      throw createError(ErrorCode.AUTH_INVALID_CREDENTIALS, 401);
+      // Log failed attempt
+      await this.logAuthAttempt(null, email, false, 'Invalid credentials', ipAddress, userAgent);
+      throw new Error('Invalid email or password.');
     }
 
     const user = rows[0];
@@ -108,12 +110,44 @@ export const AuthService = {
       throw createError(ErrorCode.AUTH_INVALID_CREDENTIALS, 401);
     }
 
+    // Perform adaptive authentication if request object is available
+    if (req) {
+      try {
+        const { AdaptiveAuthService } = await import('./adaptive-auth.service');
+        const adaptiveResult = await AdaptiveAuthService.authenticateAdaptive(req, {
+          userId: user.id,
+          email,
+          isLoginAttempt: true
+        });
+
+        if (adaptiveResult.decision === 'block') {
+          await this.logAuthAttempt(user.id, email, false, 'Blocked by adaptive auth', ipAddress, userAgent, adaptiveResult.riskScore);
+          throw new Error('Login blocked due to security policy. Please try again later or contact support.');
+        }
+
+        if (adaptiveResult.decision === 'challenge') {
+          await this.logAuthAttempt(user.id, email, false, 'Additional challenges required', ipAddress, userAgent, adaptiveResult.riskScore);
+          return {
+            challengesRequired: true,
+            challenges: adaptiveResult.challenges,
+            sessionId: adaptiveResult.sessionId,
+            riskLevel: adaptiveResult.riskLevel,
+            userId: user.id
+          };
+        }
+      } catch (error) {
+        // Don't fail login if adaptive auth service is unavailable
+        logger.warn('Adaptive auth service unavailable during login', { userId: user.id, error });
+      }
+    }
+
     if (user.mfa_enabled) {
       const mfaToken = jwt.sign(
         { sub: user.id, mfaPending: true },
         JWT_SECRET,
         { expiresIn: '5m' }
       );
+      await this.logAuthAttempt(user.id, email, false, 'MFA required', ipAddress, userAgent);
       return { mfaRequired: true, mfaToken, userId: user.id };
     }
 
@@ -131,6 +165,9 @@ export const AuthService = {
       userAgent: userAgent ?? null,
       userEmail: email,
     }).catch(() => { });
+
+    // Log successful authentication
+    await this.logAuthAttempt(user.id, email, true, 'Login successful', ipAddress, userAgent);
 
     return { tokens, userId: user.id, role: user.role };
   },
@@ -196,4 +233,37 @@ export const AuthService = {
 
     return userId;
   },
+
+  /**
+   * Log authentication attempts for risk analysis
+   */
+  async logAuthAttempt(
+    userId: string | null,
+    email: string,
+    success: boolean,
+    failureReason?: string,
+    ipAddress?: string | null,
+    userAgent?: string | null,
+    riskScore?: number
+  ): Promise<void> {
+    try {
+      await pool.query(`
+        INSERT INTO auth_attempts (
+          user_id, email, success, failure_reason, ip_address, user_agent, 
+          risk_score, authentication_method, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'password', NOW())
+      `, [
+        userId,
+        email,
+        success,
+        failureReason,
+        ipAddress,
+        userAgent,
+        riskScore
+      ]);
+    } catch (error) {
+      // Don't fail auth if logging fails
+      console.error('Failed to log auth attempt:', error);
+    }
+  }
 };

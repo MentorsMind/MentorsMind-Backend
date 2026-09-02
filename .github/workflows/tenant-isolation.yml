@@ -1,0 +1,33 @@
+name: Tenant Isolation Tests
+
+# Required pass gate for multi-tenancy isolation (issue #985).
+# Prevents PR merges that would allow cross-tenant data leakage.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+  PNPM_VERSION: "9"
+
+jobs:
+  tenant-isolation:
+    name: Tenant Isolation Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run tenant isolation gate
+        run: pnpm run test:tenant-isolation

@@ -55,6 +55,8 @@ export const AdminAuditController = {
         page: result.page,
         limit: result.limit,
         totalPages: result.totalPages,
+        hasNext: result.page < result.totalPages,
+        hasPrev: result.page > 1,
       },
     );
   },

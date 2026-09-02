@@ -40,7 +40,6 @@ import {
 } from "./hsm.service";
 import { type SignatureResult } from "../utils/crypto-hsm.utils";
 import hsmConfig from "../config/hsm.config";
-import { type SignatureResult } from "../utils/crypto-hsm.utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -122,7 +121,7 @@ export class KeyManagementService {
     this.wireEncryptionUtil();
 
     logger.info(
-      { managedPurposes: [...this.managedKeys.keys()] },
+      { managedPurposes: Array.from(this.managedKeys.keys()) },
       "KeyManagementService initialised",
     );
   }
@@ -301,7 +300,8 @@ export class KeyManagementService {
     const now = Date.now();
     const lookaheadMs = 7 * 86_400_000; // rotate if < 7 days remaining
 
-    for (const [purpose, managed] of this.managedKeys.entries()) {
+    for (const entry of Array.from(this.managedKeys.entries())) {
+      const [purpose, managed] = entry;
       if (
         managed.status === "active" &&
         managed.expiresAt.getTime() - now < lookaheadMs
@@ -329,7 +329,7 @@ export class KeyManagementService {
     logger.warn("EMERGENCY KEY ROTATION triggered — rotating all active keys");
 
     const summaries: KeyRotationSummary[] = [];
-    for (const purpose of this.managedKeys.keys()) {
+    for (const purpose of Array.from(this.managedKeys.keys())) {
       const summary = await this.rotatePurposeKey(purpose, false);
       summaries.push(summary);
     }
@@ -346,7 +346,8 @@ export class KeyManagementService {
   async escrowAllActiveKeys(): Promise<Record<ManagedKeyPurpose, string[]>> {
     const result: Record<string, string[]> = {};
 
-    for (const [purpose, managed] of this.managedKeys.entries()) {
+    for (const entry of Array.from(this.managedKeys.entries())) {
+      const [purpose, managed] = entry;
       if (managed.status !== "active") continue;
       try {
         const escrowResult = await this.hsm.escrowKey(managed.hsmKeyId);
@@ -378,7 +379,7 @@ export class KeyManagementService {
       new Date(),
     );
 
-    const pendingRotation = [...this.managedKeys.values()].filter(
+    const pendingRotation = Array.from(this.managedKeys.values()).filter(
       (k) => k.expiresAt.getTime() - Date.now() < 30 * 86_400_000,
     ).length;
 
@@ -386,8 +387,8 @@ export class KeyManagementService {
       provider: hsmConfig.provider,
       fipsEnabled: hsmConfig.enabled,
       fipsLevel: hsmConfig.compliance.fipsLevel,
-      managedPurposes: [...this.managedKeys.keys()],
-      activeKeyCount: [...this.managedKeys.values()].filter(
+      managedPurposes: Array.from(this.managedKeys.keys()),
+      activeKeyCount: Array.from(this.managedKeys.values()).filter(
         (k) => k.status === "active",
       ).length,
       keysPendingRotation: pendingRotation,
@@ -401,7 +402,7 @@ export class KeyManagementService {
    * List all managed keys (metadata only — no key material).
    */
   async listManagedKeys(): Promise<ManagedKey[]> {
-    return [...this.managedKeys.values()];
+    return Array.from(this.managedKeys.values());
   }
 
   // ── EncryptionUtil Bridge ─────────────────────────────────────────────────────

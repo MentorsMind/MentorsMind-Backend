@@ -9,7 +9,7 @@ import {
 import { LoginAttemptsService } from "../services/loginAttempts.service";
 import { IpFilterService } from "../services/ipFilter.service";
 import pool from "../config/database";
-import { keyRotationJob } from "../jobs/keyRotation.job";
+import keyRotationJob from "../jobs/keyRotation.job";
 import { AuditLogArchivalJob } from "../jobs/auditLog.job";
 import { accountDeletionService } from "../services/accountDeletion.service";
 import { WebhookService } from "../services/webhook.service";

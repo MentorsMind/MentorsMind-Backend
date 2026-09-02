@@ -19,7 +19,8 @@
  * NEVER use: MD5, SHA-1, DES, 3DES, RC4, ECB mode.
  */
 
-import crypto, {
+import * as crypto from "crypto";
+import {
   type CipherGCMTypes,
   type KeyObject,
   type webcrypto,

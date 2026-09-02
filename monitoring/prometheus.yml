@@ -1,0 +1,212 @@
+# Prometheus Configuration for MentorsMind Monitoring Stack
+# Scrapes metrics from API, exporters, and other targets
+
+global:
+  # How often Prometheus scrapes targets
+  scrape_interval: 15s
+  # Timeout for scrape requests
+  scrape_timeout: 10s
+  # How often to evaluate rules
+  evaluation_interval: 15s
+  # External labels added to all metrics
+  external_labels:
+    cluster: "mentorminds"
+    environment: "{{ ENVIRONMENT }}"
+    region: "{{ REGION }}"
+
+# Alert rules
+rule_files:
+  - "/etc/prometheus/rules/prometheus-alerts-comprehensive.yml"
+  - "/etc/prometheus/rules/slo-recording-rules.yml"
+
+# Alert manager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+      relabel_configs:
+        - source_labels: [__meta_alertmanager_node_name]
+          target_label: replica
+
+# Scrape configurations
+scrape_configs:
+  # ─── Prometheus Self-monitoring ──────────────────────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    relabel_configs:
+      - source_labels: [__scheme__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        target_label: __param_module
+      - target_label: __address__
+        replacement: "localhost:9090"
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: job
+        replacement: "prometheus"
+
+  # ─── AlertManager monitoring ─────────────────────────────────────────────────
+  - job_name: "alertmanager"
+    static_configs:
+      - targets: ["alertmanager:9093"]
+    scrape_interval: 30s
+
+  # ─── MentorsMind API ─────────────────────────────────────────────────────────
+  - job_name: "mentorminds-api"
+    # Metrics endpoint from express app
+    static_configs:
+      - targets: ["localhost:9091"]
+        labels:
+          service: "api"
+          version: "{{ API_VERSION }}"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: "/metrics"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [__scheme__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "localhost:9091"
+
+  # ─── PostgreSQL via pg_exporter ──────────────────────────────────────────────
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          database: "mentorminds"
+          service: "postgres"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    metric_relabel_configs:
+      # Keep essential postgres metrics
+      - source_labels: [__name__]
+        regex: "pg_(stat_|database_|index_)"
+        action: keep
+
+  # ─── Redis via redis_exporter ────────────────────────────────────────────────
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          database: "redis"
+          service: "redis"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    metric_relabel_configs:
+      # Keep essential Redis metrics
+      - source_labels: [__name__]
+        regex: "redis_(commands|connected|memory|cpu|keyspace|pubsub)"
+        action: keep
+
+  # ─── Node Exporter (host metrics) ────────────────────────────────────────────
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: "infrastructure"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # ─── Docker (container metrics) ──────────────────────────────────────────────
+  - job_name: "docker"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: "containers"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # ─── Application-level service discovery ─────────────────────────────────────
+  # Example: discover services via DNS
+  - job_name: "mentorminds-services"
+    dns_sd_configs:
+      - names:
+          - "tasks.mentorminds.internal"
+        type: "A"
+        port: 9091
+    relabel_configs:
+      - source_labels: [__meta_sd_name]
+        target_label: service
+
+  # ─── Blackbox Exporter for endpoint monitoring ───────────────────────────────
+  - job_name: "blackbox-http"
+    metrics_path: /probe
+    params:
+      module: [http_2xx, http_3xx, http_4xx, http_5xx]
+    static_configs:
+      - targets:
+          - "http://localhost:5000/health"
+          - "http://localhost:5000/api/v1"
+          - "http://grafana:3000"
+          - "http://alertmanager:9093/-/healthy"
+        labels:
+          service: "http"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "blackbox-exporter:9115"
+
+  # ─── Blackbox Exporter for TCP port monitoring ──────────────────────────────
+  - job_name: "blackbox-tcp"
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+          - "postgres:5432"
+          - "redis:6379"
+        labels:
+          service: "databases"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "blackbox-exporter:9115"
+
+  # ─── Stellar Network Status ──────────────────────────────────────────────────
+  - job_name: "stellar-horizon"
+    static_configs:
+      - targets:
+          - "https://horizon.stellar.org"
+          - "https://testnet.horizon.stellar.org"
+        labels:
+          blockchain: "stellar"
+          network: "mainnet"
+    metrics_path: /metrics
+    scrape_interval: 60s
+
+# ─── Service discovery configurations ────────────────────────────────────────────
+
+# Optional: Kubernetes service discovery
+# kubernetes_sd_configs:
+#   - role: pod
+#     namespaces:
+#       names:
+#         - monitoring
+#         - production
+
+# Optional: Consul service discovery
+# consul_sd_configs:
+#   - server: "consul:8500"
+#     datacenter: "dc1"
+
+# ─── Recording rules (computed metrics for efficiency) ──────────────────────────
+# These are included via rule_files above
+# Examples:
+#   - job:http:requests:rate1m = sum(rate(http_requests_total[1m])) by (job)
+#   - instance:node:cpu:rate5m = sum(rate(node_cpu_seconds_total[5m])) by (instance)

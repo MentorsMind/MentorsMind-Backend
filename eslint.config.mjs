@@ -20,6 +20,17 @@ export default tseslint.config(
       '@typescript-eslint/no-namespace': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-unsafe-function-type': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/rateLimit.middleware*', '**/middleware/tracing', '!**/middleware/tracing.middleware*'],
+              message: 'Use canonical middleware filenames: rate-limit.middleware.ts or tracing.middleware.ts.',
+            },
+          ],
+        },
+      ],
       'no-useless-catch': 'off',
       'prefer-const': 'warn',
       'no-useless-escape': 'warn',

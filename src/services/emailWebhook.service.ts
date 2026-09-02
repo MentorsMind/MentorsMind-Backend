@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import config from '../config';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
+import { WebhookIdempotencyService } from './webhook-idempotency.service';
 import { logger } from '../utils/logger';
 
 export interface SendGridEvent {
@@ -114,6 +115,23 @@ export const EmailWebhookService = {
           messageId,
         });
 
+        // Idempotency guard: dedupe on the provider event ID (24h TTL in Redis).
+        const eventId = messageId || `sg-${event.event}-${event.email}-${event.timestamp}`;
+        const claim = await WebhookIdempotencyService.claim(
+          'sendgrid',
+          eventId,
+          event.event,
+          {
+            event: event.event,
+            email: event.email,
+            timestamp: event.timestamp,
+            trackingId,
+            reason: event.reason,
+            type: event.type,
+          },
+        );
+        if (claim.isDuplicate) continue;
+
         if (trackingId) {
           await NotificationDeliveryTrackingModel.create({
             notification_id: trackingId,
@@ -163,6 +181,22 @@ export const EmailWebhookService = {
         trackingId,
         messageId,
       });
+
+      // Idempotency guard: dedupe on the provider message-id (24h TTL in Redis).
+      const eventId = messageId || `mg-${eventData.event}-${eventData.recipient}-${eventData.timestamp}`;
+      const claim = await WebhookIdempotencyService.claim(
+        'mailgun',
+        eventId,
+        eventData.event,
+        {
+          event: eventData.event,
+          recipient: eventData.recipient,
+          timestamp: eventData.timestamp,
+          trackingId,
+          reason: eventData.reason,
+        },
+      );
+      if (claim.isDuplicate) return;
 
       if (trackingId) {
         await NotificationDeliveryTrackingModel.create({

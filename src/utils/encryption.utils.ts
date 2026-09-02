@@ -1,4 +1,4 @@
-import crypto from "crypto";
+import * as crypto from "crypto";
 import { resolveAppSecrets } from "../config/secrets";
 
 const ALGORITHM = "aes-256-gcm";

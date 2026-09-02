@@ -93,4 +93,25 @@ export const MentorOnboardingController = {
     const analytics = await MentorOnboardingService.getAdminAnalytics();
     return ResponseUtil.success(res, analytics);
   }),
+
+  badges: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const badges = await MentorOnboardingService.getBadges(userId);
+    return ResponseUtil.success(res, { badges });
+  }),
+
+  adminFunnelAnalytics: asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+    const analytics = await MentorOnboardingService.getAdminFunnelAnalytics();
+    return ResponseUtil.success(res, analytics);
+  }),
+
+  triggerNudge: asyncHandler(async (_req: AuthenticatedRequest, res: Response) => {
+    const { onboardingNudgeQueue } = await import('../queues/onboarding-nudge.queue');
+    await onboardingNudgeQueue.add(
+      'onboarding-nudge-scan',
+      { jobType: 'onboarding-nudge', triggeredAt: new Date().toISOString() },
+      { removeOnComplete: { count: 50 } },
+    );
+    return ResponseUtil.success(res, { queued: true }, 'Onboarding nudge scan queued');
+  }),
 };

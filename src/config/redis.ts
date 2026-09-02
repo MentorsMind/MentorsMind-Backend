@@ -29,3 +29,4 @@ if (redisConfig.clusterEnabled && redisConfig.clusterNodes) {
 }
 
 export const redis = redisClient;
+export { redisClient };

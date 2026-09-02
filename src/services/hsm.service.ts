@@ -21,7 +21,7 @@
  *   the same escrow backend.
  */
 
-import crypto from "crypto";
+import * as crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import pool from "../config/database";
 import { redis } from "../config/redis";
@@ -779,8 +779,10 @@ export class HsmService {
     // Rotate if less than 7 days remain
     const lookaheadMs = 7 * 86_400_000;
 
-    for (const [keyId, versions] of this.keyRegistry.entries()) {
-      for (const [, entry] of versions.entries()) {
+    for (const entry of Array.from(this.keyRegistry.entries())) {
+      const [keyId, versions] = entry;
+      for (const versionEntry of Array.from(versions.entries())) {
+        const [, entry] = versionEntry;
         if (
           entry.status === "active" &&
           entry.type === "symmetric" &&
@@ -810,8 +812,10 @@ export class HsmService {
     const purged: string[] = [];
     const cutoff = Date.now() - this.config.rotation.retentionDays * 86_400_000;
 
-    for (const [, versions] of this.keyRegistry.entries()) {
-      for (const [, entry] of versions.entries()) {
+    for (const entry of Array.from(this.keyRegistry.entries())) {
+      const [, versions] = entry;
+      for (const versionEntry of Array.from(versions.entries())) {
+        const [, entry] = versionEntry;
         if (
           entry.status === "rotating" &&
           entry.rotatedAt &&
@@ -1033,8 +1037,8 @@ export class HsmService {
     filter: { status?: KeyStatus; purpose?: KeyPurpose } = {},
   ): Promise<HsmKeyMetadata[]> {
     const results: HsmKeyMetadata[] = [];
-    for (const versions of this.keyRegistry.values()) {
-      for (const entry of versions.values()) {
+    for (const versions of Array.from(this.keyRegistry.values())) {
+      for (const entry of Array.from(versions.values())) {
         if (filter.status && entry.status !== filter.status) continue;
         if (filter.purpose && entry.purpose !== filter.purpose) continue;
         results.push(this.toMetadata(entry));
@@ -1191,7 +1195,7 @@ export class HsmService {
 
     // Return the newest active version
     let latest: KeyEntry | undefined;
-    for (const entry of versions.values()) {
+    for (const entry of Array.from(versions.values())) {
       if (entry.status === "active") {
         if (!latest || entry.createdAt > latest.createdAt) {
           latest = entry;

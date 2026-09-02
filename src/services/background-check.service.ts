@@ -1,6 +1,7 @@
 import pool from "../config/database";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   BackgroundCheck,
   InitiateBackgroundCheckData
@@ -28,7 +29,7 @@ export const BackgroundCheckService = {
       );
 
       if (mentorRows.length === 0 || mentorRows[0].role !== 'mentor') {
-        throw createError("Mentor not found", 404);
+        throw createError(ErrorCode.MENTOR_NOT_FOUND, 404);
       }
 
       // Check for existing pending/in-progress check
@@ -40,7 +41,7 @@ export const BackgroundCheckService = {
       );
 
       if (existingRows.length > 0) {
-        throw createError("Background check already in progress", 409);
+        throw createError(ErrorCode.BACKGROUND_CHECK_ALREADY_IN_PROGRESS, 409);
       }
 
       const provider = data.provider || this.getProviderName();
@@ -133,7 +134,7 @@ export const BackgroundCheckService = {
     try {
       const check = await this.getBackgroundCheck(checkId);
       if (!check) {
-        throw createError("Background check not found", 404);
+        throw createError(ErrorCode.BACKGROUND_CHECK_NOT_FOUND, 404);
       }
 
       const updates: string[] = ['status = $1'];
@@ -204,7 +205,7 @@ export const BackgroundCheckService = {
    */
   async simulateBackgroundCheck(checkId: string): Promise<void> {
     if (process.env.NODE_ENV === "production") {
-      throw createError("Simulated background checks are disabled in production", 500);
+      throw createError(ErrorCode.BACKGROUND_CHECK_SIMULATION_DISABLED, 500);
     }
 
     try {
@@ -255,7 +256,7 @@ export const BackgroundCheckService = {
   async initiateProviderCheck(checkId: string): Promise<BackgroundCheck> {
     const check = await this.getBackgroundCheck(checkId);
     if (!check) {
-      throw createError("Background check not found", 404);
+      throw createError(ErrorCode.BACKGROUND_CHECK_NOT_FOUND, 404);
     }
 
     const adapter = this.getAdapter(check.provider);
@@ -293,7 +294,7 @@ export const BackgroundCheckService = {
       payload?.object?.id;
 
     if (!externalReferenceId) {
-      throw createError("Webhook payload missing provider reference", 400);
+      throw createError(ErrorCode.WEBHOOK_PAYLOAD_INVALID, 400);
     }
 
     const { rows } = await pool.query(

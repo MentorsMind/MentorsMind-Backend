@@ -24,12 +24,13 @@ export const CDNAdminController = {
 
       const metrics = await CDNHealthService.getHealthStatus(config.domains);
 
-      ResponseUtil.success(res, metrics, 'CDN health status retrieved successfully', 200, {
+      ResponseUtil.success(res, {
+        ...metrics,
         provider: config.provider,
         domainCount: config.domains.length,
         healthyCount: Object.values(metrics).filter((m) => m.healthy).length,
         circuitOpenCount: Object.values(metrics).filter((m) => m.circuitOpen).length,
-      });
+      }, 'CDN health status retrieved successfully', 200);
     } catch (error) {
       logger.error('Failed to get CDN health status', {
         error: error instanceof Error ? error.message : 'Unknown error',

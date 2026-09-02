@@ -301,6 +301,297 @@ export class ComplianceReportingService {
       riskScore: alert.riskScore,
     };
   }
+
+  // ── SAR Pipeline ───────────────────────────────────────────────────────────
+
+  /**
+   * Persist a SAR to the database with initial status 'pending_review'.
+   * Writes an immutable audit log entry on creation.
+   */
+  async persistSAR(
+    sar: SARReport,
+    actorId?: string,
+  ): Promise<{ id: string }> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const insertResult = await client.query<{ id: string }>(
+        `INSERT INTO sar_reports
+           (alert_id, user_id, summary, transactions, risk_score, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending_review')
+         RETURNING id`,
+        [
+          sar.alertId,
+          sar.userId,
+          sar.summary,
+          JSON.stringify(sar.transactions),
+          sar.riskScore,
+        ],
+      );
+
+      const sarId = insertResult.rows[0].id;
+
+      await client.query(
+        `INSERT INTO sar_audit_log (sar_id, action, actor_id, metadata)
+         VALUES ($1, 'created', $2, $3)`,
+        [
+          sarId,
+          actorId ?? null,
+          JSON.stringify({
+            alertId: sar.alertId,
+            userId: sar.userId,
+            riskScore: sar.riskScore,
+          }),
+        ],
+      );
+
+      await client.query("COMMIT");
+      logger.info({ sarId, userId: sar.userId }, "SAR persisted");
+      return { id: sarId };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      logger.error({ err }, "Failed to persist SAR");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * List SARs pending admin review (admin queue).
+   */
+  async listPendingSARs(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: SARQueueItem[]; total: number }> {
+    const offset = (page - 1) * limit;
+
+    const [countResult, itemsResult] = await Promise.all([
+      pool.query<{ count: string }>(
+        `SELECT COUNT(*) AS count FROM sar_reports WHERE status = 'pending_review'`,
+      ),
+      pool.query<SARQueueItem>(
+        `SELECT id, alert_id, user_id, summary, risk_score, status, created_at
+         FROM sar_reports
+         WHERE status = 'pending_review'
+         ORDER BY risk_score DESC, created_at ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset],
+      ),
+    ]);
+
+    return {
+      items: itemsResult.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+    };
+  }
+
+  /**
+   * Get all SARs for the admin queue (all statuses).
+   */
+  async getAdminSARQueue(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: SARQueueItem[]; total: number }> {
+    const offset = (page - 1) * limit;
+
+    const [countResult, itemsResult] = await Promise.all([
+      pool.query<{ count: string }>(`SELECT COUNT(*) AS count FROM sar_reports`),
+      pool.query<SARQueueItem>(
+        `SELECT id, alert_id, user_id, summary, risk_score, status,
+                reviewer_id, reviewed_at, submitted_at, export_path, created_at
+         FROM sar_reports
+         ORDER BY
+           CASE status WHEN 'pending_review' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
+           risk_score DESC,
+           created_at DESC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset],
+      ),
+    ]);
+
+    return {
+      items: itemsResult.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+    };
+  }
+
+  /**
+   * Update a SAR's status (approve / reject / mark submitted).
+   * Writes an immutable audit log entry for every transition.
+   */
+  async updateSARStatus(
+    sarId: string,
+    status: "approved" | "rejected" | "submitted",
+    reviewerId: string,
+    notes?: string,
+  ): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const existing = await client.query<{ status: string }>(
+        `SELECT status FROM sar_reports WHERE id = $1 FOR UPDATE`,
+        [sarId],
+      );
+      if (!existing.rows[0]) {
+        throw new Error(`SAR ${sarId} not found`);
+      }
+
+      const extraFields =
+        status === "submitted"
+          ? `, submitted_at = NOW()`
+          : status === "approved" || status === "rejected"
+          ? `, reviewed_at = NOW(), reviewer_id = $3`
+          : "";
+
+      if (status === "submitted") {
+        await client.query(
+          `UPDATE sar_reports SET status = $1, updated_at = NOW()${extraFields}
+           WHERE id = $2`,
+          [status, sarId],
+        );
+      } else {
+        await client.query(
+          `UPDATE sar_reports SET status = $1, updated_at = NOW(), reviewed_at = NOW(), reviewer_id = $3
+           WHERE id = $2`,
+          [status, sarId, reviewerId],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO sar_audit_log (sar_id, action, actor_id, metadata)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          sarId,
+          `status_changed_to_${status}`,
+          reviewerId,
+          JSON.stringify({
+            previousStatus: existing.rows[0].status,
+            newStatus: status,
+            notes: notes ?? null,
+          }),
+        ],
+      );
+
+      await client.query("COMMIT");
+      logger.info({ sarId, status, reviewerId }, "SAR status updated");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      logger.error({ err, sarId }, "Failed to update SAR status");
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Export a SAR as a CSV string (file-based adapter; API submission planned).
+   */
+  async exportSARToCSV(sarId: string): Promise<string> {
+    const result = await pool.query<SARQueueItem>(
+      `SELECT id, alert_id, user_id, summary, transactions, risk_score, status,
+              reviewer_id, reviewed_at, submitted_at, created_at
+       FROM sar_reports WHERE id = $1`,
+      [sarId],
+    );
+
+    if (!result.rows[0]) throw new Error(`SAR ${sarId} not found`);
+    const row = result.rows[0];
+
+    const header = [
+      "id",
+      "alert_id",
+      "user_id",
+      "summary",
+      "transactions",
+      "risk_score",
+      "status",
+      "reviewer_id",
+      "reviewed_at",
+      "submitted_at",
+      "created_at",
+    ];
+
+    const escape = (v: unknown): string => {
+      const s = v == null ? "" : String(v);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+
+    const dataRow = [
+      escape(row.id),
+      escape(row.alert_id),
+      escape(row.user_id),
+      escape(row.summary),
+      escape(JSON.stringify(row.transactions)),
+      escape(row.risk_score),
+      escape(row.status),
+      escape(row.reviewer_id),
+      escape(row.reviewed_at),
+      escape(row.submitted_at),
+      escape(row.created_at),
+    ];
+
+    // Record export in audit log
+    await pool.query(
+      `INSERT INTO sar_audit_log (sar_id, action, metadata)
+       VALUES ($1, 'exported_csv', $2)`,
+      [sarId, JSON.stringify({ format: "csv" })],
+    );
+
+    // Mark export path
+    await pool.query(
+      `UPDATE sar_reports SET export_path = $1, updated_at = NOW() WHERE id = $2`,
+      [`csv-export-${sarId}-${Date.now()}`, sarId],
+    );
+
+    return [header.join(","), dataRow.join(",")].join("\n");
+  }
+
+  /**
+   * Get a single SAR by ID.
+   */
+  async getSARById(sarId: string): Promise<SARQueueItem | null> {
+    const result = await pool.query<SARQueueItem>(
+      `SELECT id, alert_id, user_id, summary, transactions, risk_score, status,
+              reviewer_id, reviewed_at, submitted_at, export_path, created_at, updated_at
+       FROM sar_reports WHERE id = $1`,
+      [sarId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  /**
+   * Get the audit trail for a SAR.
+   */
+  async getSARAuditLog(
+    sarId: string,
+  ): Promise<{ action: string; actor_id: string | null; metadata: any; created_at: Date }[]> {
+    const result = await pool.query(
+      `SELECT action, actor_id, metadata, created_at
+       FROM sar_audit_log WHERE sar_id = $1 ORDER BY created_at ASC`,
+      [sarId],
+    );
+    return result.rows;
+  }
+}
+
+// ── Additional type for DB queue items ────────────────────────────────────────
+export interface SARQueueItem {
+  id: string;
+  alert_id: string;
+  user_id: string;
+  summary: string;
+  transactions: string[];
+  risk_score: number;
+  status: "pending_review" | "approved" | "rejected" | "submitted";
+  reviewer_id?: string;
+  reviewed_at?: Date;
+  submitted_at?: Date;
+  export_path?: string;
+  created_at: Date;
+  updated_at?: Date;
 }
 
 export const complianceReportingService = new ComplianceReportingService();

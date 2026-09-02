@@ -1,6 +1,6 @@
 import { z } from "zod";
-import dotenv from "dotenv";
-import path from "path";
+import * as dotenv from "dotenv";
+import * as path from "path";
 
 // Load environment-specific .env file, then allow .env.local to override
 const NODE_ENV = process.env.NODE_ENV || "development";
@@ -73,6 +73,8 @@ const envSchema = z.object({
     .url("STELLAR_HORIZON_URL must be a valid URL"),
   PLATFORM_PUBLIC_KEY: z.string().optional(),
   PLATFORM_SECRET_KEY: z.string().optional(),
+  /** Public key of the HSM-provisioned platform Stellar key (issue #982) */
+  STELLAR_FUNDING_PUBLIC_KEY: z.string().optional(),
 
   // CORS
   CORS_ORIGIN: z

@@ -8,6 +8,10 @@ import {
   SOROBAN_POLL_INTERVAL_MS,
 } from '../utils/soroban.utils';
 import * as StellarSdk from '@stellar/stellar-sdk';
+import {
+  signStellarTransaction,
+  getPlatformPublicKey,
+} from './hsmStellarSigner.service';
 
 type EscrowContractMethod =
   | 'create_escrow'
@@ -98,9 +102,10 @@ class StellarSorobanClient implements SorobanEscrowClient {
     const RpcServerCtor = sdkAny.SorobanRpc?.Server || sdkAny.rpc?.Server;
     this.rpcServer = RpcServerCtor ? new RpcServerCtor(serverUrl) : null;
 
-    this.keypair = process.env.PLATFORM_SECRET_KEY
-      ? sdkAny.Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY)
-      : null;
+    // The platform secret is NEVER materialised here when the HSM is enabled.
+    // Signing is delegated to HsmStellarSigner.signStellarTransaction() which
+    // routes the Ed25519 signature through the HSM (CloudHSM / PKCS#11).
+    this.keypair = null;
 
     this.networkPassphrase =
       process.env.STELLAR_NETWORK === 'mainnet'
@@ -133,8 +138,20 @@ class StellarSorobanClient implements SorobanEscrowClient {
       preparedTx = assembled?.build ? assembled.build() : assembled;
     }
 
-    if (this.keypair && typeof preparedTx?.sign === 'function') {
-      preparedTx.sign(this.keypair);
+    // Signing is delegated to the HSM-backed signer (issue #982). In
+    // development this falls back to the env secret with a warning.
+    if (preparedTx?.sign && typeof preparedTx.sign === 'function') {
+      const signed = await signStellarTransaction(preparedTx, {
+        operation: mapMethodToAuditOperation(params.method),
+        contractAddress: params.contractAddress,
+        method: params.method,
+      });
+      if (signed) {
+        preparedTx = signed;
+      } else {
+        // Raw non-Transaction payload (assembleTransaction edge case) — keep
+        // the original preparedTx; it has already been signed via HSM path.
+      }
     }
 
     const response = await this.rpcServer.sendTransaction(preparedTx);
@@ -167,11 +184,15 @@ class StellarSorobanClient implements SorobanEscrowClient {
       throw new Error('Soroban RPC client is not available in @stellar/stellar-sdk');
     }
 
+    // Source account resolves through the HSM-backed signer. When the HSM is
+    // enabled the public key comes from the HSM-provisioned key material.
     const sourcePublicKey =
-      this.keypair?.publicKey?.() || process.env.PLATFORM_PUBLIC_KEY;
+      getPlatformPublicKey() || process.env.PLATFORM_PUBLIC_KEY;
 
     if (!sourcePublicKey) {
-      throw new Error('PLATFORM_PUBLIC_KEY or PLATFORM_SECRET_KEY is required for Soroban calls');
+      throw new Error(
+        'PLATFORM_PUBLIC_KEY or an HSM-provisioned platform key is required for Soroban calls',
+      );
     }
 
     const account = await this.rpcServer.getAccount(sourcePublicKey);
@@ -559,6 +580,30 @@ class SorobanEscrowServiceImpl {
 
   private resolveContractAddress(contractAddress?: string): string {
     return contractAddress || this.requireContractAddress();
+  }
+}
+
+/**
+ * Map a Soroban contract method to a semantic HSM key-usage audit operation.
+ */
+function mapMethodToAuditOperation(
+  method: EscrowContractMethod,
+): import('./hsmStellarSigner.service').HsmKeyUsageOperation {
+  switch (method) {
+    case 'create_escrow':
+      return 'stellar_create_escrow';
+    case 'release_funds':
+      return 'stellar_release_funds';
+    case 'refund':
+      return 'stellar_refund';
+    case 'open_dispute':
+      return 'stellar_open_dispute';
+    case 'resolve_dispute':
+      return 'stellar_resolve_dispute';
+    case 'get_escrow':
+      return 'stellar_get_escrow';
+    default:
+      return 'stellar_misc';
   }
 }
 

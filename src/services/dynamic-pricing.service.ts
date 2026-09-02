@@ -21,15 +21,35 @@ export interface PricingExperiment {
 export interface VariantPrice {
   label: string;
   price: number;
+  impressions?: number;
   sessionsBooked: number;
   revenue: number;
+  conversionRate?: number;
 }
 
 export interface ExperimentMetrics {
+  controlImpressions?: number;
   controlSessions: number;
+  controlConversionRate?: number;
+  variantImpressions?: number;
   variantSessions: number;
+  variantConversionRate?: number;
   conversionLift: number;
+  absoluteLift?: number;
+  zScore?: number;
+  pValue?: number;
   confidence: number;
+  isSignificant?: boolean;
+  confidenceInterval?: {
+    lower: number;
+    upper: number;
+    liftLower?: number;
+    liftUpper?: number;
+  };
+  minimumSampleSizeMet?: boolean;
+  autoStopped?: boolean;
+  winner?: 'control' | 'variant' | 'inconclusive' | null;
+  recommendedAction?: string;
 }
 
 export interface PricingBenchmark {
@@ -70,6 +90,126 @@ export interface PricingRecommendation {
   reason: string | null;
 }
 
+/**
+ * Standard normal cumulative distribution function (CDF).
+ * Uses erf polynomial approximation with precision |error| < 1.5e-7.
+ */
+export function normalCdf(z: number): number {
+  if (z === 0) return 0.5;
+  const sign = z < 0 ? -1 : 1;
+  const x = Math.abs(z) / Math.SQRT2;
+
+  const a1 = 0.254829592;
+  const a2 = -0.284496736;
+  const a3 = 1.421413741;
+  const a4 = -1.453152027;
+  const a5 = 1.061405429;
+  const p = 0.3275911;
+
+  const t = 1.0 / (1.0 + p * x);
+  const y = 1.0 - (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) * Math.exp(-x * x);
+  const erf = sign * y;
+  return 0.5 * (1.0 + erf);
+}
+
+/**
+ * Two-proportion z-test for conversion lift and confidence intervals.
+ */
+export function calculateTwoProportionZTest(
+  controlConversions: number,
+  controlImpressions: number,
+  variantConversions: number,
+  variantImpressions: number,
+  confidenceThreshold: number = 0.95,
+  minimumSampleSize: number = 30,
+) {
+  const minSampleMet = controlImpressions >= minimumSampleSize && variantImpressions >= minimumSampleSize;
+
+  if (controlImpressions <= 0 || variantImpressions <= 0) {
+    return {
+      controlRate: 0,
+      variantRate: 0,
+      conversionLift: 0,
+      absoluteLift: 0,
+      zScore: 0,
+      pValue: 1,
+      confidence: 0,
+      isSignificant: false,
+      confidenceInterval: { lower: 0, upper: 0, liftLower: 0, liftUpper: 0 },
+      minimumSampleSizeMet: false,
+      winner: null as 'control' | 'variant' | 'inconclusive' | null,
+      recommendedAction: `Gathering data (minimum ${minimumSampleSize} impressions per variant required).`,
+    };
+  }
+
+  const p1 = controlConversions / controlImpressions;
+  const p2 = variantConversions / variantImpressions;
+  const absoluteLift = p2 - p1;
+  const conversionLift = p1 > 0 ? ((p2 - p1) / p1) * 100 : 0;
+
+  // Pooled proportion under H0 (p1 == p2)
+  const pooledP = (controlConversions + variantConversions) / (controlImpressions + variantImpressions);
+  const sePooled = Math.sqrt(pooledP * (1 - pooledP) * (1 / controlImpressions + 1 / variantImpressions));
+
+  let zScore = 0;
+  if (sePooled > 0) {
+    zScore = (p2 - p1) / sePooled;
+  }
+
+  // Two-tailed p-value
+  const cdf = normalCdf(Math.abs(zScore));
+  const pValue = Math.max(0, Math.min(1, 2 * (1 - cdf)));
+  const confidence = Math.max(0, Math.min(100, (1 - pValue) * 100));
+  const isSignificant = confidence >= confidenceThreshold * 100 && minSampleMet;
+
+  // Unpooled SE for 95% confidence interval
+  const seDiff = Math.sqrt((p1 * (1 - p1)) / controlImpressions + (p2 * (1 - p2)) / variantImpressions);
+  const zCrit = 1.959963984540054; // 95% confidence critical value
+  const lowerDiff = absoluteLift - zCrit * seDiff;
+  const upperDiff = absoluteLift + zCrit * seDiff;
+
+  const liftLower = p1 > 0 ? (lowerDiff / p1) * 100 : 0;
+  const liftUpper = p1 > 0 ? (upperDiff / p1) * 100 : 0;
+
+  let winner: 'control' | 'variant' | 'inconclusive' | null = null;
+  let recommendedAction = 'Experiment in progress. Insufficient statistical significance to declare a winner.';
+
+  if (isSignificant) {
+    if (zScore > 0) {
+      winner = 'variant';
+      recommendedAction = `Variant price demonstrated a statistically significant conversion lift of +${conversionLift.toFixed(2)}% (${confidence.toFixed(1)}% confidence). Recommended: Adopt variant pricing.`;
+    } else {
+      winner = 'control';
+      recommendedAction = `Variant price produced a statistically significant drop of ${Math.abs(conversionLift).toFixed(2)}% (${confidence.toFixed(1)}% confidence). Recommended: Retain control pricing.`;
+    }
+  } else if (minSampleMet && controlImpressions >= 200 && variantImpressions >= 200 && pValue > 0.3) {
+    winner = 'inconclusive';
+    recommendedAction = 'Sample size target reached with no statistically significant conversion difference. Recommended: Conclude experiment or test a higher price divergence.';
+  } else if (!minSampleMet) {
+    recommendedAction = `Gathering data (${controlImpressions}/${minimumSampleSize} control, ${variantImpressions}/${minimumSampleSize} variant impressions).`;
+  }
+
+  return {
+    controlRate: Math.round(p1 * 10000) / 10000,
+    variantRate: Math.round(p2 * 10000) / 10000,
+    conversionLift: Math.round(conversionLift * 100) / 100,
+    absoluteLift: Math.round(absoluteLift * 10000) / 10000,
+    zScore: Math.round(zScore * 1000) / 1000,
+    pValue: Math.round(pValue * 10000) / 10000,
+    confidence: Math.round(confidence * 10) / 10,
+    isSignificant,
+    confidenceInterval: {
+      lower: Math.round(lowerDiff * 10000) / 10000,
+      upper: Math.round(upperDiff * 10000) / 10000,
+      liftLower: Math.round(liftLower * 100) / 100,
+      liftUpper: Math.round(liftUpper * 100) / 100,
+    },
+    minimumSampleSizeMet: minSampleMet,
+    winner,
+    recommendedAction,
+  };
+}
+
 export const DynamicPricingService = {
   async getMarketDemand(
     skill?: string,
@@ -106,7 +246,7 @@ export const DynamicPricingService = {
         supplyScore: r.supply_score ? parseFloat(r.supply_score) : null,
       }));
     } catch (error) {
-      logger.error("Failed to get market demand", { skill, category, error: error instanceof Error ? error.message : error });
+      logger.error("Failed to get market demand metrics", { skill, category, error: error instanceof Error ? error.message : error });
       throw error;
     }
   },
@@ -117,12 +257,12 @@ export const DynamicPricingService = {
       const params: any[] = [];
 
       if (category) {
-        query += ` AND category = $${params.length + 1}`;
         params.push(category);
+        query += ` AND category = $${params.length}`;
       }
       if (skill) {
-        query += ` AND skill = $${params.length + 1}`;
         params.push(skill);
+        query += ` AND skill = $${params.length}`;
       }
 
       query += ` ORDER BY category, skill`;
@@ -154,49 +294,66 @@ export const DynamicPricingService = {
       const cached = await CacheService.get<PricingRecommendation>(cacheKey);
       if (cached) return cached;
 
-      const mentor = await pool.query(
-        `SELECT u.id, u.hourly_rate, u.expertise FROM users u WHERE u.id = $1 AND u.role = 'mentor'`,
+      const userRes = await pool.query(
+        `SELECT id, hourly_rate, expertise FROM users WHERE id = $1 AND role = 'mentor'`,
         [mentorId],
       );
-      if (mentor.rows.length === 0) throw createError("Mentor not found", 404);
+      if (userRes.rows.length === 0) return null;
 
-      const currentPrice = mentor.rows[0].hourly_rate || 0;
-      const expertise = mentor.rows[0].expertise || [];
+      const user = userRes.rows[0];
+      const currentPrice = parseFloat(user.hourly_rate) || 50;
+      const skill = user.expertise?.[0] || 'General';
 
-      const expertiseAreas = Array.isArray(expertise) ? expertise : [expertise];
-      const skill = expertiseAreas[0] || 'general';
-
-      const { rows: benchmarks } = await pool.query(
-        `SELECT * FROM pricing_benchmarks WHERE skill = $1 OR category = $2 ORDER BY computed_at DESC LIMIT 1`,
-        [skill, skill],
+      const benchmarkRes = await pool.query(
+        `SELECT * FROM pricing_benchmarks WHERE skill ILIKE $1 LIMIT 1`,
+        [`%${skill}%`],
       );
+      const benchmark = benchmarkRes.rows[0];
+
+      const demandRes = await pool.query(
+        `SELECT * FROM market_demand_metrics WHERE skill ILIKE $1 ORDER BY period_start DESC LIMIT 1`,
+        [`%${skill}%`],
+      );
+      const demand = demandRes.rows[0];
 
       let recommendedPrice = currentPrice;
       let confidence = 50;
-      let marketPosition = 'at_market';
+      let marketPosition = 'median';
       const factors: { factor: string; impact: string }[] = [];
 
-      if (benchmarks.length > 0) {
-        const b = benchmarks[0];
-        const avgPrice = parseFloat(b.avg_price) || currentPrice;
-        const medianPrice = parseFloat(b.p50_price) || avgPrice;
+      if (benchmark) {
+        const p50 = parseFloat(benchmark.p50_price) || currentPrice;
+        const p75 = parseFloat(benchmark.p75_price) || currentPrice;
+        const p25 = parseFloat(benchmark.p25_price) || currentPrice;
 
-        const ratio = currentPrice > 0 ? currentPrice / medianPrice : 1;
-        if (ratio < 0.8) {
+        if (currentPrice < p25) {
           marketPosition = 'below_market';
-          recommendedPrice = Math.round(medianPrice * 100) / 100;
-          factors.push({ factor: 'market_position', impact: 'Your price is below market median' });
-        } else if (ratio > 1.2) {
-          marketPosition = 'above_market';
-          recommendedPrice = Math.round(medianPrice * 100) / 100;
-          factors.push({ factor: 'market_position', impact: 'Your price is above market median' });
+          recommendedPrice = p25;
+          factors.push({ factor: 'market_benchmark', impact: 'Your price is below the 25th percentile for your skill' });
+        } else if (currentPrice > p75) {
+          marketPosition = 'premium';
+          recommendedPrice = currentPrice;
+          factors.push({ factor: 'market_benchmark', impact: 'Your price is in the top quartile (premium positioning)' });
         } else {
-          factors.push({ factor: 'market_position', impact: 'Your price aligns with market median' });
+          marketPosition = 'competitive';
+          recommendedPrice = p50;
+          factors.push({ factor: 'market_benchmark', impact: 'Your price aligns with median market rates' });
         }
 
-        if (b.sample_size > 50) {
-          confidence = Math.min(confidence + 25, 95);
-          factors.push({ factor: 'sample_size', impact: `${b.sample_size} data points available` });
+        confidence = Math.min(benchmark.sample_size > 50 ? 85 : benchmark.sample_size > 20 ? 70 : 50, 95);
+      }
+
+      if (demand) {
+        const demandScore = parseFloat(demand.demand_score) || 50;
+        const supplyScore = parseFloat(demand.supply_score) || 50;
+
+        if (demandScore > 70 && supplyScore < 50) {
+          recommendedPrice = Math.round(recommendedPrice * 1.15);
+          factors.push({ factor: 'high_demand_low_supply', impact: 'High demand and low mentor supply justify a 15% increase' });
+          confidence = Math.min(confidence + 10, 95);
+        } else if (demandScore < 40 && supplyScore > 60) {
+          recommendedPrice = Math.round(recommendedPrice * 0.9);
+          factors.push({ factor: 'low_demand_high_supply', impact: 'High supply competition suggests a 10% reduction to increase bookings' });
         }
 
         factors.push({ factor: 'demand_analysis', impact: 'Based on current market demand trends' });
@@ -247,30 +404,200 @@ export const DynamicPricingService = {
     }
   },
 
+  /**
+   * Evaluates statistical significance and checks auto-stopping rules for an experiment.
+   */
+  async evaluateExperiment(
+    experimentId: string,
+    mentorId: string,
+  ): Promise<PricingExperiment | null> {
+    try {
+      const { rows } = await pool.query(
+        `SELECT * FROM pricing_experiments WHERE id = $1 AND mentor_id = $2`,
+        [experimentId, mentorId],
+      );
+      if (rows.length === 0) return null;
+
+      const exp = rows[0];
+      const variantPrices: VariantPrice[] = exp.variant_prices || [];
+      const primaryVariant = variantPrices[0] || {
+        label: 'Variant A',
+        price: exp.control_price,
+        sessionsBooked: 0,
+        impressions: 0,
+        revenue: 0,
+      };
+
+      const existingMetrics = exp.metrics || {};
+      const controlSessions = existingMetrics.controlSessions ?? 0;
+      const controlImpressions = existingMetrics.controlImpressions ?? Math.max(controlSessions, 30);
+      const variantSessions = primaryVariant.sessionsBooked ?? existingMetrics.variantSessions ?? 0;
+      const variantImpressions = primaryVariant.impressions ?? Math.max(variantSessions, 30);
+
+      const stats = calculateTwoProportionZTest(
+        controlSessions,
+        controlImpressions,
+        variantSessions,
+        variantImpressions,
+        0.95,
+        30,
+      );
+
+      let newStatus: PricingExperiment['status'] = exp.status;
+      let autoStopped = existingMetrics.autoStopped || false;
+
+      // Auto-stopping rule: When 95% statistical significance is achieved and minimum sample size met
+      if (exp.status === 'running' && stats.isSignificant) {
+        newStatus = 'completed';
+        autoStopped = true;
+        logger.info("Auto-stopping experiment: 95% confidence reached", {
+          experimentId,
+          mentorId,
+          winner: stats.winner,
+          confidence: stats.confidence,
+          lift: stats.conversionLift,
+        });
+      }
+
+      const updatedMetrics: ExperimentMetrics = {
+        controlImpressions,
+        controlSessions,
+        controlConversionRate: stats.controlRate,
+        variantImpressions,
+        variantSessions,
+        variantConversionRate: stats.variantRate,
+        conversionLift: stats.conversionLift,
+        absoluteLift: stats.absoluteLift,
+        zScore: stats.zScore,
+        pValue: stats.pValue,
+        confidence: stats.confidence,
+        isSignificant: stats.isSignificant,
+        confidenceInterval: stats.confidenceInterval,
+        minimumSampleSizeMet: stats.minimumSampleSizeMet,
+        autoStopped,
+        winner: stats.winner,
+        recommendedAction: stats.recommendedAction,
+      };
+
+      const updatedVariantPrices = variantPrices.map(v => ({
+        ...v,
+        conversionRate: (v.impressions && v.impressions > 0)
+          ? Math.round((v.sessionsBooked / v.impressions) * 10000) / 10000
+          : (v.sessionsBooked > 0 ? 1 : 0),
+      }));
+
+      const updateRes = await pool.query(
+        `UPDATE pricing_experiments
+         SET metrics = $1, variant_prices = $2, status = $3, updated_at = NOW(),
+             end_at = CASE WHEN $3 = 'completed' AND end_at IS NULL THEN NOW() ELSE end_at END
+         WHERE id = $4 AND mentor_id = $5
+         RETURNING *`,
+        [JSON.stringify(updatedMetrics), JSON.stringify(updatedVariantPrices), newStatus, experimentId, mentorId],
+      );
+
+      const updated = updateRes.rows[0];
+      return {
+        id: updated.id,
+        mentorId: updated.mentor_id,
+        name: updated.name,
+        description: updated.description,
+        status: updated.status,
+        startAt: updated.start_at,
+        endAt: updated.end_at,
+        controlPrice: parseFloat(updated.control_price),
+        variantPrices: updated.variant_prices || [],
+        metrics: updated.metrics || {},
+        createdAt: updated.created_at,
+        updatedAt: updated.updated_at,
+      };
+    } catch (error) {
+      logger.error("Failed to evaluate pricing experiment", { experimentId, error: error instanceof Error ? error.message : error });
+      throw error;
+    }
+  },
+
   async getExperiments(mentorId: string): Promise<PricingExperiment[]> {
     try {
       const { rows } = await pool.query(
         `SELECT * FROM pricing_experiments WHERE mentor_id = $1 ORDER BY created_at DESC`,
         [mentorId],
       );
-      return rows.map(r => ({
-        id: r.id,
-        mentorId: r.mentor_id,
-        name: r.name,
-        description: r.description,
-        status: r.status,
-        startAt: r.start_at,
-        endAt: r.end_at,
-        controlPrice: parseFloat(r.control_price),
-        variantPrices: r.variant_prices || [],
-        metrics: r.metrics || {},
-        createdAt: r.created_at,
-        updatedAt: r.updated_at,
-      }));
+
+      return Promise.all(
+        rows.map(async r => {
+          const variantPrices: VariantPrice[] = r.variant_prices || [];
+          const primaryVariant = variantPrices[0];
+          const rawMetrics = r.metrics || {};
+
+          const controlSessions = rawMetrics.controlSessions ?? 0;
+          const controlImpressions = rawMetrics.controlImpressions ?? Math.max(controlSessions, 30);
+          const variantSessions = primaryVariant?.sessionsBooked ?? rawMetrics.variantSessions ?? 0;
+          const variantImpressions = primaryVariant?.impressions ?? Math.max(variantSessions, 30);
+
+          const stats = calculateTwoProportionZTest(
+            controlSessions,
+            controlImpressions,
+            variantSessions,
+            variantImpressions,
+            0.95,
+            30,
+          );
+
+          let status = r.status;
+          let autoStopped = rawMetrics.autoStopped || false;
+          if (r.status === 'running' && stats.isSignificant) {
+            status = 'completed';
+            autoStopped = true;
+            await pool.query(
+              `UPDATE pricing_experiments SET status = 'completed', end_at = COALESCE(end_at, NOW()), updated_at = NOW() WHERE id = $1`,
+              [r.id],
+            );
+          }
+
+          const metrics: ExperimentMetrics = {
+            controlImpressions,
+            controlSessions,
+            controlConversionRate: stats.controlRate,
+            variantImpressions,
+            variantSessions,
+            variantConversionRate: stats.variantRate,
+            conversionLift: stats.conversionLift,
+            absoluteLift: stats.absoluteLift,
+            zScore: stats.zScore,
+            pValue: stats.pValue,
+            confidence: stats.confidence,
+            isSignificant: stats.isSignificant,
+            confidenceInterval: stats.confidenceInterval,
+            minimumSampleSizeMet: stats.minimumSampleSizeMet,
+            autoStopped,
+            winner: stats.winner,
+            recommendedAction: stats.recommendedAction,
+          };
+
+          return {
+            id: r.id,
+            mentorId: r.mentor_id,
+            name: r.name,
+            description: r.description,
+            status,
+            startAt: r.start_at,
+            endAt: r.end_at,
+            controlPrice: parseFloat(r.control_price),
+            variantPrices,
+            metrics,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+          };
+        }),
+      );
     } catch (error) {
       logger.error("Failed to get pricing experiments", { mentorId, error: error instanceof Error ? error.message : error });
       throw error;
     }
+  },
+
+  async getExperimentById(experimentId: string, mentorId: string): Promise<PricingExperiment | null> {
+    return this.evaluateExperiment(experimentId, mentorId);
   },
 
   async createExperiment(
@@ -278,19 +605,57 @@ export const DynamicPricingService = {
     name: string,
     description: string | undefined,
     controlPrice: number,
-    variantPrices: { label: string; price: number }[],
+    variantPrices: { label: string; price: number; impressions?: number }[],
     startAt: string | undefined,
     endAt: string | undefined,
   ): Promise<PricingExperiment> {
     try {
+      const initialMetrics: ExperimentMetrics = {
+        controlImpressions: 0,
+        controlSessions: 0,
+        controlConversionRate: 0,
+        variantImpressions: 0,
+        variantSessions: 0,
+        variantConversionRate: 0,
+        conversionLift: 0,
+        absoluteLift: 0,
+        zScore: 0,
+        pValue: 1,
+        confidence: 0,
+        isSignificant: false,
+        confidenceInterval: { lower: 0, upper: 0, liftLower: 0, liftUpper: 0 },
+        minimumSampleSizeMet: false,
+        autoStopped: false,
+        winner: null,
+        recommendedAction: 'Experiment initialized. Waiting for traffic and booking conversions.',
+      };
+
+      const formattedVariants = variantPrices.map(v => ({
+        label: v.label,
+        price: v.price,
+        impressions: v.impressions ?? 0,
+        sessionsBooked: 0,
+        revenue: 0,
+        conversionRate: 0,
+      }));
+
       const { rows } = await pool.query(
-        `INSERT INTO pricing_experiments (mentor_id, name, description, control_price, variant_prices, start_at, end_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO pricing_experiments (mentor_id, name, description, control_price, variant_prices, metrics, start_at, end_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [mentorId, name, description || null, controlPrice, JSON.stringify(variantPrices.map(v => ({ ...v, sessionsBooked: 0, revenue: 0 }))), startAt || null, endAt || null],
+        [
+          mentorId,
+          name,
+          description || null,
+          controlPrice,
+          JSON.stringify(formattedVariants),
+          JSON.stringify(initialMetrics),
+          startAt || null,
+          endAt || null,
+        ],
       );
 
-      logger.info("Pricing experiment created", { mentorId, name, experimentId: rows[0].id });
+      logger.info("Pricing experiment created with statistical engine", { mentorId, name, experimentId: rows[0].id });
       return {
         id: rows[0].id,
         mentorId: rows[0].mentor_id,
@@ -301,7 +666,7 @@ export const DynamicPricingService = {
         endAt: rows[0].end_at,
         controlPrice: parseFloat(rows[0].control_price),
         variantPrices: rows[0].variant_prices || [],
-        metrics: rows[0].metrics || {},
+        metrics: rows[0].metrics || initialMetrics,
         createdAt: rows[0].created_at,
         updatedAt: rows[0].updated_at,
       };
@@ -318,25 +683,16 @@ export const DynamicPricingService = {
   ): Promise<PricingExperiment | null> {
     try {
       const { rows } = await pool.query(
-        `UPDATE pricing_experiments SET status = $1 WHERE id = $2 AND mentor_id = $3 RETURNING *`,
+        `UPDATE pricing_experiments
+         SET status = $1, updated_at = NOW(),
+             end_at = CASE WHEN $1 = 'completed' AND end_at IS NULL THEN NOW() ELSE end_at END
+         WHERE id = $2 AND mentor_id = $3
+         RETURNING *`,
         [status, experimentId, mentorId],
       );
       if (rows.length === 0) return null;
       logger.info("Pricing experiment status updated", { experimentId, mentorId, status });
-      return {
-        id: rows[0].id,
-        mentorId: rows[0].mentor_id,
-        name: rows[0].name,
-        description: rows[0].description,
-        status: rows[0].status,
-        startAt: rows[0].start_at,
-        endAt: rows[0].end_at,
-        controlPrice: parseFloat(rows[0].control_price),
-        variantPrices: rows[0].variant_prices || [],
-        metrics: rows[0].metrics || {},
-        createdAt: rows[0].created_at,
-        updatedAt: rows[0].updated_at,
-      };
+      return this.evaluateExperiment(experimentId, mentorId);
     } catch (error) {
       logger.error("Failed to update pricing experiment status", { experimentId, status, error: error instanceof Error ? error.message : error });
       throw error;
@@ -345,16 +701,45 @@ export const DynamicPricingService = {
 
   async getDashboardStats(userId: string): Promise<any> {
     try {
-      const [experimentsRes, benchmarksRes, recommendationsRes] = await Promise.all([
-        pool.query(`SELECT COUNT(*)::INTEGER as total, COUNT(*) FILTER (WHERE status = 'running')::INTEGER as active FROM pricing_experiments WHERE mentor_id = $1`, [userId]),
+      const [experimentsRes, benchmarksRes, recommendationsRes, activeExperimentsRes] = await Promise.all([
+        pool.query(
+          `SELECT COUNT(*)::INTEGER as total, COUNT(*) FILTER (WHERE status = 'running')::INTEGER as active,
+                  COUNT(*) FILTER (WHERE status = 'completed')::INTEGER as completed
+           FROM pricing_experiments WHERE mentor_id = $1`,
+          [userId],
+        ),
         pool.query(`SELECT category, COUNT(*)::INTEGER as count FROM pricing_benchmarks GROUP BY category ORDER BY count DESC`),
         pool.query(`SELECT * FROM pricing_recommendations WHERE mentor_id = $1 ORDER BY created_at DESC LIMIT 1`, [userId]),
+        pool.query(`SELECT * FROM pricing_experiments WHERE mentor_id = $1 AND status = 'running' ORDER BY created_at DESC LIMIT 5`, [userId]),
       ]);
 
       const latestRec = recommendationsRes.rows[0];
+      const activeSignificanceSummaries = activeExperimentsRes.rows.map(r => {
+        const variants = r.variant_prices || [];
+        const primary = variants[0];
+        const m = r.metrics || {};
+        const controlSessions = m.controlSessions ?? 0;
+        const controlImpressions = m.controlImpressions ?? Math.max(controlSessions, 30);
+        const variantSessions = primary?.sessionsBooked ?? m.variantSessions ?? 0;
+        const variantImpressions = primary?.impressions ?? Math.max(variantSessions, 30);
+
+        const stats = calculateTwoProportionZTest(controlSessions, controlImpressions, variantSessions, variantImpressions, 0.95, 30);
+        return {
+          experimentId: r.id,
+          name: r.name,
+          confidence: stats.confidence,
+          conversionLift: stats.conversionLift,
+          isSignificant: stats.isSignificant,
+          winner: stats.winner,
+          recommendedAction: stats.recommendedAction,
+        };
+      });
 
       return {
-        experiments: experimentsRes.rows[0] || { total: 0, active: 0 },
+        experiments: {
+          ...(experimentsRes.rows[0] || { total: 0, active: 0, completed: 0 }),
+          activeSignificance: activeSignificanceSummaries,
+        },
         benchmarkCategories: benchmarksRes.rows,
         latestRecommendation: latestRec ? {
           currentPrice: parseFloat(latestRec.current_price),

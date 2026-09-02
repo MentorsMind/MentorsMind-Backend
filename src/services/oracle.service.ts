@@ -11,6 +11,7 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import { CacheService } from './cache.service';
 import { logger } from '../utils/logger.utils';
 import { createError } from '../middleware/errorHandler';
+import { ErrorCode } from '../errors/error-codes';
 import { logWarning } from '../utils/error.utils';
 
 // ---------------------------------------------------------------------------
@@ -139,7 +140,7 @@ class StellarOracleClient implements OracleContractClient {
 // ---------------------------------------------------------------------------
 
 function scaledToDecimalString(value: bigint): string {
-  const negative = value < 0n;
+  const negative = value < BigInt(0);
   const abs = negative ? -value : value;
   const whole = abs / BigInt(PRICE_SCALE);
   const frac = (abs % BigInt(PRICE_SCALE)).toString().padStart(7, '0');
@@ -180,7 +181,7 @@ class OracleServiceImpl {
    */
   async getPrice(asset: string): Promise<OraclePrice> {
     if (!this.isConfigured()) {
-      throw createError('Oracle contract is not configured', 503);
+      throw createError(ErrorCode.ORACLE_NOT_CONFIGURED, 503);
     }
 
     const key = cacheKey(asset);

@@ -5,7 +5,7 @@ import {
   DeliveryStatus,
 } from "../models/notification-delivery-tracking.model";
 import { logger } from "../utils/logger";
-import https from "https";
+import * as https from "https";
 
 export interface EmailRequest {
   to: string[];

@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "durationMs": 10000,
+  "metrics": [
+    {
+      "name": "GET /health/live",
+      "count": 100,
+      "errors": 0,
+      "errorRate": 0,
+      "minMs": 0,
+      "averageMs": 20,
+      "p50Ms": 20,
+      "p95Ms": 100,
+      "p99Ms": 150,
+      "maxMs": 200,
+      "throughputPerSecond": 1,
+      "averageMemoryDeltaBytes": 0
+    }
+  ]
+}

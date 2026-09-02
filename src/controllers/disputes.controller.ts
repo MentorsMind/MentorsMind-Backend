@@ -69,7 +69,8 @@ export class DisputesController {
       }
 
       const evidence = await DisputeModel.getEvidence(id);
-      res.status(200).json({ data: { ...dispute, evidence } });
+      const evidenceStr = Array.isArray(evidence) ? evidence[0] : evidence;
+      res.status(200).json({ data: { ...dispute, evidence: evidenceStr } });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

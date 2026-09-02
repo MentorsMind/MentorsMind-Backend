@@ -8,6 +8,7 @@ import { CacheService } from "./cache.service";
 import { CacheKeys, CacheTTL } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import pool from "../config/database";
 import {
   StudentProgress,
@@ -88,12 +89,12 @@ export const ProgressTrackingService = {
       // Validate enrollment exists
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       if (enrollment.status !== "active") {
         throw createError(
-          "Cannot update progress for inactive enrollment",
+          ErrorCode.ENROLLMENT_INACTIVE,
           400,
         );
       }
@@ -104,7 +105,7 @@ export const ProgressTrackingService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Update milestone progress
@@ -163,7 +164,7 @@ export const ProgressTrackingService = {
       // Validate enrollment and milestone
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       const milestone = await MilestoneModel.findById(milestoneId);
@@ -171,7 +172,7 @@ export const ProgressTrackingService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Check prerequisites are met
@@ -180,7 +181,9 @@ export const ProgressTrackingService = {
         milestoneId,
       );
       if (!canProceed.isValid) {
-        throw createError(`Prerequisites not met: ${canProceed.message}`, 400);
+        throw createError(ErrorCode.MILESTONE_PREREQUISITES_NOT_MET, 400, {
+          message: canProceed.message,
+        });
       }
 
       // Complete the milestone
@@ -191,7 +194,7 @@ export const ProgressTrackingService = {
       );
 
       if (!completedProgress) {
-        throw createError("Failed to complete milestone", 500);
+        throw createError(ErrorCode.MILESTONE_COMPLETION_FAILED, 500);
       }
 
       // Recalculate overall progress
@@ -296,7 +299,7 @@ export const ProgressTrackingService = {
       // Get enrollment
       const enrollmentRecord = await EnrollmentModel.findById(enrollmentId);
       if (!enrollmentRecord) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       // Get milestone progress
@@ -398,7 +401,7 @@ export const ProgressTrackingService = {
 
         logger.info("Batch progress update completed", {
           updateCount: updates.length,
-          enrollmentIds: [...new Set(updates.map((u) => u.enrollmentId))],
+          enrollmentIds: Array.from(new Set(updates.map((u) => u.enrollmentId))),
         });
       } catch (error) {
         await client.query("ROLLBACK");
@@ -624,7 +627,7 @@ export const ProgressTrackingService = {
       // Get basic path stats
       const learningPath = await LearningPathModel.findById(pathId);
       if (!learningPath) {
-        throw createError("Learning path not found", 404);
+        throw createError(ErrorCode.LEARNING_PATH_NOT_FOUND, 404);
       }
 
       // Get enrollment analytics

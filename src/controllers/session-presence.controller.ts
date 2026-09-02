@@ -24,6 +24,9 @@ export async function joinSession(req: Request, res: Response): Promise<void> {
     const userId = req.user!.id;
     const userRole = req.user!.role;
 
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+    const userRoleStr = Array.isArray(userRole) ? userRole[0] : userRole;
+
     // Verify session exists
     const booking = await BookingModel.findById(sessionId);
     if (!booking) {
@@ -35,8 +38,8 @@ export async function joinSession(req: Request, res: Response): Promise<void> {
     }
 
     // Verify user is a participant
-    const isMentor = booking.mentor_id === userId;
-    const isMentee = booking.mentee_id === userId;
+    const isMentor = booking.mentor_id === userIdStr;
+    const isMentee = booking.mentee_id === userIdStr;
 
     if (!isMentor && !isMentee) {
       res.status(403).json({ 
@@ -71,13 +74,13 @@ export async function joinSession(req: Request, res: Response): Promise<void> {
     // Mark as joined
     const joinedAt = await presenceService.markSessionJoined(
       sessionId,
-      userId,
+      userIdStr,
       role
     );
 
     logger.info('User joined session', {
       sessionId,
-      userId,
+      userId: userIdStr,
       role,
       joinedAt,
     });
@@ -120,6 +123,9 @@ export async function getSessionPresence(
   try {
     const { id: sessionId } = req.params;
     const userId = req.user!.id;
+    const userIdParam = req.query.userId;
+    const userIdValue = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
 
     // Verify session exists
     const booking = await BookingModel.findById(sessionId);
@@ -133,7 +139,7 @@ export async function getSessionPresence(
 
     // Verify user is a participant
     const isParticipant =
-      booking.mentor_id === userId || booking.mentee_id === userId;
+      booking.mentor_id === userIdStr || booking.mentee_id === userIdStr;
 
     if (!isParticipant) {
       res.status(403).json({ 

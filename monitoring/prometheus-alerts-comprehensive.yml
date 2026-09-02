@@ -1,0 +1,421 @@
+# Comprehensive Prometheus Alert Rules for MentorsMind
+# Includes SLI/SLO monitoring, severity levels, and intelligent escalation
+
+groups:
+  - name: slo-availability
+    interval: 1m
+    rules:
+      # API Availability SLO: 99.5% (allowing 0.5% error)
+      - alert: HighAPIErrorRate
+        expr: |
+          (sum(rate(http_requests_total{status_code=~"5.."}[5m])) / 
+           sum(rate(http_requests_total[5m])) * 100) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: api_availability
+          component: api
+        annotations:
+          summary: "API error rate above SLO threshold"
+          description: "API error rate is {{ $value | humanize }}%, SLO target is 0.5%"
+          runbook: "docs/runbooks/high-api-error-rate.md"
+
+      - alert: CriticalAPIErrorRate
+        expr: |
+          (sum(rate(http_requests_total{status_code=~"5.."}[5m])) / 
+           sum(rate(http_requests_total[5m])) * 100) > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          slo: api_availability
+          component: api
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: API error rate critically high"
+          description: "API error rate is {{ $value | humanize }}% (critical threshold: 1%)"
+          dashboard: "http://grafana:3000/d/slo-api"
+          runbook: "docs/runbooks/critical-api-error-rate.md"
+
+      # Database Availability SLO: 99.9%
+      - alert: DatabaseAvailabilityDegraded
+        expr: |
+          (1 - (sum(rate(db_query_duration_seconds_count[5m])) / 
+           sum(rate(db_query_duration_seconds_count[5m])) by (le))) * 100 < 98.9
+        for: 5m
+        labels:
+          severity: warning
+          slo: database_availability
+          component: database
+        annotations:
+          summary: "Database availability below SLO"
+          description: "Database availability: {{ $value | humanize }}%, SLO: 99.9%"
+          runbook: "docs/runbooks/database-availability.md"
+
+      - alert: DatabaseUnavailable
+        expr: |
+          up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          slo: database_availability
+          component: database
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: Database is down"
+          description: "PostgreSQL database instance is not responding"
+          action: "Verify database service status and network connectivity"
+          runbook: "docs/runbooks/database-down.md"
+
+  - name: slo-latency
+    interval: 1m
+    rules:
+      # API Latency SLOs
+      - alert: HighAPILatencyP95
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: api_latency_p95
+          component: api
+          percentile: "p95"
+        annotations:
+          summary: "API P95 latency above SLO threshold"
+          description: "P95 latency is {{ $value | humanize }}s, target is 500ms"
+          runbook: "docs/runbooks/high-api-latency.md"
+
+      - alert: HighAPILatencyP99
+        expr: |
+          histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1.0
+        for: 5m
+        labels:
+          severity: minor
+          slo: api_latency_p99
+          component: api
+          percentile: "p99"
+        annotations:
+          summary: "API P99 latency above SLO threshold"
+          description: "P99 latency is {{ $value | humanize }}s, target is 1s"
+          runbook: "docs/runbooks/high-api-latency.md"
+
+      # Database Latency SLO
+      - alert: DatabaseLatencyHigh
+        expr: |
+          histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le)) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          slo: database_latency_p95
+          component: database
+          percentile: "p95"
+        annotations:
+          summary: "Database P95 latency above SLO threshold"
+          description: "Database P95 latency is {{ $value | humanize }}s, target is 100ms"
+          query: "Analyze slow query logs"
+          runbook: "docs/runbooks/database-latency.md"
+
+  - name: slo-error-rates
+    interval: 1m
+    rules:
+      # Authentication Error Rate SLO: 0.5%
+      - alert: HighAuthenticationErrorRate
+        expr: |
+          (sum(rate(http_requests_total{path=~"/auth/.*", status_code=~"401|403"}[5m])) / 
+           sum(rate(http_requests_total{path=~"/auth/.*"}[5m])) * 100) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: authentication_error_rate
+          component: authentication
+        annotations:
+          summary: "Authentication error rate above SLO"
+          description: "Auth error rate is {{ $value | humanize }}%, SLO: 0.5%"
+          action: "Check auth service logs"
+          runbook: "docs/runbooks/auth-errors.md"
+
+      # Payment Error Rate SLO: 0.01% (ultra-critical)
+      - alert: PaymentProcessingErrors
+        expr: |
+          (sum(rate(http_requests_total{path=~"/payments.*", status_code=~"5.."}[5m])) / 
+           sum(rate(http_requests_total{path=~"/payments.*"}[5m])) * 100) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          slo: payment_error_rate
+          component: payments
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: Payment processing errors detected"
+          description: "Payment error rate is {{ $value | humanize }}%, SLO: < 0.01%"
+          action: "Immediately investigate payment service"
+          dashboard: "http://grafana:3000/d/slo-payments"
+          runbook: "docs/runbooks/payment-errors.md"
+
+      # Stellar Transaction Error Rate SLO: 0.5%
+      - alert: StellarTransactionFailures
+        expr: |
+          (sum(rate(stellar_api_calls_total{status="error"}[5m])) / 
+           sum(rate(stellar_api_calls_total[5m])) * 100) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          slo: stellar_transaction_error_rate
+          component: blockchain
+        annotations:
+          summary: "Stellar transaction error rate above threshold"
+          description: "Stellar error rate is {{ $value | humanize }}%, SLO: 0.5%"
+          network: "{{ $labels.network }}"
+          runbook: "docs/runbooks/stellar-errors.md"
+
+  - name: resource-health
+    interval: 30s
+    rules:
+      # Database Pool Exhaustion
+      - alert: DatabasePoolNearExhaustion
+        expr: |
+          (db_pool_utilization_percent > 80)
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+          resource: pool
+        annotations:
+          summary: "Database pool utilization very high"
+          description: "Database pool is {{ $value | humanize }}% utilized"
+          action: "Scale database connections or reduce query load"
+          runbook: "docs/runbooks/database-pool.md"
+
+      - alert: DatabasePoolExhausted
+        expr: |
+          (db_pool_utilization_percent > 95)
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+          resource: pool
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: Database pool exhausted"
+          description: "Database pool is {{ $value | humanize }}% utilized - connections limited"
+          action: "IMMEDIATE: Increase pool size or restart service"
+          runbook: "docs/runbooks/database-pool-exhausted.md"
+
+      # Memory Pressure
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes / 1024 / 1024 / 1024) > 1.5
+        for: 2m
+        labels:
+          severity: warning
+          component: process
+          resource: memory
+        annotations:
+          summary: "Process memory usage is high"
+          description: "Memory usage is {{ $value | humanize }}GB (container limit: 2GB)"
+          action: "Monitor for memory leaks"
+          runbook: "docs/runbooks/high-memory.md"
+
+      # Event Loop Lag
+      - alert: HighEventLoopLag
+        expr: |
+          nodejs_eventloop_lag_seconds > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          component: process
+          resource: event_loop
+        annotations:
+          summary: "Event loop lag is high"
+          description: "Event loop lag: {{ $value | humanize }}s (threshold: 100ms)"
+          action: "Check for blocking operations or high CPU load"
+          runbook: "docs/runbooks/event-loop-lag.md"
+
+      # GC Pressure
+      - alert: HighGarbageCollectionRate
+        expr: |
+          rate(nodejs_gc_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: process
+          resource: garbage_collection
+        annotations:
+          summary: "Garbage collection frequency is elevated"
+          description: "GC rate: {{ $value | humanize }} collections/sec"
+          action: "Investigate for memory leaks"
+          runbook: "docs/runbooks/gc-pressure.md"
+
+  - name: integration-health
+    interval: 1m
+    rules:
+      # Notification Delivery SLO: 95%
+      - alert: LowNotificationDeliveryRate
+        expr: |
+          (sum(rate(notification_delivery_attempts_total{status="sent"}[15m])) / 
+           sum(rate(notification_delivery_attempts_total[15m])) * 100) < 95
+        for: 10m
+        labels:
+          severity: warning
+          slo: notification_delivery_success_rate
+          component: notifications
+        annotations:
+          summary: "Notification delivery rate below SLO"
+          description: "Delivery rate is {{ $value | humanize }}%, SLO: 95%"
+          action: "Check notification service and email provider"
+          runbook: "docs/runbooks/notification-delivery.md"
+
+      # Webhook Delivery SLO: 99%
+      - alert: LowWebhookDeliveryRate
+        expr: |
+          (sum(rate(webhook_delivery_attempts_total{status="success"}[15m])) / 
+           sum(rate(webhook_delivery_attempts_total[15m])) * 100) < 99
+        for: 10m
+        labels:
+          severity: warning
+          slo: webhook_delivery_success_rate
+          component: webhooks
+        annotations:
+          summary: "Webhook delivery rate below SLO"
+          description: "Webhook delivery rate is {{ $value | humanize }}%, SLO: 99%"
+          action: "Check webhook endpoints and circuit breakers"
+          runbook: "docs/runbooks/webhook-delivery.md"
+
+      # Redis Connectivity
+      - alert: RedisConnectionIssues
+        expr: |
+          up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: cache
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: Redis is unavailable"
+          description: "Redis instance is not responding"
+          action: "Check Redis service status"
+          runbook: "docs/runbooks/redis-down.md"
+
+      # Circuit Breaker Open
+      - alert: WebhookCircuitBreakerOpen
+        expr: |
+          webhook_circuit_breaker_state == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: webhooks
+          state: open
+        annotations:
+          summary: "Webhook circuit breaker is open"
+          description: "Circuit breaker for {{ $labels.url_hash }} is open (failing requests)"
+          action: "Investigate webhook endpoint health"
+          runbook: "docs/runbooks/circuit-breaker.md"
+
+  - name: business-metrics
+    interval: 5m
+    rules:
+      # Session Booking Rate Anomaly
+      - alert: SessionBookingRateAnomaly
+        expr: |
+          abs(rate(session_bookings_total[5m]) - avg_over_time(rate(session_bookings_total[5m])[1h])) > 
+          2 * stddev_over_time(rate(session_bookings_total[5m])[1h])
+        for: 15m
+        labels:
+          severity: warning
+          component: business
+          metric: booking_rate
+        annotations:
+          summary: "Abnormal session booking rate detected"
+          description: "Booking rate deviates {{ $value | humanize }} from normal patterns"
+          action: "Check for service outages or user-facing issues"
+          runbook: "docs/runbooks/booking-anomaly.md"
+
+      # User Registration Rate Anomaly
+      - alert: UserRegistrationAnomaly
+        expr: |
+          abs(rate(user_registrations_total[5m]) - avg_over_time(rate(user_registrations_total[5m])[1h])) > 
+          3 * stddev_over_time(rate(user_registrations_total[5m])[1h])
+        for: 15m
+        labels:
+          severity: minor
+          component: business
+          metric: registration_rate
+        annotations:
+          summary: "Abnormal user registration rate"
+          description: "Registration rate deviates from normal by {{ $value | humanize }}"
+          action: "Investigate if marketing campaign started or service issue occurred"
+
+  - name: data-integrity
+    interval: 5m
+    rules:
+      # Escrow Sync Mismatches
+      - alert: EscrowSyncMismatches
+        expr: |
+          increase(escrow_sync_mismatches_total[5m]) > 0
+        labels:
+          severity: warning
+          component: escrow
+          type: sync_mismatch
+        annotations:
+          summary: "Escrow state mismatches detected"
+          description: "Found {{ $value | humanize }} escrow sync mismatches in the last 5 minutes"
+          action: "Review escrow reconciliation logs"
+          dashboard: "http://grafana:3000/d/escrow-health"
+          runbook: "docs/runbooks/escrow-mismatch.md"
+
+      # Rate Limiting Threshold Breaches
+      - alert: RateLimitThresholdBreach
+        expr: |
+          rate(rate_limit_exceeded_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+          type: rate_limiting
+        annotations:
+          summary: "Rate limit threshold breaches detected"
+          description: "Rate limit exceeded {{ $value | humanize }} times in last 5 minutes"
+          tier: "{{ $labels.tier }}"
+          action: "Investigate for DDoS or API abuse"
+          runbook: "docs/runbooks/rate-limit-abuse.md"
+
+  # SLO Burn Rate Alerts (Multi-window)
+  - name: slo-burn-rates
+    interval: 1m
+    rules:
+      # 30-min window: if we burn 15% of error budget in 30m, alert (critical trend)
+      - alert: SLOBurnRateCritical
+        expr: |
+          (
+            (1 - (sum(rate(http_requests_total{status_code=~"2..3.."}[30m])) / sum(rate(http_requests_total[30m]))))
+            / (1 - 0.995)
+          ) > 0.15
+        for: 2m
+        labels:
+          severity: critical
+          type: slo_burn_rate
+          window: "30m"
+          escalate: "true"
+        annotations:
+          summary: "CRITICAL: SLO error budget burning rapidly"
+          description: "Burn rate is {{ $value | humanize }}x normal (30m window)"
+          action: "Activate incident response procedures"
+          dashboard: "http://grafana:3000/d/slo-burn-rate"
+          runbook: "docs/runbooks/slo-burn-rate.md"
+
+      # 1-hour window: if we burn 5% of error budget in 1h, alert (warning trend)
+      - alert: SLOBurnRateHigh
+        expr: |
+          (
+            (1 - (sum(rate(http_requests_total{status_code=~"2..3.."}[1h])) / sum(rate(http_requests_total[1h]))))
+            / (1 - 0.995)
+          ) > 0.05
+        for: 15m
+        labels:
+          severity: warning
+          type: slo_burn_rate
+          window: "1h"
+        annotations:
+          summary: "SLO error budget burning at elevated rate"
+          description: "Burn rate is {{ $value | humanize }}x normal (1h window)"
+          action: "Monitor closely for rapid degradation"
+          runbook: "docs/runbooks/slo-burn-rate.md"

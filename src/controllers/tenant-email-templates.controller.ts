@@ -144,7 +144,7 @@ export const TenantEmailTemplatesController = {
       if (!tpl) return ResponseUtil.notFound(res, "Template not found");
 
       const rendered = await TemplateEngineService.renderEmail(
-        { name: templateName, tenantId },
+        { name: templateName, tenantId: Array.isArray(tenantId) ? tenantId[0] : tenantId },
         sampleData,
       );
       return ResponseUtil.success(res, rendered);

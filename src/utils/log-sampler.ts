@@ -5,7 +5,7 @@
  *   import { sampleLog } from './utils/log-sampler';
  *   sampleLog(logger, 'info', 0.01, 'metric.event', { foo: 'bar' });
  */
-import type pino from "pino";
+import type * as pino from "pino";
 
 export function sampleLog(
   logger: pino.Logger,

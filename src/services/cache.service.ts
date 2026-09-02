@@ -28,8 +28,9 @@ const memStore = new Map<string, MemEntry>();
 // Evict expired entries every minute
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of memStore.entries()) {
-    if (entry.expiresAt <= now) memStore.delete(key);
+  for (const entry of Array.from(memStore.entries())) {
+    const [key, entryValue] = entry;
+    if (entryValue.expiresAt <= now) memStore.delete(key);
   }
 }, 60_000);
 
@@ -52,7 +53,7 @@ function memDel(key: string): void {
 
 function memKeys(pattern: string): string[] {
   const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-  return [...memStore.keys()].filter((k) => regex.test(k));
+  return Array.from(memStore.keys()).filter((k) => regex.test(k));
 }
 
 // ─── Redis Client ─────────────────────────────────────────────────────────────

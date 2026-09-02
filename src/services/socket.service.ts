@@ -14,7 +14,8 @@ const EVENT_TTL_MS = 5 * 60 * 1000; // 5 minutes
 // Periodically evict users whose entire event history has expired
 setInterval(() => {
   const now = Date.now();
-  for (const [userId, events] of eventHistory) {
+  for (const entry of Array.from(eventHistory)) {
+    const [userId, events] = entry;
     if (events.every((e) => now - e.timestamp.getTime() > EVENT_TTL_MS)) {
       eventHistory.delete(userId);
     }
