@@ -1,5 +1,12 @@
 /// <reference types="jest" />
+jest.mock('../baseline-store.service', () => ({
+  BaselineStore: {
+    getSamples: jest.fn(),
+  },
+}));
+
 import { MlSecurityService } from '../ml-security.service';
+import { BaselineStore } from '../baseline-store.service';
 
 describe('MlSecurityService', () => {
   describe('scoreDeviation', () => {
@@ -76,6 +83,36 @@ describe('MlSecurityService', () => {
       const events = [now, minutesAgo(120)]; // one event way outside the window
       const score = MlSecurityService.computeVelocityScore(events, 10 * 60_000, 1);
       expect(score).toBe(0); // only 1 event counted within window, not > threshold
+    });
+  });
+
+  describe('scoreDeviationForUser', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('scores against the override samples without touching BaselineStore', async () => {
+      const score = await MlSecurityService.scoreDeviationForUser('user-1', 6, [4, 5, 6, 5, 4, 6]);
+
+      expect(BaselineStore.getSamples).not.toHaveBeenCalled();
+      expect(score).toBe(MlSecurityService.scoreDeviation(6, [4, 5, 6, 5, 4, 6]));
+    });
+
+    it('loads samples from BaselineStore when no override is given', async () => {
+      (BaselineStore.getSamples as jest.Mock).mockResolvedValue([0, 1, 1, 1, 2]);
+
+      const score = await MlSecurityService.scoreDeviationForUser('user-1', 5);
+
+      expect(BaselineStore.getSamples).toHaveBeenCalledWith('user-1');
+      expect(score).toBe(MlSecurityService.scoreDeviation(5, [0, 1, 1, 1, 2]));
+    });
+
+    it('returns 0 when BaselineStore has no samples for the user yet', async () => {
+      (BaselineStore.getSamples as jest.Mock).mockResolvedValue([]);
+
+      const score = await MlSecurityService.scoreDeviationForUser('user-1', 5);
+
+      expect(score).toBe(0);
     });
   });
 });

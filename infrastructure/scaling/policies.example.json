@@ -1,0 +1,34 @@
+{
+  "_comment": "Example scaling profiles (issue #862). capacityPerInstance must be measured by load-testing this service — every other number is derived from it.",
+  "conservative": {
+    "minInstances": 3,
+    "maxInstances": 12,
+    "capacityPerInstance": 100,
+    "targetUtilisation": 0.55,
+    "scaleUpCooldownSeconds": 90,
+    "scaleDownCooldownSeconds": 600,
+    "maxScaleDownStep": 1,
+    "minForecastConfidence": 0.6
+  },
+  "balanced": {
+    "minInstances": 2,
+    "maxInstances": 20,
+    "capacityPerInstance": 100,
+    "targetUtilisation": 0.7,
+    "scaleUpCooldownSeconds": 60,
+    "scaleDownCooldownSeconds": 300,
+    "maxScaleDownStep": 1,
+    "minForecastConfidence": 0.4
+  },
+  "aggressive": {
+    "minInstances": 1,
+    "maxInstances": 40,
+    "capacityPerInstance": 100,
+    "targetUtilisation": 0.85,
+    "scaleUpCooldownSeconds": 30,
+    "scaleDownCooldownSeconds": 120,
+    "maxScaleDownStep": 3,
+    "minForecastConfidence": 0.3,
+    "costCeilingInstances": 25
+  }
+}

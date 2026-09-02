@@ -134,6 +134,21 @@ app.get("/api/versions", (_req, res) => {
   });
 });
 
+// ─── API Gateway (opt-in via GATEWAY_ENABLED) ────────────────────────────────
+// Service-discovery context is always attached (cheap, additive); the routing /
+// rate-limiting / load-balancing proxy only engages when the gateway is enabled
+// and a request path matches a registered service prefix.
+import { getApiGateway, gatewayRoutes, gatewayConfig } from "./gateway";
+import { serviceDiscoveryMiddleware } from "./middleware/service-discovery.middleware";
+
+app.use("/api/v1/gateway", gatewayRoutes);
+app.use(serviceDiscoveryMiddleware());
+if (gatewayConfig.enabled) {
+  app.use(getApiGateway().middleware());
+  getApiGateway().start();
+  logger.info("API gateway proxy enabled");
+}
+
 // ─── Versioned API routes ─────────────────────────────────────────────────────
 // v1 — stable, always active
 app.use("/api/v1", v1Router);

@@ -310,94 +310,61 @@ export const BookingsController = {
   }),
 
   /**
-   * Update video mode for an active session.
-   * Called by participants to switch between video and audio-only modes —
-   * typically triggered via the `session:audio_fallback_suggested` WebSocket event.
-   *
-   * PATCH /api/v1/bookings/:id/video-mode
-   * Body: { mode: 'audio_only' | 'video' }
+   * POST /api/v1/bookings/:id/no-show/dispute
+   * File a dispute against a recorded no-show within the dispute window.
    */
-  updateVideoMode: asyncHandler(async (req: Request, res: Response) => {
+  disputeNoShow: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const { reason } = req.body;
 
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
     if (!id || Array.isArray(id)) {
-      return ResponseUtil.error(res, "Invalid session ID", 400);
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!reason || typeof reason !== "string" || !reason.trim()) {
+      return ResponseUtil.error(res, "Dispute reason is required", 400);
     }
 
-    const { mode } = req.body as { mode?: string };
-    const VALID_MODES = ["audio_only", "video"] as const;
-    type VideoMode = (typeof VALID_MODES)[number];
-
-    if (!mode || !(VALID_MODES as readonly string[]).includes(mode)) {
-      return ResponseUtil.error(
-        res,
-        "Invalid mode. Must be 'audio_only' or 'video'.",
-        400,
-      );
-    }
-
-    const session = await SessionModel.findById(id);
-    if (!session) {
-      return ResponseUtil.error(res, "Session not found", 404);
-    }
-
-    // Only participants of the session may change the video mode
-    const requestingUserId =
-      (req as any).user?.id || (req as any).user?.userId;
-    if (
-      requestingUserId !== session.mentor_id &&
-      requestingUserId !== session.mentee_id
-    ) {
-      return ResponseUtil.error(
-        res,
-        "You are not a participant of this session",
-        403,
-      );
-    }
-
-    // Session must be in progress (confirmed) to change video mode
-    if (session.status !== "confirmed") {
-      return ResponseUtil.error(
-        res,
-        "Video mode can only be changed for confirmed sessions",
-        400,
-      );
-    }
-
-    // Persist the video mode in the notes metadata field as a lightweight
-    // solution (no DB migration required). In production, add a dedicated
-    // `video_mode` column to the sessions table.
-    const videoMode = mode as VideoMode;
-    const currentNotes = session.notes ?? "";
-    const VIDEO_MODE_TAG_RE = /\[video_mode:[^\]]+\]/;
-    const newNotes = VIDEO_MODE_TAG_RE.test(currentNotes)
-      ? currentNotes.replace(VIDEO_MODE_TAG_RE, `[video_mode:${videoMode}]`)
-      : `${currentNotes}[video_mode:${videoMode}]`.trim();
-
-    await SessionModel.updateStatus(id, session.status); // touch updated_at via a benign update
-    // Use a direct query to write the notes field with the embedded mode tag
-    const pool = (await import("../config/database")).default;
-    await pool.query(
-      `UPDATE sessions SET notes = $1, updated_at = NOW() WHERE id = $2`,
-      [newNotes, id],
-    );
-
-    logger.info(
-      { sessionId: id, videoMode, requestingUserId },
-      "Session video mode updated",
-    );
-
+    const booking = await BookingsService.disputeNoShow(id, userId, reason.trim());
     return ResponseUtil.success(
       res,
-      {
-        sessionId: id,
-        videoMode,
-        message:
-          videoMode === "audio_only"
-            ? "Session switched to audio-only mode"
-            : "Session switched back to full video mode",
-      },
-      "Video mode updated successfully",
+      { booking },
+      "No-show dispute submitted and pending review",
+    );
+  }),
+
+  /**
+   * POST /api/v1/bookings/:id/no-show/dispute/resolve
+   * Admin resolves a pending no-show dispute (approved | dismissed).
+   */
+  resolveNoShowDispute: asyncHandler(async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const adminUserId = (req as any).user?.id || (req as any).user?.userId;
+    const { decision, note } = req.body;
+
+    if (!adminUserId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!["approved", "dismissed"].includes(decision)) {
+      return ResponseUtil.error(res, "Decision must be 'approved' or 'dismissed'", 400);
+    }
+
+    const booking = await BookingsService.resolveNoShowDispute(
+      id,
+      adminUserId,
+      decision as "approved" | "dismissed",
+      typeof note === "string" && note.trim() ? note.trim() : undefined,
+    );
+    return ResponseUtil.success(
+      res,
+      { booking },
+      "No-show dispute resolved",
     );
   }),
 };

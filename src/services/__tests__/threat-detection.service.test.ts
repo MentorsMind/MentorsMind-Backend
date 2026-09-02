@@ -16,6 +16,14 @@ jest.mock('../loginAttempts.service', () => ({
   },
 }));
 
+// Baseline defaults mirror the old hardcoded scoreDeviation() sample set the
+// tests were written against, so behavior stays deterministic here.
+jest.mock('../baseline-store.service', () => ({
+  BaselineStore: {
+    getSamples: jest.fn().mockResolvedValue([0, 1, 1, 1, 2]),
+  },
+}));
+
 describe('ThreatDetectionService.analyzeLoginEvent', () => {
   const userId = 'user-1';
   const baseContext = {

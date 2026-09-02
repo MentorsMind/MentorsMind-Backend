@@ -97,13 +97,14 @@ export const ThreatDetectionService = {
       userId,
       new Date(Date.now() - CORRELATION_WINDOW_MS),
     );
-    const ipDiversityScore = MlSecurityService.scoreDeviation(distinctIps, [
-      0,
-      1,
-      1,
-      1,
-      2,
-    ]);
+    // Scored against the user's Redis-backed 30-day rolling baseline
+    // (see baseline-store.service.ts) instead of a hardcoded sample set —
+    // the baseline is refreshed asynchronously by baselineRefresh.job.ts,
+    // so this stays a cheap Redis read on the hot path.
+    const ipDiversityScore = await MlSecurityService.scoreDeviationForUser(
+      userId,
+      distinctIps,
+    );
 
     // Signal 2: failed login attempts (coarse, email-keyed counter).
     let failedAttempts = 0;

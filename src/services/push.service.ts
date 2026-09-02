@@ -436,6 +436,24 @@ export const PushService = {
   },
 
   /**
+   * Send a streak milestone push notification (issue #984).
+   * Called when a user crosses a gamification streak milestone
+   * (e.g. 7-day, 30-day, 60-day streaks).
+   */
+  async sendStreakMilestone(
+    userId: string,
+    milestone: number,
+  ): Promise<PushSendResult> {
+    const title = `🔥 ${milestone}-Day Streak!`;
+    const body = `Amazing consistency! You hit a ${milestone}-day streak. Keep it going!`;
+    return this.sendToUser(userId, title, body, {
+      type: "streak_milestone",
+      milestone: String(milestone),
+      deepLink: "mentorsmind://gamification/me",
+    });
+  },
+
+  /**
    * Send a rich push notification with actions and deep link
    */
   async sendRich(
