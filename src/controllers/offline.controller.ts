@@ -15,15 +15,14 @@
  */
 
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { OfflineCacheService } from '../services/offline-cache.service';
 import { OfflineQueueService, EnqueueInput } from '../services/offline-queue.service';
 import { OfflineSyncService } from '../services/offline-sync.service';
 import { logger } from '../utils/logger.utils';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getUserId(req: Request): string {
-  return (req as any).user?.userId ?? (req as any).user?.id;
+function getUserId(req: AuthenticatedRequest): string {
+  return req.user?.userId ?? req.user?.id ?? '';
 }
 
 const VALID_DOMAINS = [
@@ -59,7 +58,7 @@ export const OfflineController = {
    * Query params:
    *  - refresh=true  Force rebuild even if cached
    */
-  async getSnapshot(req: Request, res: Response): Promise<void> {
+  async getSnapshot(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const forceRefresh = req.query.refresh === 'true';
 
@@ -98,7 +97,7 @@ export const OfflineController = {
    *
    * Returns the server-side sync state (last synced timestamp + ETag) per domain.
    */
-  async getSyncState(req: Request, res: Response): Promise<void> {
+  async getSyncState(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
 
     try {
@@ -120,7 +119,7 @@ export const OfflineController = {
    *
    * Returns records changed in a specific domain since a given timestamp.
    */
-  async getDelta(req: Request, res: Response): Promise<void> {
+  async getDelta(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const { domain, since } = req.query as {
       domain?: string;
@@ -171,7 +170,7 @@ export const OfflineController = {
    *
    * Body: { clientKey, actionType, payload, clientTimestamp }
    */
-  async enqueueAction(req: Request, res: Response): Promise<void> {
+  async enqueueAction(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const { clientKey, actionType, payload, clientTimestamp } = req.body;
 
@@ -244,7 +243,7 @@ export const OfflineController = {
    *
    * Query params: status, limit, offset
    */
-  async getQueue(req: Request, res: Response): Promise<void> {
+  async getQueue(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const {
       status,
@@ -274,7 +273,7 @@ export const OfflineController = {
    *
    * Returns a summary of the queue status for the authenticated user.
    */
-  async getQueueStatus(req: Request, res: Response): Promise<void> {
+  async getQueueStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
 
     try {
@@ -302,7 +301,7 @@ export const OfflineController = {
    *    actions: [ { clientKey, actionType, payload, clientTimestamp }, ... ]
    *  }
    */
-  async sync(req: Request, res: Response): Promise<void> {
+  async sync(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const { syncState, actions = [] } = req.body;
 
@@ -367,7 +366,7 @@ export const OfflineController = {
    *
    * Body: { strategy: 'client_wins' | 'server_wins' | 'merge', mergedPayload? }
    */
-  async resolveConflict(req: Request, res: Response): Promise<void> {
+  async resolveConflict(req: AuthenticatedRequest, res: Response): Promise<void> {
     const userId = getUserId(req);
     const { id } = req.params as Record<string, string>;
     const { strategy, mergedPayload } = req.body;

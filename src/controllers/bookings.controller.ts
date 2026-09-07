@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
 import { UsersService } from "../services/users.service";
 import { MeetingService } from "../services/meeting.service";
@@ -17,9 +18,9 @@ export const BookingsController = {
    * Create a new booking
    * POST /api/v1/bookings
    */
-  createBooking: asyncHandler(async (req: Request, res: Response) => {
+  createBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { mentorId, scheduledAt, durationMinutes, topic, notes } = req.body;
-    const menteeId = (req as any).user?.id || (req as any).user?.userId;
+    const menteeId = req.user?.id ?? req.user?.userId;
 
     if (!menteeId) {
       return ResponseUtil.unauthorized(res, "Authentication required");
@@ -196,8 +197,8 @@ export const BookingsController = {
    * List user's sessions
    * GET /api/v1/bookings
    */
-  listBookings: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id || (req as any).user?.userId;
+  listBookings: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id ?? req.user?.userId;
 
     if (!userId) {
       return ResponseUtil.error(res, "Unauthorized", 401);
@@ -313,9 +314,9 @@ export const BookingsController = {
    * POST /api/v1/bookings/:id/no-show/dispute
    * File a dispute against a recorded no-show within the dispute window.
    */
-  disputeNoShow: asyncHandler(async (req: Request, res: Response) => {
+  disputeNoShow: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const userId = req.user?.id ?? req.user?.userId;
     const { reason } = req.body;
 
     if (!userId) {
@@ -340,9 +341,9 @@ export const BookingsController = {
    * POST /api/v1/bookings/:id/no-show/dispute/resolve
    * Admin resolves a pending no-show dispute (approved | dismissed).
    */
-  resolveNoShowDispute: asyncHandler(async (req: Request, res: Response) => {
+  resolveNoShowDispute: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    const adminUserId = (req as any).user?.id || (req as any).user?.userId;
+    const adminUserId = req.user?.id ?? req.user?.userId;
     const { decision, note } = req.body;
 
     if (!adminUserId) {

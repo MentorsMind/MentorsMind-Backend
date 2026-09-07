@@ -33,6 +33,8 @@ import deepLinkRoutes from "../deepLink.routes";
 import goalRoutes from "../goal.routes";
 import learnerRoutes from "../learner.routes";
 import webhookRoutes from "../webhooks.routes";
+import credentialsRoutes from "../credentials.routes";
+import tenantEmailTemplatesRoutes from "../tenantEmailTemplates.routes";
 import learningPathRoutes from "../learning-path.routes";
 import progressRoutes from "../progress.routes";
 import sessionMilestoneRoutes from "../session-milestone.routes";

@@ -1,18 +1,12 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { InAppNotificationService } from '../services/inAppNotification.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 
-/**
- * Notifications Controller - Handles in-app notification CRUD operations
- */
 export const NotificationsController = {
-  /**
-   * GET /api/v1/notifications
-   * Paginated list of notifications for the authenticated user (unread first).
-   */
-  getNotifications: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  getNotifications: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -36,24 +30,16 @@ export const NotificationsController = {
     );
   }),
 
-  /**
-   * GET /api/v1/notifications/unread-count
-   * Lightweight unread count for badge display.
-   */
-  getUnreadCount: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  getUnreadCount: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
     const count = await InAppNotificationService.unreadCount(userId);
     ResponseUtil.success(res, { unreadCount: count }, 'Unread count retrieved');
   }),
 
-  /**
-   * PUT /api/v1/notifications/:id/read
-   * Mark a single notification as read.
-   */
-  markAsRead: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  markAsRead: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
@@ -63,12 +49,8 @@ export const NotificationsController = {
     ResponseUtil.success(res, null, 'Notification marked as read');
   }),
 
-  /**
-   * PUT /api/v1/notifications/read-all
-   * Mark all notifications as read for the authenticated user.
-   */
-  markAllAsRead: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  markAllAsRead: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
     const count = await InAppNotificationService.markAllRead(userId);
@@ -79,12 +61,8 @@ export const NotificationsController = {
     );
   }),
 
-  /**
-   * DELETE /api/v1/notifications/:id
-   * Dismiss (soft-delete) a notification.
-   */
-  deleteNotification: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  deleteNotification: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
@@ -94,14 +72,10 @@ export const NotificationsController = {
     ResponseUtil.success(res, null, 'Notification dismissed');
   }),
 
-  /**
-   * POST /api/v1/notifications/push/send-rich
-   * Send rich mobile push notification with deep link and actions
-   */
-  sendRichNotification: asyncHandler(async (req: Request, res: Response) => {
+  sendRichNotification: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { PushNotificationService } = await import('../services/push-notification.service');
     const { userId, title, body, imageUrl, deepLink, actions, data, priority, sound, badge } = req.body;
-    const targetUserId = userId || (req as any).user?.id;
+    const targetUserId = userId || req.user?.id;
 
     if (!targetUserId) {
       return ResponseUtil.error(res, 'Target userId is required', 400);
@@ -125,10 +99,6 @@ export const NotificationsController = {
     ResponseUtil.success(res, result, 'Rich push notification processed', result.success ? 200 : 207);
   }),
 
-  /**
-   * POST /api/v1/notifications/push/send-segment
-   * Send targeted push notifications to user segments (role, tier, activity)
-   */
   sendToSegment: asyncHandler(async (req: Request, res: Response) => {
     const { PushNotificationService } = await import('../services/push-notification.service');
     const { segment, title, body, imageUrl, deepLink, actions, data } = req.body;
@@ -152,10 +122,6 @@ export const NotificationsController = {
     ResponseUtil.success(res, result, 'Segment push notifications processed');
   }),
 
-  /**
-   * GET /api/v1/notifications/push/analytics
-   * Get push notification delivery metrics and analytics
-   */
   getPushAnalytics: asyncHandler(async (req: Request, res: Response) => {
     const { PushNotificationService } = await import('../services/push-notification.service');
     const { startDate, endDate, segment } = req.query;
@@ -169,13 +135,9 @@ export const NotificationsController = {
     ResponseUtil.success(res, analytics, 'Push notification delivery analytics retrieved');
   }),
 
-  /**
-   * POST /api/v1/notifications/push/track-open
-   * Track when a push notification is opened/clicked by the user
-   */
-  trackNotificationOpened: asyncHandler(async (req: Request, res: Response) => {
+  trackNotificationOpened: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { PushNotificationService } = await import('../services/push-notification.service');
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
     const { notificationId } = req.body;
 
     if (!notificationId) {

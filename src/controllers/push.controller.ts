@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { PushTokensModel } from "../models/push-tokens.model";
 import { PushService } from "../services/push.service";
 import { ResponseUtil } from "../utils/response.utils";
@@ -19,9 +20,8 @@ export const PushController = {
    * Subscribe to push notifications
    * POST /api/v1/notifications/push/subscribe
    */
-  subscribe: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id;
+  subscribe: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id;
 
       if (!userId) {
         ResponseUtil.error(res, "Unauthorized", 401);
@@ -57,13 +57,8 @@ export const PushController = {
     },
   ),
 
-  /**
-   * Unsubscribe from push notifications
-   * DELETE /api/v1/notifications/push/unsubscribe
-   */
-  unsubscribe: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id;
+  unsubscribe: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id;
 
       if (!userId) {
         ResponseUtil.error(res, "Unauthorized", 401);
@@ -91,13 +86,8 @@ export const PushController = {
     },
   ),
 
-  /**
-   * Get all active push tokens for the authenticated user
-   * GET /api/v1/notifications/push/tokens
-   */
-  getTokens: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id;
+  getTokens: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id;
 
       if (!userId) {
         ResponseUtil.error(res, "Unauthorized", 401);
@@ -118,12 +108,8 @@ export const PushController = {
     },
   ),
 
-  /**
-   * Send test push notification
-   * POST /api/v1/notifications/push/test
-   */
-  sendTest: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  sendTest: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
 
     if (!userId) {
       ResponseUtil.error(res, "Unauthorized", 401);
@@ -144,12 +130,8 @@ export const PushController = {
     });
   }),
 
-  /**
-   * Send rich push notification with actions and deep link
-   * POST /api/v1/notifications/push/send
-   */
-  sendRich: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  sendRich: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       ResponseUtil.error(res, "Unauthorized", 401);
       return;

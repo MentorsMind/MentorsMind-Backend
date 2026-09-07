@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { DisputeService } from "../services/disputes.service";
 import { DisputeModel } from "../models/dispute.model";
 import { routeParam } from "../utils/route-params.utils";
@@ -76,14 +77,14 @@ export class DisputesController {
     }
   }
 
-  static async uploadEvidence(req: Request, res: Response): Promise<void> {
+  static async uploadEvidence(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { text_content, file_url } = req.body;
-      const submitterId = (req as any).user!.userId || (req as any).user!.id;
+      const submitterId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
-      const userRole = (req as any).user!.role;
+      const userRole = req.user!.role;
 
       const evidence = await DisputeService.uploadEvidence(
         id,
@@ -104,11 +105,11 @@ export class DisputesController {
     }
   }
 
-  static async resolveDispute(req: Request, res: Response): Promise<void> {
+  static async resolveDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { mentor_pct, notes } = req.body;
-      const adminId = (req as any).user!.userId || (req as any).user!.id;
+      const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
@@ -138,11 +139,11 @@ export class DisputesController {
     }
   }
 
-  static async mediateDispute(req: Request, res: Response): Promise<void> {
+  static async mediateDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { notes } = req.body;
-      const adminId = (req as any).user!.userId || (req as any).user!.id;
+      const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
@@ -167,10 +168,10 @@ export class DisputesController {
     res.status(200).json({ data: RESOLUTION_TEMPLATES });
   }
 
-  static async listDisputes(req: Request, res: Response): Promise<void> {
+  static async listDisputes(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user!.userId || (req as any).user!.id;
-      const isAdmin = (req as any).user!.role === "admin";
+      const userId = req.user!.userId ?? req.user!.id;
+      const isAdmin = req.user!.role === "admin";
 
       let disputes;
       if (isAdmin) {

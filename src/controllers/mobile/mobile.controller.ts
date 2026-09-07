@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../../middleware/auth.middleware";
 import { z } from "zod";
 import { PushTokensModel } from "../../models/push-tokens.model";
 import { OfflineSyncService } from "../../services/offline-sync.service";
@@ -30,9 +31,8 @@ const pushRegisterSchema = z.object({
 });
 
 export const MobileController = {
-  getSyncStatus: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id ?? (req as any).user?.userId;
+  getSyncStatus: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id ?? req.user?.userId;
       if (!userId) {
         ResponseUtil.unauthorized(res, "Authentication required");
         return;
@@ -58,8 +58,8 @@ export const MobileController = {
     },
   ),
 
-  sync: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id ?? (req as any).user?.userId;
+  sync: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id ?? req.user?.userId;
     if (!userId) {
       ResponseUtil.unauthorized(res, "Authentication required");
       return;
@@ -107,10 +107,9 @@ export const MobileController = {
     );
   }),
 
-  getOptimizedSnapshot: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
+  getOptimizedSnapshot: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
       const snapshot = {
-        userId: (req as any).user?.id ?? (req as any).user?.userId,
+        userId: req.user?.id ?? req.user?.userId,
         dashboard: {
           upcomingSessions: 3,
           unreadMessages: 7,
@@ -135,9 +134,8 @@ export const MobileController = {
     },
   ),
 
-  registerPushToken: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id ?? (req as any).user?.userId;
+  registerPushToken: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id ?? req.user?.userId;
       if (!userId) {
         ResponseUtil.unauthorized(res, "Authentication required");
         return;

@@ -1,19 +1,12 @@
-import { Request, Response } from "express";
+import { Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdvancedSearchService, AdvancedSearchFilters } from "../services/advanced-search.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 
-/**
- * Search V2 Controller
- * Provides advanced faceted search, saved searches, and recommendation-based mentor discovery
- */
 export const SearchV2Controller = {
-  /**
-   * GET /api/v2/search/mentors or GET /api/v1/search/advanced
-   * Enhanced faceted search with skills, price range, availability, rating filters
-   */
-  searchMentors: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  searchMentors: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
 
     // Parse filters from query parameters
     const query = (req.query.query as string) || (req.query.q as string);
@@ -69,8 +62,8 @@ export const SearchV2Controller = {
    * GET /api/v2/search/recommendations
    * Get personalized mentor recommendations based on learner profile and learning goals
    */
-  getRecommendations: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  getRecommendations: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       return ResponseUtil.error(res, "Authentication required for recommendations", 401);
     }
@@ -85,8 +78,8 @@ export const SearchV2Controller = {
    * POST /api/v2/search/saved
    * Save a search configuration / preset
    */
-  saveSearch: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  saveSearch: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       return ResponseUtil.error(res, "Authentication required", 401);
     }
@@ -110,8 +103,8 @@ export const SearchV2Controller = {
    * GET /api/v2/search/saved
    * Get all saved searches for the authenticated user
    */
-  getSavedSearches: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  getSavedSearches: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       return ResponseUtil.error(res, "Authentication required", 401);
     }
@@ -124,8 +117,8 @@ export const SearchV2Controller = {
    * GET /api/v2/search/saved/:id/execute
    * Execute a saved search preset
    */
-  executeSavedSearch: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  executeSavedSearch: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) {
       return ResponseUtil.error(res, "Authentication required", 401);
@@ -144,8 +137,8 @@ export const SearchV2Controller = {
    * DELETE /api/v2/search/saved/:id
    * Delete a saved search preset
    */
-  deleteSavedSearch: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  deleteSavedSearch: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) {
       return ResponseUtil.error(res, "Authentication required", 401);

@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import passport, { EmailRequiredError } from '../config/passport';
 import { env } from '../config/env';
 import { TokenService } from '../services/token.service';
@@ -265,9 +266,9 @@ export const OAuthController = {
      * DELETE /api/v1/auth/oauth/:provider
      * Unlink OAuth provider from user account
      */
-    async unlinkProvider(req: Request, res: Response): Promise<any> {
+    async unlinkProvider(req: AuthenticatedRequest, res: Response): Promise<any> {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = req.user?.userId;
             const provider = req.params.provider as string;
 
             if (!userId) {
@@ -334,9 +335,9 @@ export const OAuthController = {
      * GET /api/v1/auth/oauth/providers
      * Get list of linked OAuth providers for current user
      */
-    async getLinkedProviders(req: Request, res: Response): Promise<any> {
+    async getLinkedProviders(req: AuthenticatedRequest, res: Response): Promise<any> {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = req.user?.userId;
 
             if (!userId) {
                 return res.status(401).json({ success: false, error: 'Unauthorized' });

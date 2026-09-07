@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionTranscriptionService } from "../services/session-transcription.service";
 
 export class SessionTranscriptionController {
@@ -28,8 +29,8 @@ export class SessionTranscriptionController {
     res.json({ success: true, message: "Transcript updated" });
   }
 
-  static async searchTranscripts(req: Request, res: Response): Promise<void> {
-    const userId = (req as any).user?.id;
+  static async searchTranscripts(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user?.id;
     const { q } = req.query;
     const results = await SessionTranscriptionService.searchTranscripts(
       userId,

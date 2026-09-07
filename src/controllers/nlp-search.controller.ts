@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { NlpSearchService } from "../services/nlp-search.service";
 
 export class NlpSearchController {
-  static async search(req: Request, res: Response): Promise<void> {
+  static async search(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { q, minRating, maxPrice, language } = req.query;
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
 
     if (!q || typeof q !== "string") {
       res.status(400).json({ success: false, message: "Query 'q' is required" });

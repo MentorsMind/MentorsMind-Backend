@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { DeepLinkService, DeepLinkType } from "../services/deepLink.service";
 import { extractClientIp } from "../utils/log-formatter.utils";
 import { logger } from "../utils/logger";
@@ -8,7 +9,7 @@ export const DeepLinkController = {
    * GET /dl/:type/:id
    * Handles redirection for deep links.
    */
-  async handleRedirection(req: Request, res: Response): Promise<void> {
+  async handleRedirection(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { type, id } = req.params as Record<string, string>;
     const userAgent = req.headers["user-agent"];
     const ipAddress = extractClientIp(req);
@@ -24,7 +25,7 @@ export const DeepLinkController = {
         {
           type: type as DeepLinkType,
           id,
-          userId: (req as any).user?.id,
+          userId: req.user?.id,
         },
         userAgent,
         ipAddress,
