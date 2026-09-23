@@ -63,7 +63,7 @@ interface ContentDocument {
   created_at: string;
 }
 
-class ElasticsearchService {
+export class ElasticsearchService {
   private client: Client | null = null;
   private isConnected = false;
 
@@ -77,6 +77,7 @@ class ElasticsearchService {
     try {
       const authConfig: any = {
         node: config.elasticsearch.url,
+        requestTimeout: config.elasticsearch.requestTimeoutMs,
       };
 
       if (config.elasticsearch.username && config.elasticsearch.password) {
