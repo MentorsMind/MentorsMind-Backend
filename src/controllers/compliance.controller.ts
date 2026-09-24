@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ResponseUtil } from "../utils/response.utils";
 import { ComplianceService, DSARType, DataRetentionPolicy } from "../services/compliance.service";
 import { complianceReportingService } from "../services/compliance-reporting.service";

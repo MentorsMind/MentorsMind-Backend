@@ -1,7 +1,8 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { logger } from "../utils/logger.utils";
+import type { AuthenticatedRequest } from "../types/auth.types";
 
 const JWT_SECRET = env.JWT_SECRET;
 const LAST_ACTIVE_DEBOUNCE_MS = 60 * 1000; // 1 minute
@@ -9,21 +10,8 @@ const LAST_ACTIVE_DEBOUNCE_MS = 60 * 1000; // 1 minute
 // In-memory debounce map: userId -> last update timestamp
 const lastActiveDebounce = new Map<string, number>();
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    userId: string;
-    email?: string;
-    role: string;
-    mfaVerified?: boolean;
-    /** Set to true when this request is authenticated via an impersonation token */
-    isImpersonation?: boolean;
-    /** The admin user ID who initiated the impersonation */
-    impersonatedBy?: string;
-    /** The impersonation session ID — used for revocation checks */
-    impersonationSessionId?: string;
-  };
-}
+// Re-exported so existing `AuthenticatedRequest` imports from this module keep working.
+export type { AuthenticatedRequest };
 
 export const authenticate = async (
   req: AuthenticatedRequest,

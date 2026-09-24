@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionQualityService, MentorQualityTier } from "../services/session-quality.service";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 

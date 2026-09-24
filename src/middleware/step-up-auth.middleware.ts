@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from './auth.middleware';
 import { AdminService } from '../services/admin.service';
 
 const getCodeFromRequest = (req: AuthenticatedRequest): string | null => {

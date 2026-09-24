@@ -4,7 +4,7 @@
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { MentorsService } from '../services/mentors.service';
 import { ResponseUtil } from '../utils/response.utils';
 

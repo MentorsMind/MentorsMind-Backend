@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdvancedAnalyticsService } from "../services/advanced-analytics.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";

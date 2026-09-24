@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { EventReplayService, ReplayProgress } from '../services/event-replay.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { logger } from '../utils/logger';
