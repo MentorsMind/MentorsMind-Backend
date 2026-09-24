@@ -102,20 +102,46 @@ export const db = {
 // tenant isolation at the database layer, providing a defense-in-depth
 // guarantee even if the application-level tenant filter is bypassed.
 //
-// Usage:
-//   const client = await TenantPoolManager.connect(tenantId);
-//   await client.query('SELECT * FROM bookings');
-//   client.release();
+// Usage (see the JSDoc on connect() / withClient() below for full examples):
+//   await TenantPoolManager.withClient(tenantId, async (client) => {
+//     await client.query('SELECT * FROM bookings');
+//   });
+//
+// Queries sent through the plain `pool` / `db` exports never set
+// `app.tenant_id`, so RLS treats them as unfiltered. Use TenantPoolManager
+// for any tenant-scoped data.
 //
 // The variable is reset to '' on release so the next borrower of that
 // connection gets a clean slate.
 
 export const TenantPoolManager = {
   /**
-   * Acquire a pool client with `app.tenant_id` set to `tenantId`.
+   * Acquire a pool client with `app.tenant_id` set to `tenantId`, so RLS
+   * policies restrict every query on it to that tenant's rows.
    *
-   * @param tenantId  UUID of the tenant to scope queries to, an empty string
-   *                  for no filtering, or the '__ADMIN_BYPASS__' sentinel.
+   * You MUST call `client.release()` in a `finally` block — a leaked client
+   * exhausts the pool and keeps its tenant setting. Prefer `withClient()`,
+   * which does this for you; use `connect()` only when you need to hold the
+   * client across several steps (e.g. an explicit transaction).
+   *
+   * `tenantId` handling:
+   *  - UUID               → rows restricted to that tenant
+   *  - '__ADMIN_BYPASS__' → all rows (admin routes only)
+   *  - null / ''          → no RLS filtering
+   *  - anything else      → logged and treated as '' (NO filtering)
+   *
+   * @example
+   * const client = await TenantPoolManager.connect(TenantContext.requireTenantId());
+   * try {
+   *   await client.query('BEGIN');
+   *   await client.query('UPDATE bookings SET status = $1 WHERE id = $2', ['cancelled', id]);
+   *   await client.query('COMMIT');
+   * } catch (err) {
+   *   await client.query('ROLLBACK');
+   *   throw err;
+   * } finally {
+   *   client.release();
+   * }
    */
   async connect(tenantId: string | null): Promise<PoolClient> {
     const client = await pool.connect();
@@ -125,9 +151,9 @@ export const TenantPoolManager = {
     const safeId = sanitizeTenantId(tenantId);
 
     try {
-      // Use set_config with is_local=TRUE so the value is scoped to the
-      // current transaction (reverted on ROLLBACK / COMMIT). When outside a
-      // transaction, the value persists until the connection is released.
+      // Use set_config with is_local=FALSE so the value applies to the whole
+      // session (surviving COMMIT / ROLLBACK) until the wrapped release()
+      // below resets it.
       await client.query(`SELECT set_config('app.tenant_id', $1, FALSE)`, [safeId]);
     } catch (err) {
       client.release();
@@ -151,12 +177,22 @@ export const TenantPoolManager = {
 
   /**
    * Execute a callback with a tenant-scoped client, automatically releasing
-   * the connection when done (or on error).
+   * the connection when done (or on error). This is the default way to run
+   * tenant-scoped queries.
+   *
+   * Take the tenant ID from `TenantContext`, never from request input. Pair
+   * it with `withTenantFilter` so isolation holds even where RLS is not
+   * enabled on the table. Do not keep a reference to `client` after the
+   * callback returns — it has already been released.
    *
    * @example
-   * const result = await TenantPoolManager.withClient(tenantId, (client) =>
-   *   client.query('SELECT * FROM bookings WHERE id = $1', [id])
-   * );
+   * const tenantId = TenantContext.requireTenantId();
+   * const bookings = await TenantPoolManager.withClient(tenantId, async (client) => {
+   *   const { query, params } = withTenantFilter(
+   *     'SELECT * FROM bookings WHERE mentor_id = $1', [mentorId], tenantId);
+   *   const { rows } = await client.query(query, params);
+   *   return rows;
+   * });
    */
   async withClient<T>(
     tenantId: string | null,
