@@ -114,12 +114,20 @@ function isCancelledBeforeSession(booking: BookingRecord): boolean {
   return booking.scheduled_at > new Date();
 }
 
+let bookingsServiceInitialized = false;
+
 export const BookingsService = {
   /**
    * Initialize bookings service (starts background monitoring only).
    * Table schema is managed by migrations, not runtime DDL.
+   * Idempotent — safe to call multiple times.
    */
   async initialize(): Promise<void> {
+    if (bookingsServiceInitialized) {
+      logger.info("BookingsService already initialized, skipping");
+      return;
+    }
+    bookingsServiceInitialized = true;
     // Start pending escrow monitoring (background job)
     SorobanEscrowService.startPendingEscrowMonitoring();
   },
