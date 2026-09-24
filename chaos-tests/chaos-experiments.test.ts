@@ -1,12 +1,14 @@
 import { databaseFailureExperiment } from "../experiments/database-failure";
 import { networkPartitionExperiment } from "../experiments/network-partition";
 import { serviceOutageExperiment } from "../experiments/service-outage";
+import { redisFailureExperiment } from "../experiments/redis-failure";
 import type { ChaosExperiment } from "./types";
 
 const experiments: ChaosExperiment[] = [
   databaseFailureExperiment(),
   networkPartitionExperiment(),
   serviceOutageExperiment(),
+  redisFailureExperiment(),
 ];
 
 describe("resilience experiments", () => {

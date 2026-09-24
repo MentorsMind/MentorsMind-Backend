@@ -63,20 +63,12 @@ import leaderboardRoutes from "../leaderboard.routes";
 
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
-import { notificationCleanupService } from "../../services/notification-cleanup.service";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
 
 const router = Router();
 
-// Service initialization (async, non-blocking)
-// Note: These services no longer create tables at runtime.
-// Table schema is managed exclusively by migration files.
-BookingsService.initialize().catch((err) => {
-  logger.error("Failed to initialize bookings service:", err);
-});
-notificationCleanupService.initialize().catch((err: unknown) => {
-  logger.error("Failed to initialize notification cleanup service:", err);
-});
+// Service initialization moved to src/routes/index.ts (top-level router)
+// This ensures services are initialized exactly once, avoiding duplicate subscriptions and listeners
 
 router.use("/auth", authRoutes);
 router.use("/users", usersRoutes);
