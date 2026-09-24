@@ -33,7 +33,14 @@ const TIER_DISCOUNT_BPS: Record<string, number> = {
   platinum: 150,
 };
 
-const TIER_THRESHOLDS = { bronze: 0, silver: 100, gold: 500, platinum: 2000 };
+// Balance (spending) thresholds per tier — exported so boundary tests and
+// consumers reference the same source of truth instead of magic numbers.
+export const TIER_THRESHOLDS = {
+  bronze: 0,
+  silver: 100,
+  gold: 500,
+  platinum: 2000,
+} as const;
 const TIER_BENEFITS: Record<string, string[]> = {
   bronze: ["5% session discount"],
   silver: ["10% session discount", "Priority support"],
@@ -53,7 +60,7 @@ const EARN_RULES: EarnRule[] = [
   { action: "daily_login", tokensEarned: "1", maxPerDay: "1" },
 ];
 
-function computeTier(
+export function computeTier(
   balance: number,
 ): "bronze" | "silver" | "gold" | "platinum" {
   if (balance >= TIER_THRESHOLDS.platinum) return "platinum";

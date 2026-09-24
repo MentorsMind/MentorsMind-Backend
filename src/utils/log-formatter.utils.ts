@@ -28,6 +28,8 @@ export interface StructuredLogPayload {
     action: AuditAction | string;
     message: string;
     userId?: string;
+    /** Owning tenant — falls back to TenantContext when omitted. */
+    tenantId?: string;
     entityType?: string;
     entityId?: string;
     metadata?: Record<string, any>;
@@ -45,6 +47,7 @@ export const formatAuditLogJSON = (payload: StructuredLogPayload): string => {
         action: payload.action,
         message: payload.message,
         user_id: payload.userId || null,
+        tenant_id: payload.tenantId || null,
         entity_type: payload.entityType || null,
         entity_id: payload.entityId || null,
         metadata: payload.metadata || {},

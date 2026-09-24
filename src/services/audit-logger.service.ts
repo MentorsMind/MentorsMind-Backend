@@ -5,10 +5,12 @@ import {
   StructuredLogPayload,
 } from '../utils/log-formatter.utils';
 import { logger } from '../utils/logger';
+import { TenantContext } from '../utils/tenant-context.utils';
 
 export interface AuditLogSearchParams {
   action?: string;
   userId?: string;
+  tenantId?: string;
   level?: string;
   entityType?: string;
   entityId?: string;
@@ -47,6 +49,9 @@ export const AuditLoggerService = {
       action: payload.action,
       message: payload.message,
       user_id: payload.userId || null,
+      // Explicit tenantId wins; otherwise fall back to the request's
+      // TenantContext so tenant-scoped operations are always tagged.
+      tenant_id: payload.tenantId ?? TenantContext.getTenantId() ?? null,
       entity_type: payload.entityType || null,
       entity_id: payload.entityId || null,
       metadata: payload.metadata || {},
@@ -70,6 +75,10 @@ export const AuditLoggerService = {
     if (params.userId) {
       conditions.push(`user_id = $${idx++}`);
       values.push(params.userId);
+    }
+    if (params.tenantId) {
+      conditions.push(`tenant_id = $${idx++}`);
+      values.push(params.tenantId);
     }
     if (params.level) {
       conditions.push(`level = $${idx++}`);
