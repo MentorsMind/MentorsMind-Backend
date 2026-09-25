@@ -23,6 +23,12 @@ export enum AuditAction {
     VERIFICATION_RETRY = 'VERIFICATION_RETRY',
 }
 
+export enum SystemActor {
+    AUTO_RELEASE = 'auto_release',
+    CRON_JOB = 'cron_job',
+    ADMIN_OVERRIDE = 'admin_override',
+}
+
 export interface StructuredLogPayload {
     level: LogLevel;
     action: AuditAction | string;
@@ -33,6 +39,7 @@ export interface StructuredLogPayload {
     metadata?: Record<string, any>;
     ipAddress?: string;
     userAgent?: string;
+    actorType?: SystemActor;
 }
 
 /**
@@ -47,7 +54,10 @@ export const formatAuditLogJSON = (payload: StructuredLogPayload): string => {
         user_id: payload.userId || null,
         entity_type: payload.entityType || null,
         entity_id: payload.entityId || null,
-        metadata: payload.metadata || {},
+        metadata: {
+            ...payload.metadata,
+            ...(payload.actorType && { system_actor: payload.actorType }),
+        },
         ip_address: payload.ipAddress || null,
         user_agent: payload.userAgent || null,
     };

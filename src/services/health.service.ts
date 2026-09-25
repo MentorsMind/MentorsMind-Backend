@@ -4,6 +4,7 @@ import config from "../config";
 import { redisConfig } from "../config/redis.config";
 import { CacheService } from "./cache.service";
 import { JwksService } from "./jwks.service";
+import { OracleService } from "./oracle.service";
 import { logger } from "../utils/logger.utils";
 import { CURRENT_VERSION } from "../config/api-versions.config";
 import { validateRequiredTables } from "../utils/table-validator.utils";
@@ -32,6 +33,7 @@ export interface DetailedHealthStatus {
     system?: HealthComponent;
     jwks?: HealthComponent;
     verificationContract?: HealthComponent;
+    oracle?: HealthComponent;
   };
   uptime: number;
   version: string;
@@ -149,6 +151,7 @@ export class HealthService {
       analyticsViewsCheck,
       jwksCheck,
       verificationContractCheck,
+      oracleCheck,
     ] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
@@ -158,6 +161,7 @@ export class HealthService {
       this.checkAnalyticsViews(),
       this.checkJwks(),
       this.checkVerificationContract(),
+      this.checkOracle(),
     ]);
 
     // Critical components for readiness: all must not be 'unhealthy'
@@ -195,10 +199,46 @@ export class HealthService {
         system: this.getSystemInfo(),
         jwks: jwksCheck,
         verificationContract: verificationContractCheck,
+        oracle: oracleCheck,
       },
       uptime: process.uptime(),
       version: config.server.apiVersion || CURRENT_VERSION,
       timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Reports whether the Soroban oracle contract is available.
+   *
+   * - "healthy"  – oracle is configured and serving fresh prices.
+   * - "degraded" – oracle circuit-breaker triggered; service is using
+   *                last-known-good prices (up to 10 min old).  Ops should
+   *                investigate feeder availability or STALE_SECS threshold.
+   * - "healthy"  – oracle is not configured (optional component).
+   */
+  private static async checkOracle(): Promise<HealthComponent> {
+    if (!OracleService.isConfigured()) {
+      return {
+        status: "healthy",
+        details: { configured: false },
+      };
+    }
+
+    if (OracleService.isDegraded) {
+      return {
+        status: "degraded",
+        error: OracleService.degradedReason || "Oracle circuit-breaker open",
+        details: {
+          configured: true,
+          usingLastKnownGood: true,
+          lkgMaxStalenessMs: 10 * 60 * 1000,
+        },
+      };
+    }
+
+    return {
+      status: "healthy",
+      details: { configured: true, usingLastKnownGood: false },
     };
   }
 

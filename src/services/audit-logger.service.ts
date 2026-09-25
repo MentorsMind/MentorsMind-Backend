@@ -144,4 +144,62 @@ export const AuditLoggerService = {
     const { rowCount } = await pool.query(query, [retentionDays]);
     return rowCount ?? 0;
   },
+
+  /**
+   * Query to distinguish auto vs manual escrow releases for the Admin UI.
+   * Returns a breakdown of releases with their actor types and metadata.
+   */
+  async getEscrowReleaseAudits(params: {
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<PaginatedAuditLogs> {
+    const conditions: string[] = [
+      `action = 'ADMIN_ACTION'`,
+      `entity_type = 'escrow'`,
+      `message LIKE 'Escrow % released%'`
+    ];
+    const values: any[] = [];
+    let idx = 1;
+
+    if (params.startDate) {
+      conditions.push(`created_at >= $${idx++}`);
+      values.push(params.startDate);
+    }
+    if (params.endDate) {
+      conditions.push(`created_at <= $${idx++}`);
+      values.push(params.endDate);
+    }
+
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
+
+    // Count Query for pagination
+    const countQuery = `SELECT COUNT(*) FROM audit_logs ${whereClause}`;
+    const countResult = await pool.query(countQuery, [...values]);
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    const limit = params.limit ?? 50;
+    const offset = params.offset ?? 0;
+    
+    // The UI can distinguish auto-releases by checking if metadata->>'system_actor' === 'auto_release'
+    // Manual releases will either lack 'system_actor' or have it set to 'admin_override'.
+    const query = `
+      SELECT 
+        id, level, action, message, user_id, entity_type, entity_id, 
+        metadata, ip_address, user_agent, created_at
+      FROM audit_logs
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${idx++} OFFSET $${idx}
+    `;
+
+    values.push(limit, offset);
+    const { rows } = await pool.query<AuditLogRecord>(query, values);
+
+    return {
+      data: rows,
+      total,
+    };
+  }
 };

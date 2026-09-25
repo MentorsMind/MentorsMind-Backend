@@ -4,7 +4,10 @@
  * Responsibilities:
  *  - Query the deployed Soroban oracle contract for XLM/USD (and other) prices
  *  - Cache prices in Redis with a 60 s TTL (matches the oracle's STALE_SECS window)
- *  - Expose staleness so callers can apply a circuit-breaker fallback (e.g. SDEX)
+ *  - Catch contract panics (stale prices, insufficient feeders, TWAP circuit-breaker)
+ *    and map them to a typed OracleUnavailableError
+ *  - Fall back to a last-known-good (LKG) price cache (max 10-minute staleness)
+ *  - Expose a degradedMode flag for GET /health/ready
  */
 
 import * as StellarSdk from '@stellar/stellar-sdk';
@@ -23,7 +26,74 @@ const PRICE_SCALE = 10_000_000; // 7 decimals, matches Stellar stroop convention
 const MONITORED_ASSETS = ['XLM'];
 const STALENESS_CHECK_INTERVAL_MS = 60_000; // matches ORACLE_PRICE_TTL_SECONDS
 
+/** Maximum age (ms) for the last-known-good fallback price before it is also rejected. */
+export const LKG_MAX_STALENESS_MS = 10 * 60 * 1_000; // 10 minutes
+
 const cacheKey = (asset: string) => `mm:oracle:price:${asset}`;
+/** Separate Redis key-space for last-known-good prices so they survive normal TTL expiry. */
+const lkgCacheKey = (asset: string) => `mm:oracle:lkg:${asset}`;
+
+// ---------------------------------------------------------------------------
+// Contract-error patterns emitted by the Soroban oracle contract
+// (matches panic strings in contracts/oracle/src/lib.rs)
+// ---------------------------------------------------------------------------
+
+/** Substrings present in contract panic messages that indicate a circuit-breaker condition. */
+const CONTRACT_ERROR_PATTERNS = [
+  'not enough feeders',
+  'no prices',
+  'no TWAP available',
+  'price deviation exceeds circuit breaker threshold',
+  'stale',
+  'unauthorized feeder',
+] as const;
+
+// ---------------------------------------------------------------------------
+// Typed error
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown when the oracle contract panics due to:
+ *  - Fewer than MIN_FEEDERS registered feeders ("not enough feeders")
+ *  - No price data submitted ("no prices")
+ *  - Price deviation beyond the 50 % TWAP circuit-breaker threshold
+ *  - Stale prices detected by the contract's STALE_SECS check
+ *
+ * Callers should catch this and fall back to SDEX or cached data.
+ */
+export class OracleUnavailableError extends Error {
+  public readonly code = ErrorCode.ORACLE_UNAVAILABLE;
+  public readonly statusCode = 503;
+  public readonly isOperational = true;
+  /** The raw contract error message for diagnostics. */
+  public readonly contractError: string;
+  /** Whether a last-known-good fallback was used. */
+  public readonly usedFallback: boolean;
+
+  constructor(contractError: string, usedFallback = false) {
+    super(
+      `Oracle contract unavailable${usedFallback ? ' (using last-known-good cache)' : ''}: ${contractError}`,
+    );
+    this.name = 'OracleUnavailableError';
+    this.contractError = contractError;
+    this.usedFallback = usedFallback;
+    Object.setPrototypeOf(this, OracleUnavailableError.prototype);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the error message matches one of the known contract panic
+ * patterns that indicate the oracle circuit-breaker has triggered.
+ */
+export function isContractError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const msg = err.message.toLowerCase();
+  return CONTRACT_ERROR_PATTERNS.some((pattern) => msg.includes(pattern.toLowerCase()));
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,9 +105,17 @@ export interface OraclePrice {
   twap: string; // decimal string
   isStale: boolean;
   updatedAt: string; // ISO timestamp
+  /** Set to true when the price comes from the LKG cache, not a fresh contract call. */
+  fromFallback?: boolean;
 }
 
-interface OracleContractClient {
+/** Stamped alongside an LKG entry so we can enforce maximum staleness. */
+interface LkgEntry {
+  price: OraclePrice;
+  cachedAt: number; // Date.now() ms
+}
+
+export interface OracleContractClient {
   getPrice(asset: string): Promise<{ price: bigint; updatedAt: number }>;
   getTwap(asset: string): Promise<bigint>;
   isPriceStale(asset: string): Promise<boolean>;
@@ -152,6 +230,14 @@ class OracleServiceImpl {
   private stalenessTimer: NodeJS.Timeout | null = null;
   private lastAlertedStale = new Set<string>();
 
+  /**
+   * True when the oracle is operating in degraded mode (last fresh fetch failed
+   * and the service is serving last-known-good prices). Exposed for /health/ready.
+   */
+  public degradedMode = false;
+  /** Reason string surfaced in the health check. Empty when not degraded. */
+  public degradedReason = '';
+
   constructor(private client: OracleContractClient) {}
 
   setClient(client: OracleContractClient): void {
@@ -174,8 +260,44 @@ class OracleServiceImpl {
     return address;
   }
 
+  // ---------------------------------------------------------------------------
+  // Last-known-good cache helpers
+  // ---------------------------------------------------------------------------
+
+  private async setLkg(asset: string, price: OraclePrice): Promise<void> {
+    const entry: LkgEntry = { price, cachedAt: Date.now() };
+    // Store for 1 hour — we enforce our own staleness check on read.
+    await CacheService.set(lkgCacheKey(asset), entry, 3600);
+  }
+
+  private async getLkg(asset: string): Promise<OraclePrice | null> {
+    const entry = await CacheService.get<LkgEntry>(lkgCacheKey(asset));
+    if (!entry) return null;
+
+    const ageMs = Date.now() - entry.cachedAt;
+    if (ageMs > LKG_MAX_STALENESS_MS) {
+      logger.warn('Oracle LKG cache exceeded maximum staleness — discarding', {
+        asset,
+        ageMs,
+        maxMs: LKG_MAX_STALENESS_MS,
+      });
+      return null;
+    }
+
+    return { ...entry.price, fromFallback: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
   /**
    * Return the current price for an asset, using a 60 s Redis cache.
+   *
+   * On contract failure (stale prices / insufficient feeders / circuit-breaker):
+   *  1. Attempts to serve the last-known-good price if it is ≤ 10 minutes old.
+   *  2. Throws OracleUnavailableError when no valid fallback exists.
+   *
    * `isStale` reflects the oracle contract's own circuit-breaker check
    * (last update older than its STALE_SECS window), not just cache age.
    */
@@ -188,29 +310,85 @@ class OracleServiceImpl {
     const cached = await CacheService.get<OraclePrice>(key);
     if (cached) return cached;
 
-    const price = await this.fetchPriceFromContract(asset);
-    await CacheService.set(key, price, ORACLE_PRICE_TTL_SECONDS);
-    return price;
+    try {
+      const price = await this.fetchPriceFromContract(asset);
+      await CacheService.set(key, price, ORACLE_PRICE_TTL_SECONDS);
+      // Persist as last-known-good on every successful fetch.
+      await this.setLkg(asset, price);
+      this.setDegradedMode(false);
+      return price;
+    } catch (err) {
+      const contractErrMsg = err instanceof Error ? err.message : String(err);
+
+      if (isContractError(err) || err instanceof OracleUnavailableError) {
+        logger.warn('Oracle contract error — attempting last-known-good fallback', {
+          asset,
+          error: contractErrMsg,
+        });
+
+        this.setDegradedMode(true, contractErrMsg);
+
+        const lkg = await this.getLkg(asset);
+        if (lkg) {
+          logger.info('Serving oracle price from last-known-good cache', { asset });
+          return lkg;
+        }
+
+        // No valid fallback — propagate a typed error.
+        throw new OracleUnavailableError(contractErrMsg, false);
+      }
+
+      // Non-contract errors (network, RPC timeouts) are re-thrown as-is.
+      throw err;
+    }
   }
 
   /**
    * Bypass cache and query the oracle contract directly.
+   * Throws OracleUnavailableError when the contract panics.
    */
   async fetchPriceFromContract(asset: string): Promise<OraclePrice> {
-    const [{ price, updatedAt }, twap, isStale] = await Promise.all([
-      this.client.getPrice(asset),
-      this.client.getTwap(asset).catch(() => null),
-      this.client.isPriceStale(asset),
-    ]);
+    try {
+      const [{ price, updatedAt }, twap, isStale] = await Promise.all([
+        this.client.getPrice(asset),
+        this.client.getTwap(asset).catch(() => null),
+        this.client.isPriceStale(asset),
+      ]);
 
-    return {
-      asset,
-      price: scaledToDecimalString(price),
-      twap: twap !== null ? scaledToDecimalString(twap) : scaledToDecimalString(price),
-      isStale,
-      updatedAt: new Date(updatedAt * 1000).toISOString(),
-    };
+      return {
+        asset,
+        price: scaledToDecimalString(price),
+        twap: twap !== null ? scaledToDecimalString(twap) : scaledToDecimalString(price),
+        isStale,
+        updatedAt: new Date(updatedAt * 1000).toISOString(),
+      };
+    } catch (err) {
+      if (isContractError(err)) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new OracleUnavailableError(msg);
+      }
+      throw err;
+    }
   }
+
+  // ---------------------------------------------------------------------------
+  // Degraded-mode state management
+  // ---------------------------------------------------------------------------
+
+  private setDegradedMode(degraded: boolean, reason = ''): void {
+    if (degraded && !this.degradedMode) {
+      logger.error('OracleService entering degraded mode', { reason });
+      logWarning('Oracle entering degraded mode', { reason });
+    } else if (!degraded && this.degradedMode) {
+      logger.info('OracleService recovered from degraded mode');
+    }
+    this.degradedMode = degraded;
+    this.degradedReason = degraded ? reason : '';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Background staleness monitoring
+  // ---------------------------------------------------------------------------
 
   /**
    * Start a background interval that polls the oracle for staleness and
@@ -272,4 +450,7 @@ export const OracleService = {
   fetchPriceFromContract: (asset: string) => oracleService.fetchPriceFromContract(asset),
   startStalenessMonitoring: () => oracleService.startStalenessMonitoring(),
   stopStalenessMonitoring: () => oracleService.stopStalenessMonitoring(),
+  /** Current degraded-mode state — consumed by HealthService. */
+  get isDegraded() { return oracleService.degradedMode; },
+  get degradedReason() { return oracleService.degradedReason; },
 };

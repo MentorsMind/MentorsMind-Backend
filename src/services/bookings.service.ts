@@ -24,6 +24,7 @@ import { SessionSummaryModel } from "../models/session-summary.model";
 import { MentorsService } from "./mentors.service";
 import { LoyaltyService } from "./loyalty.service";
 import { scheduleNoShowCheck } from "../queues/session-no-show.queue";
+import { scheduleReputationSync } from "../queues/reputation-sync.queue";
 import config from "../config";
 import { withSpan } from "../utils/tracing.utils";
 import { EventStoreService } from "./event-store.service";

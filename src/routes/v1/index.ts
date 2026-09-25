@@ -60,6 +60,7 @@ import taxRoutes from "../tax.routes";
 import emailWebhookRoutes from "../emailWebhook.routes";
 import gamificationRoutes from "../gamification.routes";
 import leaderboardRoutes from "../leaderboard.routes";
+import stakingRoutes from "../staking.routes";
 
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
@@ -161,6 +162,9 @@ router.use("/developer", developerRoutes);
 
 // Tax reporting export (issue #978) — /api/v1/tax
 router.use("/tax", taxRoutes);
+
+// Staking integration (issue #995)
+router.use("/staking", stakingRoutes);
 
 // Inbound provider webhooks (issue #979) — unauthenticated, signature-verified
 router.use("/webhooks/email", emailWebhookRoutes);

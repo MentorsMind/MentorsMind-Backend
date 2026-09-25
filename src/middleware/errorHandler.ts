@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { logger } from "../utils/logger.utils";
 import { traceStore } from "./tracing.middleware";
 import { CircuitBreakerError } from "../services/database.service";
+import { OracleUnavailableError } from "../services/oracle.service";
 import {
   ErrorCode,
   ERROR_CATALOG,
@@ -122,6 +123,25 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  if (err instanceof OracleUnavailableError) {
+    res.setHeader("Retry-After", "60");
+    res.status(503).json({
+      status: "error",
+      code: ErrorCode.ORACLE_UNAVAILABLE,
+      message: err.message,
+      details: {
+        contractError: err.contractError,
+        usedFallback: err.usedFallback,
+      },
+      requestId:
+        traceStore.getStore()?.requestId ||
+        (req as any).requestId ||
+        res.locals?.requestId,
+      timestamp: new Date().toISOString(),
+    } satisfies ErrorResponse & { details: Record<string, unknown> });
+    return;
+  }
+
   if (err instanceof CircuitBreakerError) {
     const retryAfter = (err as CircuitBreakerError).retryAfterSeconds;
     res.setHeader("Retry-After", String(retryAfter));
