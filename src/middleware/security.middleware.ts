@@ -18,6 +18,7 @@ export const securityMiddleware = helmet({
       mediaSrc: ["'self'"],
       manifestSrc: ["'self'"],
       workerSrc: ["'self'"],
+      reportUri: ['/api/v1/csp-report'],
       upgradeInsecureRequests: [],
     },
     reportOnly: false,

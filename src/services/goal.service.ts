@@ -8,6 +8,7 @@ import {
   GoalMentorSuggestion,
 } from '../models/goal.model';
 import { createError } from '../middleware/errorHandler';
+import { ErrorCode } from '../errors/error-codes';
 
 import { LearnerService } from './learners.service';
 
@@ -67,6 +68,13 @@ export class GoalService {
   }
 
   static async updateProgress(id: string, learnerId: string, progress: number, notes?: string): Promise<Goal> {
+    if (typeof progress !== 'number' || !Number.isFinite(progress) || progress < 0 || progress > 100) {
+      throw createError(ErrorCode.BAD_REQUEST, 400, {
+        field: 'progress',
+        reason: 'Progress must be between 0 and 100',
+      });
+    }
+
     const goal = await this.getGoal(id, learnerId);
     
     // Log progress history (this also updates the goal.progress in DB)
