@@ -481,12 +481,13 @@ export const BookingsService = {
       throw createError(ErrorCode.BOOKING_NOT_CONFIRMED, 400);
     }
 
-    // Verify session time has passed
+    // Verify session time has passed or both participants have joined
     const sessionEnd = calculateEndTime(
       booking.scheduled_at,
       booking.duration_minutes,
     );
-    if (sessionEnd > new Date()) {
+    const bothJoined = !!(booking.mentor_joined_at && booking.mentee_joined_at);
+    if (sessionEnd > new Date() && !bothJoined) {
       throw createError(ErrorCode.BOOKING_SESSION_NOT_ENDED, 400);
     }
 
