@@ -44,6 +44,10 @@ const app: Application = express();
 const { apiVersion } = config.server;
 const resolvedApiVersion = apiVersion || CURRENT_VERSION;
 
+// Disable X-Powered-By header to prevent technology stack disclosure
+// This mitigates information disclosure vulnerabilities
+app.disable("x-powered-by");
+
 // Initialize i18n
 initializeI18n().catch((err) => {
   logger.error("Failed to initialize i18n", { error: err });
