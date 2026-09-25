@@ -69,8 +69,13 @@ import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
 import { notificationCleanupService } from "../../services/notification-cleanup.service";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
+import { deprecationMiddleware } from "../../middleware/deprecation.middleware";
+import { initializeDeprecationRegistry } from "../../config/deprecation-registry";
 
 const router = Router();
+
+// Populate the deprecation registry consumed by deprecationMiddleware (issue #1096)
+initializeDeprecationRegistry();
 
 // Service initialization (async, non-blocking)
 // Note: These services no longer create tables at runtime.
@@ -157,7 +162,9 @@ router.use("/offline", offlineRoutes);
 router.use("/sync", syncRoutes);
 
 // Unified global search across mentors, sessions, and messages (issue #738)
-router.use("/search", searchRoutes);
+// deprecationMiddleware adds Deprecation/Sunset headers to v1-only deprecated
+// search endpoints (see src/config/deprecation-registry.ts, issue #1096)
+router.use("/search", deprecationMiddleware, searchRoutes);
 
 // NLP-powered natural language mentor search (issue #739)
 router.use("/search", nlpSearchRoutes);
