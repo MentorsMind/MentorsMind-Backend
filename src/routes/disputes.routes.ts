@@ -2,13 +2,13 @@ import { Router } from "express";
 import { DisputesController } from "../controllers/disputes.controller";
 import { validate } from "../middleware/validation.middleware";
 import { authenticate, requireRole } from "../middleware/auth.middleware";
+import { disputeIdParamSchema } from "../validators/schemas/disputes.schemas";
 import {
-  disputeIdParamSchema,
   openDisputeSchema,
   uploadEvidenceSchema,
   resolveDisputeSchema,
   mediateDisputeSchema,
-} from "../validators/schemas/disputes.schemas";
+} from "../validators/disputes.validator";
 
 const router = Router();
 

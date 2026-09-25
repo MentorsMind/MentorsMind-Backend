@@ -1,7 +1,7 @@
 import { db } from "../config/database";
 import { server } from "../config/stellar";
 import config from "../config";
-import { redisConfig } from "../config/redis.config";
+import { redis } from "../config/redis";
 import { CacheService } from "./cache.service";
 import { JwksService } from "./jwks.service";
 import { OracleService } from "./oracle.service";
@@ -51,6 +51,14 @@ export class HealthService {
 
   private static readonly HEALTHY_CACHE_TTL_MS = 5000;
   private static readonly UNHEALTHY_CACHE_TTL_MS = 1000;
+
+  /**
+   * GET /health/detailed
+   * Returns full detailed health status.
+   */
+  static async getDetailedHealth(): Promise<DetailedHealthStatus> {
+    return this.checkReadiness();
+  }
 
   /**
    * GET /health/live
@@ -164,13 +172,12 @@ export class HealthService {
       this.checkOracle(),
     ]);
 
-    // Critical components for readiness: all must not be 'unhealthy'
-    const criticalComponents = [dbCheck, redisCheck, horizonCheck];
-    const isUnhealthy = criticalComponents.some(
-      (c) => c.status === "unhealthy",
-    );
+    // DB check is critical for server liveness.
+    // If Redis or Horizon are unhealthy/degraded, overall status is 'degraded' (returns 200).
+    const isUnhealthy = dbCheck.status === "unhealthy";
     const isDegraded =
-      !isUnhealthy && criticalComponents.some((c) => c.status === "degraded");
+      !isUnhealthy &&
+      (redisCheck.status !== "healthy" || horizonCheck.status !== "healthy" || dbCheck.status === "degraded");
 
     const status: HealthStatus = isUnhealthy
       ? "unhealthy"
@@ -378,23 +385,21 @@ export class HealthService {
   private static async checkRedis(): Promise<HealthComponent> {
     const start = Date.now();
 
-    if (!redisConfig.url) {
-      return { status: "degraded", error: "Redis URL not configured" };
-    }
-
-    if (!CacheService.isDistributed()) {
-      return { status: "degraded", error: "Redis shared client not connected" };
-    }
-
     try {
-      // Ping via the shared client — no new connection created
-      await CacheService.ping();
-      return { status: "healthy", responseTimeMs: Date.now() - start };
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Redis ping timeout")), 2000)
+      );
+
+      await Promise.race([redis.ping(), timeoutPromise]);
+      return {
+        status: "healthy",
+        responseTimeMs: Date.now() - start,
+      };
     } catch (err: any) {
       return {
         status: "unhealthy",
         responseTimeMs: Date.now() - start,
-        error: err.message,
+        error: err?.message || String(err),
       };
     }
   }
