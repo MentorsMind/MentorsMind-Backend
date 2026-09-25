@@ -358,7 +358,7 @@ export const ReviewsService = {
       throw createError("Mentor not found", 404);
     }
 
-    const limit = params.limit ?? 10;
+    const limit = params.limit ?? 20;
     const page = params.page ?? 1;
 
     // Count total reviews for this mentor (optional for cursor perf, but kept for backward compatibility)
