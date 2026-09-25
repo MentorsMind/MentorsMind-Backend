@@ -136,6 +136,18 @@ export const ReviewsService = {
       const booking = bookingResult.rows[0];
       const mentorId = booking.mentor_id;
 
+      // Prevent self-review: reviewer cannot be the same as reviewee
+      if (reviewerId === mentorId) {
+        throw createError(
+          "You cannot review yourself",
+          400,
+        );
+      }
+
+      // Verify booking ownership: mentee and mentor match the session
+      // (already verified mentee_id above; also verify mentor_id is not the reviewer)
+      // This additional check prevents booking manipulation attacks
+
       // Check for existing review on same booking_id + reviewer_id
       const existingReview = await client.query(
         `SELECT id FROM reviews WHERE booking_id = $1 AND reviewer_id = $2`,
