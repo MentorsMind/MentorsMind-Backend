@@ -75,8 +75,8 @@ app.use(tenantMiddleware as any);
 app.use(requireJsonContentType);
 
 // Body parsing
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 app.use(sanitizeInput);
     app.use(distributedGeneralLimiter);
