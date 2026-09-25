@@ -208,15 +208,22 @@ export const errorHandler = (
  *                   interpolation of placeholders like {{field}}
  */
 export const createError = (
-  code: ErrorCode,
+  code: ErrorCode | string,
   httpStatus?: number,
   details?: Record<string, unknown>,
 ): AppError => {
-  const catalogEntry =
-    ERROR_CATALOG[code] ?? getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
-  const error: AppError = new Error(catalogEntry.message);
-  error.code = code;
-  error.statusCode = httpStatus ?? catalogEntry.httpStatus;
+  const isCatalogKey = typeof code === "string" && code in ERROR_CATALOG;
+  const catalogEntry = isCatalogKey || (typeof code === "string" && !(code in ERROR_CATALOG) === false)
+    ? ERROR_CATALOG[code as ErrorCode]
+    : getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
+
+  const message = (typeof code === "string" && !isCatalogKey)
+    ? code
+    : (catalogEntry?.message ?? String(code));
+
+  const error: AppError = new Error(message);
+  error.code = code as ErrorCode;
+  error.statusCode = httpStatus ?? catalogEntry?.httpStatus ?? 500;
   error.isOperational = true;
   error.details = details;
   return error;

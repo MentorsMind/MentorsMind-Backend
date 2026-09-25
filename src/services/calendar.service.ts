@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { redis } from "../config/redis";
 import { pool } from "../config/database";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   buildICalFeed,
   generateICalToken,
@@ -159,7 +160,7 @@ export const CalendarService = {
       "SELECT ical_token, ical_token_expires_at FROM users WHERE id = $1",
       [userId],
     );
-    if (!rows[0]) throw createError("User not found", 404);
+    if (!rows[0]) throw createError(ErrorCode.USER_NOT_FOUND, 404);
 
     if (
       rows[0].ical_token &&
@@ -190,7 +191,7 @@ export const CalendarService = {
       "UPDATE users SET ical_token = $1, ical_token_expires_at = $2 WHERE id = $3",
       [token, expiresAt, userId],
     );
-    if (!rowCount) throw createError("User not found", 404);
+    if (!rowCount) throw createError(ErrorCode.USER_NOT_FOUND, 404);
     return token;
   },
 
@@ -207,7 +208,7 @@ export const CalendarService = {
       dynamicAdjustment: false,
     });
     if (!rlResult.allowed) {
-      throw createError("Rate limit exceeded for iCal feed", 429);
+      throw createError(ErrorCode.ICAL_RATE_LIMIT_EXCEEDED, 429);
     }
 
     // 2. Fetch user
@@ -215,13 +216,13 @@ export const CalendarService = {
       "SELECT id, first_name, last_name, ical_token_expires_at FROM users WHERE ical_token = $1 AND is_active = true",
       [token],
     );
-    if (!rows[0]) throw createError("Invalid or expired iCal token", 404);
+    if (!rows[0]) throw createError(ErrorCode.ICAL_TOKEN_INVALID, 404);
 
     const user = rows[0];
 
     // 3. Check token expiry (1 year)
     if (user.ical_token_expires_at && user.ical_token_expires_at < new Date()) {
-      throw createError("Invalid or expired iCal token", 404);
+      throw createError(ErrorCode.ICAL_TOKEN_INVALID, 404);
     }
 
     // 4. Update access stats
@@ -358,7 +359,7 @@ export const CalendarService = {
        WHERE id = $1`,
       [userId],
     );
-    if (!rowCount) throw createError("User not found", 404);
+    if (!rowCount) throw createError(ErrorCode.USER_NOT_FOUND, 404);
   },
 
   // ---- Google Calendar event management ------------------------------------
@@ -446,7 +447,7 @@ export const CalendarService = {
        WHERE b.id = $1`,
       [bookingId],
     );
-    if (!rows[0]) throw createError("Booking not found", 404);
+    if (!rows[0]) throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
     const booking = rows[0];
 
     const eventBody = {
@@ -542,7 +543,7 @@ export const CalendarService = {
        WHERE b.id = $1`,
       [bookingId],
     );
-    if (!rows[0]) throw createError("Booking not found", 404);
+    if (!rows[0]) throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
     const booking = rows[0];
 
     const participants: Array<{ id: string; eventId: string | null }> = [
