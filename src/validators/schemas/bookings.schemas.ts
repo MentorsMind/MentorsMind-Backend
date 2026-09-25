@@ -14,8 +14,8 @@ export const createBookingSchema = z.object({
       .min(1, 'Scheduled time is required')
       .datetime({ message: 'scheduledAt must be an ISO 8601 datetime string' })
       .refine(
-        (v) => new Date(v) > new Date(),
-        { message: 'Booking must be scheduled in the future' }
+        (v) => new Date(v) > new Date(Date.now() + 30 * 60 * 1000),
+        { message: 'scheduledAt must be at least 30 minutes in the future' }
       ),
     durationMinutes: z
       .number()
