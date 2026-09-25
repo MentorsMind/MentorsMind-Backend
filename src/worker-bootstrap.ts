@@ -41,12 +41,10 @@ async function startWorkers() {
     taxReportingWorker,
     startScheduler,
     stopScheduler,
-    startOutboxWorker,
-    stopOutboxWorker,
-  } = await import("./workers");
+          } = await import("./workers");
 
   await startScheduler();
-  await startOutboxWorker();
+  
 
   logger.info("[WorkerProcess] All workers and scheduler started", {
     workers: [

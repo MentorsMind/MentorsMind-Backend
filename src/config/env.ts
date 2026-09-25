@@ -20,6 +20,35 @@ dotenv.config({
 // ---------------------------------------------------------------------------
 const envSchema = z.object({
   // Server
+
+  // Multi-Region Overrides
+  REGION_US_EAST_1_DB_HOST: z.string().optional(),
+  REGION_US_EAST_1_DB_PORT: z.string().optional(),
+  REGION_US_EAST_1_POOL_SIZE: z.string().optional(),
+  REGION_US_EAST_1_REPLICA_1_HOST: z.string().optional(),
+  REGION_US_EAST_1_CACHE_HOST: z.string().optional(),
+  REGION_US_EAST_1_BROKER_HOST: z.string().optional(),
+
+  REGION_EU_WEST_1_DB_HOST: z.string().optional(),
+  REGION_EU_WEST_1_DB_PORT: z.string().optional(),
+  REGION_EU_WEST_1_POOL_SIZE: z.string().optional(),
+  REGION_EU_WEST_1_REPLICA_1_HOST: z.string().optional(),
+  REGION_EU_WEST_1_CACHE_HOST: z.string().optional(),
+  REGION_EU_WEST_1_BROKER_HOST: z.string().optional(),
+
+  REGION_AP_SOUTHEAST_1_DB_HOST: z.string().optional(),
+  REGION_AP_SOUTHEAST_1_DB_PORT: z.string().optional(),
+  REGION_AP_SOUTHEAST_1_POOL_SIZE: z.string().optional(),
+  REGION_AP_SOUTHEAST_1_REPLICA_1_HOST: z.string().optional(),
+  REGION_AP_SOUTHEAST_1_CACHE_HOST: z.string().optional(),
+  REGION_AP_SOUTHEAST_1_BROKER_HOST: z.string().optional(),
+  
+  MULTI_REGION_ENABLED: z.string().optional(),
+  PRIMARY_REGION: z.string().optional(),
+  ACTIVE_REGIONS: z.string().optional(),
+  OVERRIDE_REGION: z.string().optional(),
+  DB_SSL: z.string().optional(),
+
   NODE_ENV: z
     .enum(["development", "test", "production", "staging"])
     .default("development"),

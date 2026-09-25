@@ -58,7 +58,7 @@ export const SkillTestService = {
       );
 
       if (testRows.length === 0) {
-        throw createError("Skill test not found", 404);
+        throw createError(ErrorCode.SKILL_TEST_NOT_FOUND, 404);
       }
 
       const test = this.transformSkillTest(testRows[0]);
@@ -131,11 +131,11 @@ export const SkillTestService = {
     try {
       const attempt = await this.getTestAttempt(data.attemptId);
       if (!attempt) {
-        throw createError("Test attempt not found", 404);
+        throw createError(ErrorCode.TEST_ATTEMPT_NOT_FOUND, 404);
       }
 
       if (attempt.status !== "in_progress") {
-        throw createError("Test attempt is not in progress", 400);
+        throw createError(ErrorCode.TEST_ATTEMPT_NOT_IN_PROGRESS, 400);
       }
 
       // Get the test
@@ -145,7 +145,7 @@ export const SkillTestService = {
       );
 
       if (testRows.length === 0) {
-        throw createError("Skill test not found", 404);
+        throw createError(ErrorCode.SKILL_TEST_NOT_FOUND, 404);
       }
 
       const test = this.transformSkillTest(testRows[0]);
@@ -253,11 +253,11 @@ export const SkillTestService = {
     try {
       const attempt = await this.getTestAttempt(attemptId);
       if (!attempt) {
-        throw createError("Test attempt not found", 404);
+        throw createError(ErrorCode.TEST_ATTEMPT_NOT_FOUND, 404);
       }
 
       if (attempt.status !== "in_progress") {
-        throw createError("Test attempt is not in progress", 400);
+        throw createError(ErrorCode.TEST_ATTEMPT_NOT_IN_PROGRESS, 400);
       }
 
       await pool.query(
@@ -291,7 +291,7 @@ export const SkillTestService = {
       );
 
       if (rows.length === 0) {
-        throw createError("Skill test not found", 404);
+        throw createError(ErrorCode.SKILL_TEST_NOT_FOUND, 404);
       }
 
       const questions: TestQuestion[] = rows[0].questions;

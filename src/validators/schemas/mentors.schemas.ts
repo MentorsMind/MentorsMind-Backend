@@ -74,7 +74,7 @@ export const updateMentorProfileSchema = z.object({
 export const listMentorsSchema = z.object({
   query: cursorPaginationSchema.shape.query.extend({
     search: z.string().trim().max(200).optional(),
-    expertise: z.string().trim().max(100).optional(),
+    expertise: expertiseSchema.optional(),
     minRate: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
     maxRate: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
     isAvailable: z.string().optional().transform((v) => v === 'true' ? true : v === 'false' ? false : undefined),
@@ -89,7 +89,7 @@ export const listMentorsSearchSchema = z.object({
     page: z.string().optional().transform((v) => (v ? parseInt(v, 10) : 1)),
     limit: z.string().optional().transform((v) => (v ? parseInt(v, 10) : 10)),
     search: z.string().trim().max(200).optional(),
-    expertise: z.string().trim().max(100).optional(),
+    expertise: expertiseSchema.optional(),
     minRate: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
     maxRate: z.string().optional().transform((v) => (v ? parseFloat(v) : undefined)),
     isAvailable: z.string().optional().transform((v) => v === 'true' ? true : v === 'false' ? false : undefined),

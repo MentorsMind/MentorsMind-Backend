@@ -36,7 +36,7 @@ jobs:
         continue-on-error: true # Keep going even if there are lint errors so SonarQube can track them
 
       - name: Run Unit Tests with coverage
-        run: pnpm run test:unit -- --coverage --coverageDirectory=coverage
+        run: pnpm run test:unit --coverage --coverageDirectory=coverage
         env:
           NODE_ENV: test
           JWT_SECRET: "ci-e2e-jwt-secret-at-least-32-characters-long!!!"

@@ -193,6 +193,47 @@ export class CacheService {
     }
   }
 
+
+  /** Add members to a set */
+  static async sadd(key: string, members: string[], ttlSeconds = redisConfig.defaultTtl): Promise<void> {
+    try {
+      if (members.length === 0) return;
+      const client = await getClient();
+      if (client) {
+        await withCacheSpan("sadd", key, "redis", () => client.sadd(key, ...members));
+        await withCacheSpan("expire", key, "redis", () => client.expire(key, ttlSeconds));
+      } else {
+        const current = new Set(JSON.parse(memGet(key) || '[]') as string[]);
+        for (const m of members) current.add(m);
+        memSet(key, JSON.stringify(Array.from(current)), ttlSeconds);
+      }
+      track('sets', key);
+    } catch (err: any) {
+      track('errors', key);
+      logger.warn('Cache sadd error', { key, error: err.message });
+    }
+  }
+
+  /** Check if member is in set */
+  static async sismember(key: string, member: string): Promise<boolean> {
+    try {
+      const client = await getClient();
+      if (client) {
+        const res = await withCacheSpan("sismember", key, "redis", () => client.sismember(key, member));
+        track('hits', key);
+        return res === 1;
+      } else {
+        const current = JSON.parse(memGet(key) || '[]') as string[];
+        track('hits', key);
+        return current.includes(member);
+      }
+    } catch (err: any) {
+      track('errors', key);
+      logger.warn('Cache sismember error', { key, error: err.message });
+      return false;
+    }
+  }
+
   /** Delete a specific key */
   static async del(key: string): Promise<void> {
     try {

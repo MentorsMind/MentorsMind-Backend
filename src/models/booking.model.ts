@@ -93,6 +93,17 @@ export const BookingModel = {
       limit?: number;
     },
   ): Promise<{ bookings: BookingRecord[]; total: number }> {
+    return this.findByUser(userId, filters);
+  },
+
+  async findByUser(
+    userId: string,
+    filters?: {
+      status?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{ bookings: BookingRecord[]; total: number }> {
     const page = filters?.page || 1;
     const limit = filters?.limit || 10;
     const offset = (page - 1) * limit;
@@ -107,29 +118,38 @@ export const BookingModel = {
       paramIndex++;
     }
 
-    // Apply tenant filter on top of the existing WHERE clause
+    // Apply tenant filter on top of the existing WHERE clause with COUNT(*) OVER()
     const { query: baseQuery, params: filteredParams } = withCurrentTenantFilter(
-      `SELECT * FROM bookings WHERE ${whereClause}`,
+      `SELECT *, COUNT(*) OVER() AS total_count FROM bookings WHERE ${whereClause}`,
       baseParams,
     );
     const finalParamIndex = filteredParams.length + 1;
 
-    const { query: countQuery, params: countParams } = withCurrentTenantFilter(
-      `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
-      baseParams,
+    const dataResult = await db.query(
+      `${baseQuery} ORDER BY scheduled_at DESC LIMIT $${finalParamIndex} OFFSET $${finalParamIndex + 1}`,
+      [...filteredParams, limit, offset],
     );
 
-    const [dataResult, countResult] = await Promise.all([
-      db.query(
-        `${baseQuery} ORDER BY scheduled_at DESC LIMIT $${finalParamIndex} OFFSET $${finalParamIndex + 1}`,
-        [...filteredParams, limit, offset],
-      ),
-      db.query(countQuery, countParams),
-    ]);
+    let total = 0;
+    if (dataResult.rows.length > 0) {
+      total = Number(dataResult.rows[0].total_count) || 0;
+    } else if (offset > 0) {
+      const { query: countQuery, params: countParams } = withCurrentTenantFilter(
+        `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
+        baseParams,
+      );
+      const countResult = await db.query(countQuery, countParams);
+      total = Number(countResult.rows[0]?.count) || 0;
+    }
+
+    const bookings: BookingRecord[] = dataResult.rows.map((row: any) => {
+      const { total_count, ...record } = row;
+      return record as BookingRecord;
+    });
 
     return {
-      bookings: dataResult.rows,
-      total: parseInt(countResult.rows[0].count, 10),
+      bookings,
+      total,
     };
   },
 

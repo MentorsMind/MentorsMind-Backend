@@ -140,11 +140,11 @@ async function logSyncError(
 }
 
 export const vestingSyncWorker = new Worker<VestingSyncJobData>(
-  QUEUE_NAMES.VESTING_SYNC,
+  'vesting-sync-queue',
   processVestingSync,
   {
     connection: redisConnection,
-    concurrency: CONCURRENCY.VESTING_SYNC || 1,
+    concurrency: 1 || 1,
   },
 );
 

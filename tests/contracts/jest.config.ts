@@ -4,7 +4,7 @@ const config: Config = {
   displayName: 'contract',
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testMatch: ['**/tests/contracts/**/*.spec.ts'],
+  testMatch: ['**/tests/contracts/**/*.spec.ts', '**/tests/contracts/**/*.pact.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
   transform: {
     '^.+\\.tsx?$': [

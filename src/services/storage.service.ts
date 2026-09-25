@@ -214,11 +214,11 @@ export const StorageService = {
             Transitions: [
               {
                 Days: 30,
-                StorageClass: 'STANDARD_IA' as StorageClass,
+                StorageClass: 'STANDARD_IA',
               },
               {
                 Days: 90,
-                StorageClass: 'GLACIER' as StorageClass,
+                StorageClass: 'GLACIER',
               },
             ],
             Expiration: {

@@ -1,3 +1,4 @@
+import pino from "pino";
 import { env } from "../config/env";
 import { maskPIIDeep } from "./pii-mask";
 
@@ -7,12 +8,12 @@ import { maskPIIDeep } from "./pii-mask";
 // ---------------------------------------------------------------------------
 interface PinoLogger {
   level: string;
-  info(obj: object | string, msg?: string, ...args: unknown[]): void;
-  debug(obj: object | string, msg?: string, ...args: unknown[]): void;
-  warn(obj: object | string, msg?: string, ...args: unknown[]): void;
-  error(obj: object | string, msg?: string, ...args: unknown[]): void;
-  fatal(obj: object | string, msg?: string, ...args: unknown[]): void;
-  trace(obj: object | string, msg?: string, ...args: unknown[]): void;
+  info(obj: object | string, msg?: any, ...args: unknown[]): void;
+  debug(obj: object | string, msg?: any, ...args: unknown[]): void;
+  warn(obj: object | string, msg?: any, ...args: unknown[]): void;
+  error(obj: object | string, msg?: any, ...args: unknown[]): void;
+  fatal(obj: object | string, msg?: any, ...args: unknown[]): void;
+  trace(obj: object | string, msg?: any, ...args: unknown[]): void;
   child(bindings: Record<string, unknown>): PinoLogger;
 }
 
@@ -45,12 +46,7 @@ const LOG_LEVEL: string =
   (IS_TEST ? "silent" : IS_PRODUCTION ? "info" : "debug");
 
 function createPinoLogger(): PinoLogger {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mod: any = (globalThis as any).require?.("pino") ??
-    // fallback: when bundled with ts-node, module is available via eval
-    Function("m", "return require(m)")("pino"); // eslint-disable-line no-new-func
-  const factory = typeof mod === "function" ? mod : mod?.default ?? mod;
-  return factory({
+  return (pino as any)({
     level: LOG_LEVEL,
     redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
     ...(IS_PRODUCTION
@@ -79,7 +75,7 @@ export class Logger {
     this.child = logger.child({ context });
   }
 
-  info(obj: object | string, msg?: string): void {
+  info(obj: object | string, msg?: any): void {
     if (typeof obj === "string") {
       this.child.info(obj);
     } else {
@@ -87,7 +83,7 @@ export class Logger {
     }
   }
 
-  debug(obj: object | string, msg?: string): void {
+  debug(obj: object | string, msg?: any): void {
     if (typeof obj === "string") {
       this.child.debug(obj);
     } else {
@@ -95,7 +91,7 @@ export class Logger {
     }
   }
 
-  warn(obj: object | string, msg?: string): void {
+  warn(obj: object | string, msg?: any): void {
     if (typeof obj === "string") {
       this.child.warn(obj);
     } else {
@@ -103,7 +99,7 @@ export class Logger {
     }
   }
 
-  error(obj: object | string, msg?: string): void {
+  error(obj: object | string, msg?: any): void {
     if (typeof obj === "string") {
       this.child.error(obj);
     } else {

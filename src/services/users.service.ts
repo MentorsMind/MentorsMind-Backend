@@ -114,7 +114,7 @@ export class UserReader implements IUserReader {
 
 export class UserWriter implements IUserWriter {
   constructor(
-    private readonly pool: typeof pool,
+    private readonly pool: any,
     private readonly encryption: typeof EncryptionUtil,
     private readonly mapper: IUserMapper,
     private readonly reader: IUserReader,
