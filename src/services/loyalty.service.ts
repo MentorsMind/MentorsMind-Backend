@@ -53,7 +53,7 @@ const EARN_RULES: EarnRule[] = [
   { action: "daily_login", tokensEarned: "1", maxPerDay: "1" },
 ];
 
-function computeTier(
+export function computeTier(
   balance: number,
 ): "bronze" | "silver" | "gold" | "platinum" {
   if (balance >= TIER_THRESHOLDS.platinum) return "platinum";

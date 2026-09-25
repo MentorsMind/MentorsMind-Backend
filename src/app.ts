@@ -84,6 +84,80 @@ app.use(sanitizeInput);
 app.use(versioningMiddleware);
 app.set("trust proxy", 1);
 
+// GraphQL endpoint — POST /api/graphql.
+// The endpoint itself is mounted by initializeGraphQL(app) (called from
+// src/server.ts → src/graphql/server.ts via Apollo's expressMiddleware), but
+// the Swagger/OpenAPI entry is declared here so it is discoverable alongside
+// the rest of the API documentation (issue #1078).
+/**
+ * @swagger
+ * /api/graphql:
+ *   post:
+ *     summary: Execute a GraphQL query or mutation
+ *     description: |
+ *       Single-endpoint GraphQL interface for the MentorMinds API.
+ *
+ *       Send a JSON body containing a `query` document (optionally with
+ *       `variables` and `operationName`). Authentication uses the same
+ *       `Authorization: Bearer <access_token>` header as the REST API.
+ *
+ *       **Exploring the schema:** outside production the Apollo GraphQL
+ *       Playground is served at this path (open `GET /api/graphql` in a
+ *       browser) and schema introspection is enabled, so you can discover
+ *       every available query, mutation, and type directly from the endpoint.
+ *     tags: [GraphQL]
+ *     security:
+ *       - bearerAuth: []
+ *     servers:
+ *       - url: /
+ *         description: GraphQL is mounted at /api/graphql (outside the /api/v1 prefix)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - query
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 description: GraphQL query or mutation document
+ *                 example: "{ me { id email } }"
+ *               variables:
+ *                 type: object
+ *                 additionalProperties: true
+ *                 description: Values for variables declared in the query document
+ *               operationName:
+ *                 type: string
+ *                 description: Operation name when the document contains multiple operations
+ *     responses:
+ *       '200':
+ *         description: |
+ *           Generic GraphQL execution result — `data` is present on success,
+ *           `errors` is present when validation or execution fails.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   nullable: true
+ *                   description: Query/mutation result
+ *                 errors:
+ *                   type: array
+ *                   description: Execution or validation errors
+ *                   items:
+ *                     type: object
+ *       '400':
+ *         description: Malformed GraphQL request
+ *       '401':
+ *         description: Missing or invalid bearer token
+ *       '429':
+ *         description: Rate limit exceeded
+ */
+
 // Swagger docs (served on the current default version)
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
 app.use(
