@@ -126,101 +126,137 @@ export const BookingsService = {
 
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
     return withSpan("BookingsService.createBooking", async () => {
-      // Batch-validate both users in a single query (avoids N+1)
-    const { rows: users } = await db.query(
-      `SELECT id, role, status FROM users WHERE id = ANY($1) AND is_active = true`,
-      [[data.menteeId, data.mentorId]],
-    );
+      const client = await db.connect();
+      try {
+        await client.query("BEGIN");
 
-    const mentee = users.find((u: any) => u.id === data.menteeId);
-    const mentor = users.find((u: any) => u.id === data.mentorId);
+        // Key lock on mentor ID + date truncated to the hour
+        const dateHour = new Date(data.scheduledAt);
+        dateHour.setMinutes(0, 0, 0);
+        const lockKey = `${data.mentorId}:${dateHour.toISOString()}`;
 
-    if (!mentee) {
-      throw createError(ErrorCode.BOOKING_MENTEE_NOT_FOUND, 404);
-    }
-    if (!mentor) {
-      throw createError(ErrorCode.BOOKING_MENTOR_NOT_FOUND, 404);
-    }
+        // Attempt to acquire advisory lock for up to 5 seconds
+        let acquired = false;
+        const startTime = Date.now();
+        while (Date.now() - startTime < 5000) {
+          const { rows } = await client.query(
+            "SELECT pg_try_advisory_xact_lock(hashtext($1)) as locked",
+            [lockKey],
+          );
+          if (rows[0].locked) {
+            acquired = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
 
-    // Prevent suspended or banned users from booking
-    if (mentee.status === "suspended") {
-      throw createError(ErrorCode.BOOKING_USER_SUSPENDED, 403);
-    }
-    if (mentee.status === "banned") {
-      throw createError(ErrorCode.BOOKING_USER_BANNED, 403);
-    }
-    if (mentor.status === "suspended" || mentor.status === "banned") {
-      throw createError(ErrorCode.MENTOR_NOT_AVAILABLE, 400);
-    }
+        if (!acquired) {
+          throw createError(ErrorCode.BOOKING_CONFLICT, 409);
+        }
 
-    if (mentor.role !== "mentor") {
-      throw createError(ErrorCode.BOOKING_USER_NOT_A_MENTOR, 400);
-    }
+        // Batch-validate both users in a single query (avoids N+1)
+        const { rows: users } = await client.query( // use the locked client here instead of db
+          `SELECT id, role, status FROM users WHERE id = ANY($1) AND is_active = true`,
+          [[data.menteeId, data.mentorId]],
+        );
 
-    // Check for booking conflicts
-    const hasConflict = await BookingModel.checkConflict(
-      data.mentorId,
-      data.scheduledAt,
-      data.durationMinutes,
-    );
+        const mentee = users.find((u: any) => u.id === data.menteeId);
+        const mentor = users.find((u: any) => u.id === data.mentorId);
 
-    if (hasConflict) {
-      throw createError(ErrorCode.BOOKING_CONFLICT, 409);
-    }
+        if (!mentee) {
+          throw createError(ErrorCode.BOOKING_MENTEE_NOT_FOUND, 404);
+        }
+        if (!mentor) {
+          throw createError(ErrorCode.BOOKING_MENTOR_NOT_FOUND, 404);
+        }
 
-    // Calculate amount from mentor profile
-    const mentorProfile = await MentorsService.findById(data.mentorId);
-    if (!mentorProfile || mentorProfile.hourly_rate === null) {
-      throw createError(ErrorCode.BOOKING_MENTOR_PROFILE_NOT_FOUND, 404);
-    }
-    const hourlyRate = mentorProfile.hourly_rate;
-    const amount = ((data.durationMinutes / 60) * hourlyRate).toFixed(7);
+        // Prevent suspended or banned users from booking
+        if (mentee.status === "suspended") {
+          throw createError(ErrorCode.BOOKING_USER_SUSPENDED, 403);
+        }
+        if (mentee.status === "banned") {
+          throw createError(ErrorCode.BOOKING_USER_BANNED, 403);
+        }
+        if (mentor.status === "suspended" || mentor.status === "banned") {
+          throw createError(ErrorCode.MENTOR_NOT_AVAILABLE, 400);
+        }
 
-    // Best-effort USD equivalent (oracle preferred, SDEX fallback via
-    // AssetExchangeService). Never blocks booking creation on failure.
-    let usdEquivalent: string | null = null;
-    try {
-      const rate = await AssetExchangeService.getRate("XLM", "USDC");
-      usdEquivalent = (parseFloat(amount) * parseFloat(rate.rate)).toFixed(2);
-    } catch (error) {
-      logger.warn("Failed to compute USD equivalent for booking amount", {
-        mentorId: data.mentorId,
-        error: error instanceof Error ? error.message : error,
-      });
-    }
+        if (mentor.role !== "mentor") {
+          throw createError(ErrorCode.BOOKING_USER_NOT_A_MENTOR, 400);
+        }
 
-    // Create booking
-    const booking = await BookingModel.create({
-      menteeId: data.menteeId,
-      mentorId: data.mentorId,
-      scheduledAt: data.scheduledAt,
-      durationMinutes: data.durationMinutes,
-      topic: data.topic,
-      notes: data.notes,
-      amount,
-      currency: "XLM",
-      usdEquivalent,
-    });
+        // Check for booking conflicts
+        const hasConflict = await BookingModel.checkConflict(
+          data.mentorId,
+          data.scheduledAt,
+          data.durationMinutes,
+        );
 
-    // Dual-write: domain event alongside direct DB write (migration period)
-    await publishBookingDomainEvent(
-      booking.id,
-      BookingProjectionEventType.BookingCreated,
-      {
-        menteeId: booking.mentee_id,
-        mentorId: booking.mentor_id,
-        scheduledAt: booking.scheduled_at,
-        durationMinutes: booking.duration_minutes,
-        topic: booking.topic,
-        notes: booking.notes,
-        amount: booking.amount,
-        currency: booking.currency,
-        status: booking.status,
-        paymentStatus: booking.payment_status,
-      },
-      data.menteeId,
-    );
-      return booking;
+        if (hasConflict) {
+          throw createError(ErrorCode.BOOKING_CONFLICT, 409);
+        }
+
+        // Calculate amount from mentor profile
+        const mentorProfile = await MentorsService.findById(data.mentorId);
+        if (!mentorProfile || mentorProfile.hourly_rate === null) {
+          throw createError(ErrorCode.BOOKING_MENTOR_PROFILE_NOT_FOUND, 404);
+        }
+        const hourlyRate = mentorProfile.hourly_rate;
+        const amount = ((data.durationMinutes / 60) * hourlyRate).toFixed(7);
+
+        // Best-effort USD equivalent (oracle preferred, SDEX fallback via
+        // AssetExchangeService). Never blocks booking creation on failure.
+        let usdEquivalent: string | null = null;
+        try {
+          const rate = await AssetExchangeService.getRate("XLM", "USDC");
+          usdEquivalent = (parseFloat(amount) * parseFloat(rate.rate)).toFixed(2);
+        } catch (error) {
+          logger.warn("Failed to compute USD equivalent for booking amount", {
+            mentorId: data.mentorId,
+            error: error instanceof Error ? error.message : error,
+          });
+        }
+
+        // Create booking
+        const booking = await BookingModel.create({
+          menteeId: data.menteeId,
+          mentorId: data.mentorId,
+          scheduledAt: data.scheduledAt,
+          durationMinutes: data.durationMinutes,
+          topic: data.topic,
+          notes: data.notes,
+          amount,
+          currency: "XLM",
+          usdEquivalent,
+        });
+
+        // Dual-write: domain event alongside direct DB write (migration period)
+        await publishBookingDomainEvent(
+          booking.id,
+          BookingProjectionEventType.BookingCreated,
+          {
+            menteeId: booking.mentee_id,
+            mentorId: booking.mentor_id,
+            scheduledAt: booking.scheduled_at,
+            durationMinutes: booking.duration_minutes,
+            topic: booking.topic,
+            notes: booking.notes,
+            amount: booking.amount,
+            currency: booking.currency,
+            status: booking.status,
+            paymentStatus: booking.payment_status,
+          },
+          data.menteeId,
+        );
+
+        await client.query("COMMIT");
+        return booking;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     }, { menteeId: data.menteeId, mentorId: data.mentorId });
   },
 
