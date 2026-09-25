@@ -137,6 +137,31 @@ export const createWalletSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Wallet transfer request schemas
+// ---------------------------------------------------------------------------
+
+export const walletTransferSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Wallet ID is required'),
+  }),
+  body: z.object({
+    amount: stellarAmountSchema,
+    destinationAddress: stellarAddressSchema,
+    assetCode: optionalAssetCodeSchema,
+    memo: stellarMemoSchema,
+  }).strict().refine(
+    (data) => {
+      const amount = parseFloat(data.amount);
+      return amount > 0;
+    },
+    {
+      message: 'Amount must be positive',
+      path: ['amount'],
+    }
+  ),
+});
+
+// ---------------------------------------------------------------------------
 // Type exports
 // ---------------------------------------------------------------------------
 
@@ -146,6 +171,7 @@ export type TransactionQuery = z.infer<typeof transactionQuerySchema>['query'];
 export type EarningsQuery = z.infer<typeof earningsQuerySchema>['query'];
 export type BalanceQuery = z.infer<typeof balanceQuerySchema>['query'];
 export type CreateWalletInput = z.infer<typeof createWalletSchema>['body'];
+export type WalletTransferInput = z.infer<typeof walletTransferSchema>['body'];
 
 // ---------------------------------------------------------------------------
 // Schema validation helpers
