@@ -1,3 +1,11 @@
+/**
+ * Users Seed — Creates admin, mentor, and mentee user accounts.
+ * 
+ * Generates deterministic user records with pre-hashed passwords, Stellar keys,
+ * and profile data (mentors: expertise, rates, bios; mentees: basic profiles).
+ * Size-configurable: test (2 mentors, 3 mentees) or dev (5 mentors, 10 mentees).
+ */
+
 import { PoolClient } from 'pg';
 import { SeedFn, SeedSize, SEED_SIZES, seededRandom, pick, pickN } from '../../src/utils/seed-runner.utils';
 

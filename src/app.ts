@@ -79,8 +79,8 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use(sanitizeInput);
-    app.use(distributedGeneralLimiter);
-    app.use(metricsMiddleware);
+app.use(distributedGeneralLimiter);
+app.use(metricsMiddleware);
 app.use(versioningMiddleware);
 app.set("trust proxy", 1);
 
@@ -189,31 +189,12 @@ AdvancedCacheService.initialize().catch((err) => {
   logger.error("AdvancedCacheService initialization failed", { error: err });
 });
 
-// ─── GET /api/versions ────────────────────────────────────────────────────────
-app.get("/api/versions", (_req, res) => {
-  const versions = Object.values(API_VERSIONS).map((v) => ({
-    version: (v as any).version,
-    active: (v as any).active,
-    current: (v as any).version === CURRENT_VERSION,
-    ...((v as any).deprecatedAt && { deprecatedAt: (v as any).deprecatedAt }),
-    ...((v as any).sunsetAt && { sunsetAt: (v as any).sunsetAt }),
-    ...((v as any).deprecationMessage && {
-      deprecationMessage: (v as any).deprecationMessage,
-    }),
-    links: {
-      docs: (v as any).active ? `/api/${(v as any).version}/docs` : null,
-    },
-  }));
+import { ApiVersionsController } from "./controllers/api-versions.controller";
 
-  res.json({
-    status: "success",
-    data: {
-      current: CURRENT_VERSION,
-      supported: SUPPORTED_VERSIONS,
-      versions,
-    },
-  });
-});
+// ─── GET /api/versions ────────────────────────────────────────────────────────
+// Meta-endpoint: discover API versions, deprecation timelines, migration guides
+// No authentication required; publicly cacheable
+app.get("/api/versions", (req: any, res: any) => ApiVersionsController.getVersions(req, res));
 
 // ─── API Gateway (opt-in via GATEWAY_ENABLED) ────────────────────────────────
 // Service-discovery context is always attached (cheap, additive); the routing /

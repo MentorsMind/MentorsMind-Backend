@@ -1,3 +1,11 @@
+/**
+ * Reviews Seed — Creates reviews for completed bookings.
+ * 
+ * Generates 3–5 star ratings with sub-ratings (communication, professionalism, knowledge, punctuality).
+ * Reviews are created only for completed sessions from sessions.seed.
+ * Titles and comments are randomly selected from predefined pools using deterministic RNG.
+ */
+
 import { PoolClient } from 'pg';
 import { SeedFn, SeedSize, seededRandom, pick } from '../../src/utils/seed-runner.utils';
 import { seededBookings } from './sessions.seed';
