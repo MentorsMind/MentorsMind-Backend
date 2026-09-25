@@ -101,8 +101,8 @@ export const MentorsService = {
       values.push(`%${search}%`);
       idx++;
     }
-    if (expertise) {
-      conditions.push(`$${idx} = ANY(expertise)`);
+    if (expertise && expertise.length > 0) {
+      conditions.push(`expertise && $${idx}`);
       values.push(expertise);
       idx++;
     }

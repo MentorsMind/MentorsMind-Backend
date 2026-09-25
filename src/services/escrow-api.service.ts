@@ -3,6 +3,7 @@ import { DisputeModel } from '../models/dispute.model';
 import pool from '../config/database';
 import { SorobanEscrowService } from './sorobanEscrow.service';
 import { logger } from '../utils/logger.utils';
+import { SystemActor } from '../utils/log-formatter.utils';
 
 export class EscrowApiService {
   /**
@@ -59,7 +60,8 @@ export class EscrowApiService {
   static async releaseEscrow(
     escrowId: string,
     userId: string,
-    stellarTxHash?: string
+    stellarTxHash?: string,
+    actor?: SystemActor
   ): Promise<EscrowRecord> {
     const escrow = await EscrowModel.findById(escrowId);
     
@@ -72,12 +74,12 @@ export class EscrowApiService {
       throw new Error(`Cannot release escrow in ${escrow.status} status`);
     }
 
-    // Only learner can release funds
-    if (escrow.learner_id !== userId) {
+    // Only learner can release funds, unless it's an automated/system action
+    if (escrow.learner_id !== userId && actor !== SystemActor.AUTO_RELEASE && actor !== SystemActor.ADMIN_OVERRIDE) {
       throw new Error('Only the learner can release funds');
     }
 
-    logger.info('Releasing escrow', { escrowId, userId });
+    logger.info('Releasing escrow', { escrowId, userId, actor });
 
     let txHashFromChain: string | null = null;
     if (SorobanEscrowService.isConfigured()) {

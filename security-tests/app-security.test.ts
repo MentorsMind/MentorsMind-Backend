@@ -19,8 +19,8 @@ describe("OWASP baseline controls", () => {
       .post("/echo")
       .send({ displayName: '<script>alert("xss")</script>' });
 
-    expect(response.status).toBe(200);
-    expect(JSON.stringify(response.body)).not.toContain("<script");
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("MALICIOUS_INPUT_DETECTED");
   });
 
   it("rejects requests containing multiple injection classes", async () => {

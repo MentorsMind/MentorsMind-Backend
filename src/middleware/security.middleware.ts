@@ -138,7 +138,8 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
         contentLength,
         maxAllowed: validationConfig.maxBodySize
       });
-      return res.status(413).json({
+      res.status(413).json({
+
         status: 'error',
         code: 'PAYLOAD_TOO_LARGE',
         message: 'Request body size exceeds the allowed limit'
@@ -164,7 +165,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
           url: req.originalUrl,
           injectionTypes: { sql: sqlDetected, xss: xssDetected, cmd: cmdDetected }
         });
-        return res.status(400).json({
+        res.status(400).json({
           status: 'error',
           code: 'MALICIOUS_INPUT_DETECTED',
           message: 'Request contains potentially malicious content'
@@ -192,7 +193,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
             paramLength: value.length,
             maxAllowed: validationConfig.maxQueryParamLength
           });
-          return res.status(400).json({
+          res.status(400).json({
             status: 'error',
             code: 'QUERY_PARAM_TOO_LARGE',
             message: `Query parameter '${key}' exceeds size limit`
@@ -223,7 +224,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
     });
     
     // Fail securely - reject request if security validation fails
-    return res.status(500).json({
+    res.status(500).json({
       status: 'error',
       code: 'SECURITY_VALIDATION_ERROR',
       message: 'Security validation failed'

@@ -64,7 +64,7 @@ export async function scheduleStaleDisputeCheck(): Promise<void> {
     DisputeJobType.ESCALATE_STALE,
     {},
     {
-      repeat: { cron: "0 */6 * * *" }, // Every 6 hours
+      repeat: { pattern: "0 */6 * * *" }, // Every 6 hours
       removeOnComplete: true,
       removeOnFail: 100,
     },

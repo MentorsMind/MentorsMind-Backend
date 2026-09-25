@@ -1,3 +1,4 @@
+import { ErrorCode } from "../errors/error-codes";
 import pool from "../config/database";
 import { DateTime } from "luxon";
 import { createError } from "../middleware/errorHandler";
@@ -46,8 +47,8 @@ export const SmartSchedulingService = {
     const mentor = users.find((u) => u.id === mentorId);
     const mentee = users.find((u) => u.id === menteeId);
 
-    if (!mentor) throw createError("Mentor not found or inactive", 404);
-    if (!mentee) throw createError("Mentee not found or inactive", 404);
+    if (!mentor) throw createError(ErrorCode.NOT_FOUND, 404);
+    if (!mentee) throw createError(ErrorCode.NOT_FOUND, 404);
 
     const mentorTz = mentor.timezone || "UTC";
     const menteeTz = mentee.timezone || "UTC";
@@ -316,11 +317,11 @@ export const SmartSchedulingService = {
     );
 
     const booking = rows[0];
-    if (!booking) throw createError("Booking not found", 404);
+    if (!booking) throw createError(ErrorCode.NOT_FOUND, 404);
 
     // Only mentor or mentee of this booking can request rescheduling suggestions
     if (booking.mentor_id !== userId && booking.mentee_id !== userId) {
-      throw createError("Access denied", 403);
+      throw createError(ErrorCode.UNAUTHORIZED, 403);
     }
 
     // Suggest optimal times for next 7 days

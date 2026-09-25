@@ -18,6 +18,9 @@ import exportRoutes from "../export.routes";
 import adminRoutes from "../admin.routes";
 import moderationRoutes from "../moderation.routes";
 import bookingsRoutes from "../bookings.routes";
+import mentorsRoutes from "../mentors.routes";
+import paymentsRoutes from "../payments.routes";
+import reviewsRoutes from "../reviews.routes";
 import timezoneRoutes from "../timezone.routes";
 import analyticsRoutes from "../analytics.routes";
 import disputesRoutes from "../disputes.routes";
@@ -60,13 +63,19 @@ import taxRoutes from "../tax.routes";
 import emailWebhookRoutes from "../emailWebhook.routes";
 import gamificationRoutes from "../gamification.routes";
 import leaderboardRoutes from "../leaderboard.routes";
+import stakingRoutes from "../staking.routes";
 
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
 import { notificationCleanupService } from "../../services/notification-cleanup.service";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
+import { deprecationMiddleware } from "../../middleware/deprecation.middleware";
+import { initializeDeprecationRegistry } from "../../config/deprecation-registry";
 
 const router = Router();
+
+// Populate the deprecation registry consumed by deprecationMiddleware (issue #1096)
+initializeDeprecationRegistry();
 
 // Service initialization (async, non-blocking)
 // Note: These services no longer create tables at runtime.
@@ -95,6 +104,9 @@ router.use("/admin/bulk", adminBulkRoutes);
 router.use("/admin/moderation", moderationRoutes);
 
 router.use("/bookings", bookingsRoutes);
+router.use("/mentors", mentorsRoutes);
+router.use("/payments", paymentsRoutes);
+router.use("/reviews", reviewsRoutes);
 router.use("/timezones", timezoneRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/disputes", disputesRoutes);
@@ -150,7 +162,9 @@ router.use("/offline", offlineRoutes);
 router.use("/sync", syncRoutes);
 
 // Unified global search across mentors, sessions, and messages (issue #738)
-router.use("/search", searchRoutes);
+// deprecationMiddleware adds Deprecation/Sunset headers to v1-only deprecated
+// search endpoints (see src/config/deprecation-registry.ts, issue #1096)
+router.use("/search", deprecationMiddleware, searchRoutes);
 
 // NLP-powered natural language mentor search (issue #739)
 router.use("/search", nlpSearchRoutes);
@@ -161,6 +175,9 @@ router.use("/developer", developerRoutes);
 
 // Tax reporting export (issue #978) — /api/v1/tax
 router.use("/tax", taxRoutes);
+
+// Staking integration (issue #995)
+router.use("/staking", stakingRoutes);
 
 // Inbound provider webhooks (issue #979) — unauthenticated, signature-verified
 router.use("/webhooks/email", emailWebhookRoutes);

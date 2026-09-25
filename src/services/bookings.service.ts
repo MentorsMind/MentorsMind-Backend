@@ -24,7 +24,9 @@ import { SessionSummaryModel } from "../models/session-summary.model";
 import { MentorsService } from "./mentors.service";
 import { LoyaltyService } from "./loyalty.service";
 import { scheduleNoShowCheck } from "../queues/session-no-show.queue";
+import { scheduleReputationSync } from "../queues/reputation-sync.queue";
 import config from "../config";
+import { withSpan } from "../utils/tracing.utils";
 import { EventStoreService } from "./event-store.service";
 import {
   BOOKING_AGGREGATE_TYPE,
@@ -124,7 +126,8 @@ export const BookingsService = {
   },
 
   async createBooking(data: CreateBookingData): Promise<BookingRecord> {
-    // Batch-validate both users in a single query (avoids N+1)
+    return withSpan("BookingsService.createBooking", async () => {
+      // Batch-validate both users in a single query (avoids N+1)
     const { rows: users } = await db.query(
       `SELECT id, role, status FROM users WHERE id = ANY($1) AND is_active = true`,
       [[data.menteeId, data.mentorId]],
@@ -218,8 +221,8 @@ export const BookingsService = {
       },
       data.menteeId,
     );
-
-    return booking;
+      return booking;
+    }, { menteeId: data.menteeId, mentorId: data.mentorId });
   },
 
   async getBookingById(
@@ -238,6 +241,13 @@ export const BookingsService = {
     }
 
     return booking;
+  },
+
+  async listBookings(
+    userId: string,
+    filters?: { status?: string; cursor?: string; page?: number; limit?: number },
+  ): Promise<{ bookings: BookingRecord[]; total: number }> {
+    return this.getUserBookings(userId, filters);
   },
 
   async getUserBookings(
@@ -471,12 +481,13 @@ export const BookingsService = {
       throw createError(ErrorCode.BOOKING_NOT_CONFIRMED, 400);
     }
 
-    // Verify session time has passed
+    // Verify session time has passed or both participants have joined
     const sessionEnd = calculateEndTime(
       booking.scheduled_at,
       booking.duration_minutes,
     );
-    if (sessionEnd > new Date()) {
+    const bothJoined = !!(booking.mentor_joined_at && booking.mentee_joined_at);
+    if (sessionEnd > new Date() && !bothJoined) {
       throw createError(ErrorCode.BOOKING_SESSION_NOT_ENDED, 400);
     }
 

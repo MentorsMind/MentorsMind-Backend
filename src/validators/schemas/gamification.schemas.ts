@@ -52,7 +52,7 @@ export const createAchievementSchema = z.object({
       type: z.enum(['xp', 'xlm', 'discount', 'badge']),
       value: z.number().min(0),
       currency: z.string().optional(),
-      metadata: z.record(z.any()).optional(),
+      metadata: z.record(z.string(), z.any()).optional(),
     }),
   }),
 });

@@ -30,7 +30,7 @@ import {
   API_VERSIONS,
   SUPPORTED_VERSIONS,
 } from "./config/api-versions.config";
-import { logger } from "./utils/logger";
+import { logger } from "./utils/logger.utils";
 import { initializeI18n } from "./config/i18n.config";
 import { tenantMiddleware } from "./middleware/tenant.middleware";
 import { requireJsonContentType } from "./middleware/content-type.middleware";

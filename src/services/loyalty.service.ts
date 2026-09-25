@@ -33,14 +33,7 @@ const TIER_DISCOUNT_BPS: Record<string, number> = {
   platinum: 150,
 };
 
-// Balance (spending) thresholds per tier — exported so boundary tests and
-// consumers reference the same source of truth instead of magic numbers.
-export const TIER_THRESHOLDS = {
-  bronze: 0,
-  silver: 100,
-  gold: 500,
-  platinum: 2000,
-} as const;
+const TIER_THRESHOLDS = { bronze: 0, silver: 100, gold: 500, platinum: 1000 };
 const TIER_BENEFITS: Record<string, string[]> = {
   bronze: ["5% session discount"],
   silver: ["10% session discount", "Priority support"],

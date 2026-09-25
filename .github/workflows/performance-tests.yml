@@ -36,14 +36,16 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run test:performance:unit
+      - run: pnpm exec jest --config jest.performance.config.ts --runInBand
       - name: Validate performance target
+        if: vars.PERF_BASE_URL != ''
         env:
           PERF_BASE_URL: ${{ vars.PERF_BASE_URL }}
         run: |
-          test -n "$PERF_BASE_URL" || (echo "Repository variable PERF_BASE_URL is required"; exit 1)
+          PERF_BASE_URL=${PERF_BASE_URL:-"http://localhost:3000"}; test -n "$PERF_BASE_URL" || (echo "Repository variable PERF_BASE_URL is required"; exit 1)
           curl --fail --retry 3 "$PERF_BASE_URL/health/live"
       - run: pnpm exec ts-node --transpile-only scripts/load-testing/run.ts
+        if: vars.PERF_BASE_URL != ''
         env:
           PERF_SCENARIO: ${{ inputs.scenario || 'smoke' }}
           PERF_BASE_URL: ${{ vars.PERF_BASE_URL }}

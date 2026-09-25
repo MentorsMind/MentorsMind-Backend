@@ -54,25 +54,14 @@ export const SunsetExemptionService = {
       return cached.exempt;
     }
 
-    let exempt = false;
-    try {
-      const { rows } = await pool.query(
-        `SELECT 1 FROM api_sunset_exemptions
-         WHERE user_id = $1 AND api_version = $2
-           AND (expires_at IS NULL OR expires_at > NOW())
-         LIMIT 1`,
-        [userId, apiVersion],
-      );
-      exempt = rows.length > 0;
-    } catch (error) {
-      // Fail closed: on lookup errors do not grant exemptions.
-      logger.warn("Failed to check sunset exemption", {
-        userId,
-        apiVersion,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      exempt = false;
-    }
+    const { rows } = await pool.query(
+      `SELECT 1 FROM api_sunset_exemptions
+       WHERE user_id = $1 AND api_version = $2
+         AND (expires_at IS NULL OR expires_at > NOW())
+       LIMIT 1`,
+      [userId, apiVersion],
+    );
+    const exempt = rows.length > 0;
 
     exemptionCache.set(key, { exempt, cachedAt: Date.now() });
     return exempt;

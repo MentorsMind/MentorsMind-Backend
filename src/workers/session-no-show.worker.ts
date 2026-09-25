@@ -1,3 +1,4 @@
+import { NotificationType, NotificationChannel } from "../services/notification.service";
 import { Worker, Job } from 'bullmq';
 import {
   redisConnection,
@@ -15,8 +16,8 @@ import { redisClient } from '../config/redis';
 import type { SessionNoShowJobData } from '../queues/session-no-show.queue';
 
 const SYSTEM_USER_ID = 'system';
-const presenceService = new PresenceService(redisClient);
-const sorobanEscrowService = new SorobanEscrowService();
+const presenceService = new PresenceService(redisClient as any);
+const sorobanEscrowService = SorobanEscrowService;
 
 /**
  * Penalty configuration (configurable via env)
@@ -341,7 +342,7 @@ async function processNoShowCheck(
         message:
           refundPercent >= 100
             ? `Your mentor did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. A full refund has been automatically processed to your wallet.`
-            : `Your mentor did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. A partial refund (${refundPercentLabel}) has been processed; the rest is held pending the dispute window.`,
+            : `Your mentor did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. A partial refund (${refundPercentLabel} as any) has been processed; the rest is held pending the dispute window.`,
         channels: ['email', 'in_app', 'push'],
         data: {
           bookingId,
@@ -359,7 +360,7 @@ async function processNoShowCheck(
         userId: mentorId,
         type: 'session_no_show',
         title: 'Session No-Show Recorded - Dispute Window Open',
-        message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. The mentee has been refunded and ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()}).`,
+        message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. The mentee has been refunded and ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()} as any).`,
         channels: ['email', 'in_app', 'push'],
         data: {
           bookingId,
@@ -387,14 +388,14 @@ async function processNoShowCheck(
           payoutAmount: computeSplitAmount(booking.amount, payoutPercent),
           currency: booking.currency,
         },
-      });
+      } as any);
 
       // Notify mentee (warning about no-show + dispute window)
       await NotificationService.sendNotification({
         userId: menteeId,
         type: 'session_no_show',
         title: 'Session No-Show Recorded - Dispute Window Open',
-        message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()}).`,
+        message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()} as any).`,
         channels: ['email', 'in_app', 'push'],
         data: {
           bookingId,
