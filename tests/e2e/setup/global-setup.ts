@@ -87,8 +87,11 @@ export default async function globalSetup(): Promise<void> {
   // ─── Run migrations ───────────────────────────────────────────────────────
   console.log('🔄  [E2E] Running database migrations...');
   try {
+    const migrateCmd = process.platform === 'win32'
+      ? 'pnpm run migrate:up'
+      : `DATABASE_URL="${pgUrl}" pnpm run migrate:up`;
     execSync(
-      `DATABASE_URL="${pgUrl}" pnpm run migrate:up`,
+      migrateCmd,
       {
         cwd: path.join(__dirname, '../../..'),
         env: { ...process.env, DATABASE_URL: pgUrl },
