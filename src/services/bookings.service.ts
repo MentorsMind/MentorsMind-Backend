@@ -28,6 +28,8 @@ import { scheduleReputationSync } from "../queues/reputation-sync.queue";
 import config from "../config";
 import { withSpan } from "../utils/tracing.utils";
 import { EventStoreService } from "./event-store.service";
+import { DatabaseService } from "./database.service";
+import { emitBookingConfirmed } from "./outbox.service";
 import {
   BOOKING_AGGREGATE_TYPE,
   BookingProjectionEventType,
