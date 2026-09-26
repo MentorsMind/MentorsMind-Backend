@@ -63,6 +63,7 @@ import taxRoutes from "../tax.routes";
 import emailWebhookRoutes from "../emailWebhook.routes";
 import gamificationRoutes from "../gamification.routes";
 import leaderboardRoutes from "../leaderboard.routes";
+import cspReportRoutes from "../csp-report.routes";
 import stakingRoutes from "../staking.routes";
 
 import { BookingsService } from "../../services/bookings.service";
@@ -190,5 +191,8 @@ router.use("/gamification", gamificationRoutes);
 
 // Public leaderboard (issue #984): /api/v1/leaderboard?category=sessions&period=monthly
 router.use("/leaderboard", leaderboardRoutes);
+
+// CSP violation reports are unauthenticated browser callbacks.
+router.use("/csp-report", cspReportRoutes);
 
 export default router;
