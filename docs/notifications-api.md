@@ -57,7 +57,7 @@ Returns a paginated list of notifications for the authenticated user, with unrea
 
 **Query Parameters:**
 - `page` (integer, default: 1) - Page number
-- `limit` (integer, default: 20, max: 100) - Items per page
+- `limit` (integer, default: 20, max: 50) - Items per page
 
 **Response:**
 ```json

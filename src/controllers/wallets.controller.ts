@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { WalletsService } from '../services/wallets.service';
 import { stellarService } from '../services/stellar.service';
 import { defiWalletService } from '../services/defi-wallet.service';

@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { CalendarService } from "../services/calendar.service";
 import { env } from "../config/env";
 import { createError } from "../middleware/errorHandler";

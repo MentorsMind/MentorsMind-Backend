@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { UsersService } from '../services/users.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';

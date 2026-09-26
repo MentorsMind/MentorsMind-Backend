@@ -3,7 +3,7 @@
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { EarningsReportService } from '../services/earningsReport.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { logger } from '../utils/logger.utils';
