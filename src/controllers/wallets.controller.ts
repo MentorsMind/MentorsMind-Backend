@@ -6,12 +6,13 @@ import { stellarService } from '../services/stellar.service';
 import { defiWalletService } from '../services/defi-wallet.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { logger } from '../utils/logger.utils';
-import type { 
-  PayoutRequestInput, 
+import type {
+  PayoutRequestInput,
   TrustlineRequestInput,
   TransactionQuery,
   EarningsQuery,
-  BalanceQuery 
+  BalanceQuery,
+  WalletTransferInput
 } from '../validators/schemas/wallet.schemas';
 
 export const WalletsController = {
@@ -477,6 +478,61 @@ export const WalletsController = {
         error: error instanceof Error ? error.message : error,
       });
       ResponseUtil.error(res, 'Failed to retrieve payout requests', 500);
+    }
+  },
+
+  /** POST /wallets/:id/transfer */
+  async transfer(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const { id: walletId } = req.params;
+      const { amount, destinationAddress, assetCode, memo } = req.body as WalletTransferInput;
+
+      const wallet = await WalletsService.getUserWallet(userId);
+      if (!wallet) {
+        ResponseUtil.notFound(res, 'Wallet not found');
+        return;
+      }
+
+      if (wallet.id !== walletId) {
+        ResponseUtil.error(res, 'Unauthorized', 403);
+        return;
+      }
+
+      const transactionResponse = await stellarService.transfer(
+        wallet.stellar_public_key,
+        destinationAddress,
+        amount,
+        assetCode || 'XLM',
+        memo
+      );
+
+      await WalletsService.logWalletEvent(userId, {
+        eventType: 'transfer',
+        metadata: {
+          destinationAddress,
+          amount,
+          assetCode: assetCode || 'XLM',
+          txHash: transactionResponse.hash,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      ResponseUtil.success(res, {
+        transactionHash: transactionResponse.hash,
+        status: 'pending',
+        amount,
+        destinationAddress,
+        assetCode: assetCode || 'XLM',
+        timestamp: new Date().toISOString(),
+      }, 'Transfer initiated successfully', 202);
+    } catch (error) {
+      logger.error('wallets.transfer failed', {
+        userId: req.user?.userId,
+        error: error instanceof Error ? error.message : error,
+      });
+      ResponseUtil.error(res, 'Failed to process transfer', 500);
     }
   },
 };

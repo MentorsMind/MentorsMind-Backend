@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { logger } from "../utils/logger.utils";
 import { traceStore } from "./tracing.middleware";
 import { CircuitBreakerError } from "../services/database.service";
+import { OracleUnavailableError } from "../services/oracle.service";
 import {
   ErrorCode,
   ERROR_CATALOG,
@@ -122,6 +123,25 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  if (err instanceof OracleUnavailableError) {
+    res.setHeader("Retry-After", "60");
+    res.status(503).json({
+      status: "error",
+      code: ErrorCode.ORACLE_UNAVAILABLE,
+      message: err.message,
+      details: {
+        contractError: err.contractError,
+        usedFallback: err.usedFallback,
+      },
+      requestId:
+        traceStore.getStore()?.requestId ||
+        (req as any).requestId ||
+        res.locals?.requestId,
+      timestamp: new Date().toISOString(),
+    } satisfies ErrorResponse & { details: Record<string, unknown> });
+    return;
+  }
+
   if (err instanceof CircuitBreakerError) {
     const retryAfter = (err as CircuitBreakerError).retryAfterSeconds;
     res.setHeader("Retry-After", String(retryAfter));
@@ -208,15 +228,22 @@ export const errorHandler = (
  *                   interpolation of placeholders like {{field}}
  */
 export const createError = (
-  code: ErrorCode,
+  code: ErrorCode | string,
   httpStatus?: number,
   details?: Record<string, unknown>,
 ): AppError => {
-  const catalogEntry =
-    ERROR_CATALOG[code] ?? getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
-  const error: AppError = new Error(catalogEntry.message);
-  error.code = code;
-  error.statusCode = httpStatus ?? catalogEntry.httpStatus;
+  const isCatalogKey = typeof code === "string" && code in ERROR_CATALOG;
+  const catalogEntry = isCatalogKey || (typeof code === "string" && !(code in ERROR_CATALOG) === false)
+    ? ERROR_CATALOG[code as ErrorCode]
+    : getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
+
+  const message = (typeof code === "string" && !isCatalogKey)
+    ? code
+    : (catalogEntry?.message ?? String(code));
+
+  const error: AppError = new Error(message);
+  error.code = code as ErrorCode;
+  error.statusCode = httpStatus ?? catalogEntry?.httpStatus ?? 500;
   error.isOperational = true;
   error.details = details;
   return error;

@@ -31,6 +31,27 @@ export const MentorsController = {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
     }
+    const etag = `"${createHash('sha1').update(JSON.stringify(mentor)).digest('hex')}"`;
+    res.setHeader('ETag', etag);
+    res.setHeader('Last-Modified', new Date(mentor.updated_at).toUTCString());
+
+    const ifNoneMatch = req.headers['if-none-match'];
+    if (ifNoneMatch === etag) {
+      res.status(304).end();
+      return;
+    }
+
+    const ifModifiedSince = req.headers['if-modified-since'];
+    if (ifModifiedSince) {
+      const modifiedSince = Date.parse(ifModifiedSince);
+      const updatedAtSeconds = Math.floor(new Date(mentor.updated_at).getTime() / 1000);
+      const modifiedSinceSeconds = Math.floor(modifiedSince / 1000);
+      if (!Number.isNaN(modifiedSince) && updatedAtSeconds <= modifiedSinceSeconds) {
+        res.status(304).end();
+        return;
+      }
+    }
+
     ResponseUtil.success(res, mentor, 'Mentor profile retrieved successfully');
   },
 

@@ -62,6 +62,7 @@ import { initializeEmailTemplates } from "./services/template-initializer.servic
 import { logger } from "./utils/logger.utils";
 import { validateRequiredTables } from "./utils/table-validator.utils";
 import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
+import { stopMemoryMonitoring } from "./middleware/memory-monitor.middleware";
 import { JwksService } from "./services/jwks.service";
 import { registerBookingProjectionHandlers } from "./events/booking.projections";
 import { ProjectionService } from "./services/projection.service";
@@ -227,6 +228,9 @@ async function shutdown(signal: string) {
     stopScheduler(),
     stopRetentionEnforcementWorker(),
     Promise.resolve(stopPoolMonitor()),
+    // Clear the memory-monitor sampling interval so no orphaned timers keep
+    // the process alive or fire against a shutting-down server (issue #1077).
+    Promise.resolve(stopMemoryMonitoring()),
   ]);
   server.close(() => {
     logger.info("HTTP server closed");

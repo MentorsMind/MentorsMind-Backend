@@ -30,13 +30,15 @@ class DeprecationManager {
    * Register a deprecated endpoint
    */
   registerDeprecation(config: DeprecationConfig): void {
-    // Validate sunset date is at least 6 months from now
-    const minSunsetDate = new Date();
+    // Validate sunset date is at least 6 months after the deprecation date.
+    // Measured from deprecatedDate (not "now") so fixed-date registry entries
+    // keep registering on every boot until they sunset.
+    const minSunsetDate = new Date(config.deprecatedDate);
     minSunsetDate.setMonth(minSunsetDate.getMonth() + this.DEPRECATION_DURATION_MONTHS);
 
     if (config.sunsetDate < minSunsetDate) {
       throw new Error(
-        `Sunset date must be at least ${this.DEPRECATION_DURATION_MONTHS} months from now`
+        `Sunset date must be at least ${this.DEPRECATION_DURATION_MONTHS} months after the deprecation date`
       );
     }
 
@@ -237,19 +239,22 @@ export function deprecated(config: Omit<DeprecationConfig, 'endpoint'>) {
 }
 
 /**
- * Helper to create deprecation config with default 6-month window
+ * Helper to create deprecation config with default 6-month window.
+ * Pass a fixed deprecatedDate for registry entries so the Sunset date is
+ * stable across restarts instead of sliding forward on every boot.
  */
 export function createDeprecationConfig(
   endpoint: string,
   options: {
+    deprecatedDate?: Date;
     replacementEndpoint?: string;
     migrationGuide?: string;
     reason?: string;
     sunsetMonths?: number;
   } = {}
 ): DeprecationConfig {
-  const deprecatedDate = new Date();
-  const sunsetDate = new Date();
+  const deprecatedDate = options.deprecatedDate ? new Date(options.deprecatedDate) : new Date();
+  const sunsetDate = new Date(deprecatedDate);
   sunsetDate.setMonth(
     sunsetDate.getMonth() + (options.sunsetMonths || 6)
   );

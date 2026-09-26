@@ -110,6 +110,16 @@ export async function initializeGraphQL(app: Application): Promise<void> {
 
   await server.start();
 
+  /**
+   * Mounts the GraphQL endpoint (POST /api/graphql by default).
+   *
+   * Apollo Server's `expressMiddleware` registers the route here rather than
+   * in `src/app.ts`, so the Swagger/OpenAPI documentation entry for this
+   * endpoint (tags, bearer auth, request body) is declared as a `@swagger`
+   * annotation in `src/app.ts` and picked up via `swaggerOptions.apis`.
+   *
+   * No functional change: same path, JSON body parser, and auth context.
+   */
   app.use(
     graphqlConfig.path,
     json(),
