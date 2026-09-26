@@ -5,6 +5,7 @@ import {
   QUEUE_NAMES,
 } from '../queues/queue.config';
 import { VestingService } from '../services/vesting.service';
+import { StakingService } from '../services/staking.service';
 import { logger } from '../utils/logger.utils';
 import pool from '../config/database';
 
@@ -49,7 +50,10 @@ async function processVestingSync(
   const syncLogId = await logSyncStart();
 
   try {
-    const result = await VestingService.syncAllSchedules();
+    const [result, stakingResult] = await Promise.all([
+      VestingService.syncAllSchedules(),
+      StakingService.syncAllStakes()
+    ]);
 
     const syncDuration = Date.now() - syncStartTime;
 
@@ -70,6 +74,19 @@ async function processVestingSync(
       logger.warn('Some vesting schedules failed to sync', {
         failed: result.failed,
         synced: result.synced,
+      });
+    }
+
+    logger.info('Staking positions batch sync completed', {
+      synced: stakingResult.synced,
+      failed: stakingResult.failed,
+      durationMs: syncDuration,
+    });
+
+    if (stakingResult.failed > 0) {
+      logger.warn('Some staking positions failed to sync', {
+        failed: stakingResult.failed,
+        synced: stakingResult.synced,
       });
     }
   } catch (error) {

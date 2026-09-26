@@ -7,6 +7,7 @@ const elasticsearchConfig = {
   apiKey: env.ELASTICSEARCH_API_KEY,
   enabled: env.ELASTICSEARCH_ENABLED === 'true',
   indexPrefix: env.ELASTICSEARCH_INDEX_PREFIX,
+  requestTimeoutMs: parseInt(env.ELASTICSEARCH_REQUEST_TIMEOUT_MS, 10),
   
   // Index names
   indices: {

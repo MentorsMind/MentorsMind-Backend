@@ -14,6 +14,7 @@
 
 export enum ErrorCode {
   // ─── Authentication ─────────────────────────────────────────────────────────
+  UNAUTHORIZED = 'UNAUTHORIZED',
   AUTH_UNAUTHORIZED = 'AUTH_UNAUTHORIZED',
   AUTH_REQUIRED = 'AUTH_REQUIRED',
   AUTH_AUTHENTICATION_REQUIRED = 'AUTH_AUTHENTICATION_REQUIRED',
@@ -35,6 +36,7 @@ export enum ErrorCode {
   AUTH_WEAK_PASSWORD = 'AUTH_WEAK_PASSWORD',
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  FORBIDDEN = 'FORBIDDEN',
   AUTHZ_FORBIDDEN = 'AUTHZ_FORBIDDEN',
   AUTH_FORBIDDEN = 'AUTH_FORBIDDEN',
   AUTHZ_ACCESS_DENIED = 'AUTHZ_ACCESS_DENIED',
@@ -319,6 +321,8 @@ export enum ErrorCode {
 
   // ─── Oracle / iCal / MFA / Misc domain ──────────────────────────────────────
   ORACLE_NOT_CONFIGURED = 'ORACLE_NOT_CONFIGURED',
+  ORACLE_UNAVAILABLE = 'ORACLE_UNAVAILABLE',
+  ORACLE_STALE_PRICE = 'ORACLE_STALE_PRICE',
   ICAL_TOKEN_INVALID = 'ICAL_TOKEN_INVALID',
   ICAL_RATE_LIMIT_EXCEEDED = 'ICAL_RATE_LIMIT_EXCEEDED',
   MFA_PHONE_NUMBER_REQUIRED = 'MFA_PHONE_NUMBER_REQUIRED',
@@ -360,6 +364,7 @@ function entry(code: ErrorCode, httpStatus: number, message: string): [ErrorCode
  */
 export const ERROR_CATALOG = Object.fromEntries([
   // ─── Authentication ─────────────────────────────────────────────────────────
+  entry(ErrorCode.UNAUTHORIZED, 401, 'Unauthorized access'),
   entry(ErrorCode.AUTH_UNAUTHORIZED, 401, 'Unauthorized access'),
   entry(ErrorCode.AUTH_REQUIRED, 401, 'Authentication required'),
   entry(ErrorCode.AUTH_AUTHENTICATION_REQUIRED, 401, 'Authentication required'),
@@ -381,6 +386,7 @@ export const ERROR_CATALOG = Object.fromEntries([
   entry(ErrorCode.AUTH_WEAK_PASSWORD, 400, 'Password is too weak'),
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  entry(ErrorCode.FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTH_FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_ACCESS_DENIED, 403, 'You do not have access to this resource'),
@@ -665,6 +671,8 @@ export const ERROR_CATALOG = Object.fromEntries([
 
   // ─── Oracle / iCal / MFA / Misc domain ──────────────────────────────────────
   entry(ErrorCode.ORACLE_NOT_CONFIGURED, 503, 'Oracle contract is not configured'),
+  entry(ErrorCode.ORACLE_UNAVAILABLE, 503, 'Oracle contract unavailable — stale prices or insufficient feeders'),
+  entry(ErrorCode.ORACLE_STALE_PRICE, 503, 'Oracle price cache exceeded maximum staleness (10 min); no valid fallback available'),
   entry(ErrorCode.ICAL_TOKEN_INVALID, 404, 'Invalid or expired calendar token'),
   entry(ErrorCode.ICAL_RATE_LIMIT_EXCEEDED, 429, 'Rate limit exceeded for calendar feed'),
   entry(ErrorCode.MFA_PHONE_NUMBER_REQUIRED, 400, 'Phone number required for SMS MFA'),

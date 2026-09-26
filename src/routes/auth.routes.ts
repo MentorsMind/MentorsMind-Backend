@@ -11,6 +11,7 @@ import { handleTokenRefresh } from "../middleware/token-refresh.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { loginLockoutCheck } from "../middleware/rate-limit.middleware";
 import { validate } from "../middleware/validation.middleware";
+import { noCacheMiddleware } from "../middleware/no-cache.middleware";
 import {
   registerSchema,
   loginSchema,
@@ -30,6 +31,9 @@ import {
 } from "../validators/schemas/auth.schemas";
 
 const router = Router();
+
+// Disable caching for all authentication endpoints
+router.use(noCacheMiddleware);
 
 // Apply stricter rate limiting for auth endpoints to prevent brute force attacks
 const authLimiter = rateLimit({

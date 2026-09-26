@@ -246,7 +246,7 @@ export const PaymentsService = {
     }
     
     // Verify transaction is recent (within 24 hours)
-    const txCreatedAt = new Date(tx.created_at);
+    const txCreatedAt = new Date((tx as any).created_at ?? Date.now());
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     if (txCreatedAt < twentyFourHoursAgo) {
       throw createError(ErrorCode.PAYMENT_TX_TOO_OLD, 400);

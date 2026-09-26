@@ -157,12 +157,12 @@ export class CacheService {
       const raw = client
         ? await withCacheSpan("get", key, "redis", () => client.get(key))
         : memGet(key);
-      if (raw === null) {
+      if (!raw) {
         track('misses', key);
         return null;
       }
       track('hits', key);
-      return JSON.parse(raw) as T;
+      return JSON.parse(raw as any) as T;
     } catch (err: any) {
       track('errors', key);
       logger.warn('Cache get error', { key, error: err.message });

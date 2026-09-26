@@ -81,6 +81,42 @@ export const mentorIdParamSchema = z.object({
 // Query schemas
 // ---------------------------------------------------------------------------
 
+/**
+ * Pagination query schema for mentor reviews with support for both
+ * cursor-based and offset-based pagination
+ * - cursor: optional UUID for cursor-based pagination (keyset pagination)
+ * - page: optional positive integer for offset-based pagination (default: 1)
+ * - limit: optional integer 1-100 for page size (default: 20, max: 100)
+ */
+export const getMentorReviewsQuerySchema = z.object({
+  query: z.object({
+    cursor: z
+      .string()
+      .trim()
+      .optional()
+      .refine(
+        (v) => v === undefined || v.length > 0,
+        "Cursor must not be empty",
+      ),
+    page: z
+      .string()
+      .optional()
+      .transform((v) => (v !== undefined ? parseInt(v, 10) : 1))
+      .refine(
+        (v) => Number.isInteger(v) && v >= 1,
+        "Page must be a positive integer",
+      ),
+    limit: z
+      .string()
+      .optional()
+      .transform((v) => (v !== undefined ? parseInt(v, 10) : 20))
+      .refine(
+        (v) => Number.isInteger(v) && v >= 1 && v <= 100,
+        "Limit must be an integer between 1 and 100",
+      ),
+  }),
+});
+
 export const paginationQuerySchema = z.object({
   query: z.object({
     page: z

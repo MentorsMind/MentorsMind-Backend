@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from "../types/api.types";
 import { ReviewsService } from "../services/reviews.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
+import { getMentorReviewsQuerySchema } from "../validators/reviews.validator";
 
 export const ReviewsController = {
   /**
@@ -20,26 +21,52 @@ export const ReviewsController = {
   /**
    * GET /api/v1/reviews/mentor/:id
    * Get paginated reviews for a mentor
+   * Query params:
+   *   - cursor: optional UUID for cursor-based pagination
+   *   - page: optional positive integer (default: 1)
+   *   - limit: optional 1-100 (default: 20, capped at 100)
    */
   getMentorReviews: asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
       const mentorId = req.params.id as string;
-      const cursor =
-        typeof (req as any).query?.cursor === "string"
-          ? (req as any).query.cursor
-          : undefined;
-      const page =
-        (req as any).query?.page !== undefined
-          ? Number((req as any).query.page)
-          : undefined;
-      const limit = Number((req as any).query?.limit) || 10;
 
-      const data = await ReviewsService.getMentorReviews(mentorId, {
+      // Validate query parameters
+      const validation = await getMentorReviewsQuerySchema.safeParseAsync({
+        query: req.query,
+      });
+
+      if (!validation.success) {
+        const errors = validation.error.issues.map((issue) => ({
+          field: issue.path.join("."),
+          message: issue.message,
+          code: issue.code,
+        }));
+        return ResponseUtil.validationError(res, errors);
+      }
+
+      const { cursor, page, limit } = validation.data.query;
+
+      // Cap limit at 100 as per requirement
+      const cappedLimit = Math.min(limit, 100);
+
+      const result = await ReviewsService.getMentorReviews(mentorId, {
         page,
-        limit,
+        limit: cappedLimit,
         cursor,
       });
-      return ResponseUtil.success(res, data);
+
+      // Build pagination metadata
+      const meta = {
+        page: result.pagination.page,
+        limit: cappedLimit,
+        total: result.pagination.total,
+        totalPages: result.pagination.totalPages,
+        hasNext: result.pagination.hasNext,
+        hasPrev: result.pagination.hasPrev,
+        cursor: result.next_cursor || undefined,
+      };
+
+      return ResponseUtil.success(res, result.reviews, undefined, 200, meta);
     },
   ),
 
