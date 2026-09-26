@@ -315,6 +315,8 @@ const envSchema = z.object({
   ELASTICSEARCH_API_KEY: z.string().optional(),
   ELASTICSEARCH_ENABLED: z.enum(["true", "false"]).default("true"),
   ELASTICSEARCH_INDEX_PREFIX: z.string().default("mentorminds"),
+  ELASTICSEARCH_REQUEST_TIMEOUT_MS: z.string().regex(/^\d+$/).default("5000"),
+  HSTS_MAX_AGE: z.string().regex(/^\d+$/).default("31536000"),
   /** Max log documents to buffer before flushing to Elasticsearch */
   ELK_BATCH_SIZE: z.string().regex(/^\d+$/).default("100"),
   /** Flush interval in ms for the ELK batch transport */
