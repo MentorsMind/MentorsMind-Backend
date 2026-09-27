@@ -68,7 +68,6 @@ import stakingRoutes from "../staking.routes";
 
 import { BookingsService } from "../../services/bookings.service";
 import { logger } from "../../utils/logger";
-import { notificationCleanupService } from "../../services/notification-cleanup.service";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
 import { deprecationMiddleware } from "../../middleware/deprecation.middleware";
 import { initializeDeprecationRegistry } from "../../config/deprecation-registry";
