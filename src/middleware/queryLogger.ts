@@ -20,7 +20,7 @@
 import * as crypto from "crypto";
 import pool from "../config/database";
 import { logger } from "../utils/logger";
-import { dbQueryDurationMs } from "../config/metrics";
+import { dbQueryDurationMs, dbQueryDurationHistogram } from "../config/metrics";
 import QueryMonitorService from "../services/query-monitor.service";
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -65,6 +65,25 @@ function queryType(sql: string): string {
   if (first.startsWith("update")) return "update";
   if (first.startsWith("delete")) return "delete";
   return "other";
+}
+
+/**
+ * Extract table name from SQL query using lightweight regex.
+ * Looks for the first FROM or INTO clause.
+ * Returns 'unknown' for complex/dynamic queries.
+ */
+function extractTableName(sql: string): string {
+  try {
+    // Match FROM or INTO followed by table name
+    // Handles: FROM table_name, FROM schema.table_name, FROM "table_name"
+    const fromMatch = sql.match(/(?:FROM|INTO)\s+(?:"([^"]+)"|([a-zA-Z_][a-zA-Z0-9_\.]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)?))(?:\s|;|$)/i);
+    if (fromMatch) {
+      return fromMatch[1] || fromMatch[2] || 'unknown';
+    }
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 // ─── Async EXPLAIN helper ─────────────────────────────────────────────────────
@@ -146,6 +165,7 @@ export function instrumentPool(): void {
     try {
       const result = await originalQuery(textOrConfig, valuesOrCallback);
       const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+      const durationSeconds = durationMs / 1000;
 
       const sql: string =
         typeof textOrConfig === "string" ? textOrConfig : textOrConfig?.text ?? "";
@@ -157,7 +177,11 @@ export function instrumentPool(): void {
           : [];
 
       const qType = queryType(sql);
+      const tableName = extractTableName(sql);
+      
+      // Record to both histograms
       dbQueryDurationMs.observe({ query_type: qType }, durationMs);
+      dbQueryDurationHistogram.observe({ operation: qType, table: tableName }, durationSeconds);
 
       if (durationMs >= SLOW_QUERY_THRESHOLD_MS) {
         slowQueries++;
@@ -236,8 +260,13 @@ export async function trackAndLogQuery(
   try {
     const result = await client.query(sql, params);
     const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    const durationSeconds = durationMs / 1000;
+    
     const qType = queryType(sql);
+    const tableName = extractTableName(sql);
+    
     dbQueryDurationMs.observe({ query_type: qType }, durationMs);
+    dbQueryDurationHistogram.observe({ operation: qType, table: tableName }, durationSeconds);
 
     if (durationMs > SLOW_QUERY_THRESHOLD_MS) {
       slowQueries++;
