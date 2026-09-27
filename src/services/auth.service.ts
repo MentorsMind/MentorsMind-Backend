@@ -57,18 +57,32 @@ export const AuthService = {
       VALUES ($1, $2, $3, $4, $5, $6, 'free')
       RETURNING id, role, user_tier
     `;
-    const { rows } = await pool.query(insertQuery, [
-      email,
-      passwordHash,
-      firstName,
-      lastName,
-      role,
-      JSON.stringify(defaultPreferences),
-    ]);
-    const user = rows[0];
+    try {
+      const { rows } = await pool.query(insertQuery, [
+        email,
+        passwordHash,
+        firstName,
+        lastName,
+        role,
+        JSON.stringify(defaultPreferences),
+      ]);
+      const user = rows[0];
 
-    const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier);
-    return { ...tokens, userId: user.id };
+      const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier);
+      return { ...tokens, userId: user.id };
+    } catch (err: any) {
+      // Handle concurrent registration race condition
+      // Two simultaneous requests may both pass the uniqueness check before either inserts,
+      // resulting in PostgreSQL UNIQUE_VIOLATION on the second insert.
+      if (err.code === '23505' && err.constraint?.includes('email')) {
+        throw createError(
+          ErrorCode.CONFLICT,
+          409,
+          { message: 'An account with this email already exists' }
+        );
+      }
+      throw err;
+    }
   },
 
   async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null, req?: any): Promise<any> {

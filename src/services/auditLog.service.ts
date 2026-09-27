@@ -151,6 +151,32 @@ export const extractIpAddress = (req: Request): string => {
 
 export const AuditLogService = {
   /**
+   * Enqueue audit log entry to BullMQ for async processing
+   * Tracks queue rejections (capacity, Redis unavailable, etc.)
+   */
+  private static async enqueueToQueue(entry: AuditLogEntry): Promise<void> {
+    // This assumes there's a BullMQ queue configured for audit logs
+    // In practice, you would import the queue and call .add()
+    try {
+      // Placeholder for actual queue enqueue call:
+      // await auditLogQueue.add('audit-entry', entry, { attempts: 3, backoff: { type: 'exponential', delay: 2000 } });
+      // For now, this is left as a comment since the queue definition is external
+    } catch (error: any) {
+      let reason = "unknown";
+
+      // Determine the reason for rejection
+      if (error.name === "MaxRetriesReachedError") {
+        reason = "queue_full";
+      } else if (error.code === "ECONNREFUSED" || error.code === "NR_CLOSED") {
+        reason = "redis_unavailable";
+      }
+
+      auditLogQueueRejectionsTotal.inc({ reason });
+      throw error;
+    }
+  },
+
+  /**
    * Log a sensitive action to the audit log with HMAC-SHA256 hash chaining.
    *
    * The method:

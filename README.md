@@ -355,6 +355,8 @@ CI will fail if coverage drops below 70%.
 - SQL injection prevention
 - Rate limiting (coming soon)
 
+For information on reporting security vulnerabilities, supported versions, and our disclosure policy, please see our [Security Policy](SECURITY.md).
+
 ## 📚 Tech Stack
 
 - **Runtime**: Node.js 18+

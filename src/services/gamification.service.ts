@@ -10,6 +10,8 @@ import {
   Reward,
 } from '../models/gamification.model';
 import { logger } from '../utils/logger';
+import { AchievementService } from './achievement.service';
+import { LeaderboardService } from './leaderboard.service';
 
 export class GamificationService {
   /**
@@ -94,22 +96,11 @@ export class GamificationService {
     const progress = await GamificationModel.getUserProgress(userId);
     const completedSessionCount = progress.badges.filter(b => b.category === 'sessions').length + 1;
 
-    const unlockedAchievements: Achievement[] = [];
-
-    // Evaluate session achievements
-    const allAchievements = await GamificationModel.getAllAchievements('sessions');
-    for (const ach of allAchievements) {
-      if (ach.criteria.type === 'session_count') {
-        const target = ach.criteria.target;
-        // If progress achievement applies
-        if (completedSessionCount >= target) {
-          const res = await GamificationModel.unlockAchievement(userId, ach.id);
-          if (res.unlocked) {
-            unlockedAchievements.push(ach);
-          }
-        }
-      }
-    }
+    // Evaluate session achievements via the dedicated service.
+    const unlockedAchievements = await AchievementService.evaluateSessionAchievements(
+      userId,
+      completedSessionCount,
+    );
 
     // Update session challenges
     const activeChallenges = await GamificationModel.getActiveChallenges();
@@ -136,15 +127,10 @@ export class GamificationService {
     }
     await GamificationModel.addXP(mentorId, xpGained, 'manual', 'review_received');
 
-    const unlockedAchievements: Achievement[] = [];
-
-    if (rating === 5) {
-      const res = await GamificationModel.unlockAchievement(mentorId, '5_star_review');
-      if (res.unlocked) {
-        const ach = await GamificationModel.getAchievementById('5_star_review');
-        if (ach) unlockedAchievements.push(ach);
-      }
-    }
+    const unlockedAchievements = await AchievementService.evaluateReviewAchievements(
+      mentorId,
+      rating,
+    );
 
     return { xpGained, unlockedAchievements };
   }
@@ -159,12 +145,7 @@ export class GamificationService {
     const xpGained = 100;
     await GamificationModel.addXP(userId, xpGained, 'manual', `milestone_${milestoneId}`);
 
-    const unlockedAchievements: Achievement[] = [];
-    const res = await GamificationModel.unlockAchievement(userId, 'learning_path_completed');
-    if (res.unlocked) {
-      const ach = await GamificationModel.getAchievementById('learning_path_completed');
-      if (ach) unlockedAchievements.push(ach);
-    }
+    const unlockedAchievements = await AchievementService.evaluateLearningAchievements(userId);
 
     return { xpGained, unlockedAchievements };
   }
@@ -179,7 +160,7 @@ export class GamificationService {
     offset: number = 0,
     skillName?: string,
   ): Promise<Leaderboard> {
-    return await GamificationModel.getLeaderboard(type, period, limit, offset, skillName);
+    return await LeaderboardService.getLeaderboard(type, period, limit, offset, skillName);
   }
 
   /**
@@ -200,7 +181,7 @@ export class GamificationService {
    * Update badge showcase on profile
    */
   static async updateShowcase(userId: string, badgeIds: string[]): Promise<string[]> {
-    return await GamificationModel.updateShowcaseBadges(userId, badgeIds);
+    return await AchievementService.updateShowcase(userId, badgeIds);
   }
 
   /**
@@ -214,6 +195,6 @@ export class GamificationService {
    * Admin: create custom achievement
    */
   static async createAchievement(data: Partial<Achievement>): Promise<Achievement> {
-    return await GamificationModel.createAchievement(data);
+    return await AchievementService.createAchievement(data);
   }
 }

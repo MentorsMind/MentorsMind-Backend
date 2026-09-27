@@ -98,6 +98,14 @@ export const dbQueryDurationSeconds = new Histogram<string>({
 
 export const dbQueryDurationMs = dbQueryDurationSeconds;
 
+export const dbQueryDurationHistogram = new Histogram<string>({
+  name: "db_query_duration_histogram",
+  help: "PostgreSQL query duration histogram with operation and table labels",
+  labelNames: ["operation", "table"],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
+  registers: [metricsRegistry],
+});
+
 export const dbPoolTotalConnections = new Gauge<string>({
   name: "db_pool_total_connections",
   help: "Total connections in the PostgreSQL pool",
@@ -306,9 +314,11 @@ export const walletDiscrepanciesTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-export const deprecatedApiCallsTotal = new Counter<string>({
-  name: "deprecated_api_calls_total",
-  help: "Total calls made to deprecated API versions, partitioned by version",
-  labelNames: ["version"],
+// ─── Audit Logging ────────────────────────────────────────────────────────[...]
+
+export const auditLogQueueRejectionsTotal = new Counter<string>({
+  name: "audit_log_queue_rejections_total",
+  help: "Total audit log queue rejections when enqueueing entries fails, partitioned by reason (queue_full, redis_unavailable, unknown)",
+  labelNames: ["reason"],
   registers: [metricsRegistry],
 });
