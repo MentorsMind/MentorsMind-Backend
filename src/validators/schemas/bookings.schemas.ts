@@ -14,14 +14,17 @@ export const createBookingSchema = z.object({
       .min(1, 'Scheduled time is required')
       .datetime({ message: 'scheduledAt must be an ISO 8601 datetime string' })
       .refine(
-        (v) => new Date(v) > new Date(),
-        { message: 'Booking must be scheduled in the future' }
+        (v) => new Date(v) > new Date(Date.now() + 30 * 60 * 1000),
+        { message: 'scheduledAt must be at least 30 minutes in the future' }
       ),
     durationMinutes: z
       .number()
       .int('Duration must be a whole number of minutes')
       .min(15, 'Session must be at least 15 minutes')
-      .max(240, 'Session cannot exceed 4 hours'),
+      .max(480, 'Session cannot exceed 8 hours')
+      .refine((value) => value % 15 === 0, {
+        message: 'Duration must be a multiple of 15 minutes',
+      }),
     topic: shortTextSchema,
     notes: longTextSchema.optional(),
   }).strict(),
@@ -42,7 +45,10 @@ export const updateBookingSchema = z.object({
       .number()
       .int()
       .min(15)
-      .max(240)
+      .max(480)
+      .refine((value) => value % 15 === 0, {
+        message: 'Duration must be a multiple of 15 minutes',
+      })
       .optional(),
     topic: shortTextSchema.optional(),
     notes: longTextSchema.optional(),

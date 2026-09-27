@@ -8,7 +8,7 @@
  */
 
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { earningsForecastService } from "../services/earnings-forecast.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { logger } from "../utils/logger.utils";

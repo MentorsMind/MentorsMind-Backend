@@ -37,10 +37,44 @@ export function memoryDashboardMiddleware() {
   };
 }
 
-export function startMemoryMonitoring(options: MemoryMonitorOptions = {}): void {
-  memoryManager.stop();
+// Module-level interval handle so SIGTERM/graceful shutdown can clear it —
+// same pattern as startPoolMonitor/stopPoolMonitor (issue #1077).
+// Default matches MemoryManagerService's sampleIntervalMs default.
+const DEFAULT_SAMPLE_INTERVAL_MS = 30_000;
+let monitorInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Start periodic memory sampling. Idempotent — repeated calls do not stack
+ * additional intervals.
+ *
+ * @returns cleanup function that clears the sampling interval (same as
+ *          calling `stopMemoryMonitoring()`).
+ */
+export function startMemoryMonitoring(
+  options: MemoryMonitorOptions = {},
+): () => void {
+  stopMemoryMonitoring();
   memoryManager.configure(options);
-  memoryManager.start();
+  memoryManager.snapshot();
+  const intervalMs = options.sampleIntervalMs ?? DEFAULT_SAMPLE_INTERVAL_MS;
+  monitorInterval = setInterval(() => {
+    memoryManager.snapshot();
+  }, intervalMs);
+  monitorInterval.unref?.();
+  return stopMemoryMonitoring;
+}
+
+/**
+ * Stop periodic memory sampling and clear the interval. Safe to call when
+ * monitoring was never started or is already stopped.
+ */
+export function stopMemoryMonitoring(): void {
+  if (monitorInterval) {
+    clearInterval(monitorInterval);
+    monitorInterval = null;
+  }
+  // Also clear the manager's own interval in case it was started elsewhere.
+  memoryManager.stop();
 }
 
 export default memoryMonitorMiddleware;

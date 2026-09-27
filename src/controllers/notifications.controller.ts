@@ -10,7 +10,7 @@ export const NotificationsController = {
     if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
-    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 50);
 
     const result = await InAppNotificationService.list(userId, page, limit);
 

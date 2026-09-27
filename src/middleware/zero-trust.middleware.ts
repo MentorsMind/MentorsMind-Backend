@@ -29,7 +29,7 @@ export interface RiskContext {
   signals: string[];
 }
 
-declare module "./auth.middleware" {
+declare module "../types/auth.types" {
   interface AuthenticatedRequest {
     riskContext?: RiskContext;
   }

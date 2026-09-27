@@ -7,7 +7,7 @@ import {
 import { EscrowApiService } from '../services/escrow-api.service';
 import { logger } from '../utils/logger.utils';
 import { AuditLoggerService } from '../services/audit-logger.service';
-import { LogLevel, AuditAction } from '../utils/log-formatter.utils';
+import { LogLevel, AuditAction, SystemActor } from '../utils/log-formatter.utils';
 import type { EscrowReleaseJobData } from '../queues/escrow-release.queue';
 
 const SYSTEM_USER_ID = 'system';
@@ -15,7 +15,7 @@ const SYSTEM_USER_ID = 'system';
 async function processEscrowRelease(
   job: Job<EscrowReleaseJobData>,
 ): Promise<void> {
-  const { escrowId, mentorId, learnerId } = job.data;
+  const { escrowId, mentorId, learnerId, sessionCompletedAt } = job.data;
 
   logger.info('Processing escrow auto-release', { jobId: job.id, escrowId });
 
@@ -38,9 +38,11 @@ async function processEscrowRelease(
     return;
   }
 
-  await EscrowApiService.releaseEscrow(escrowId, SYSTEM_USER_ID);
+  await EscrowApiService.releaseEscrow(escrowId, SYSTEM_USER_ID, undefined, SystemActor.AUTO_RELEASE);
 
   logger.info('Escrow auto-released', { escrowId, mentorId, learnerId });
+
+  const elapsedMs = Date.now() - new Date(sessionCompletedAt).getTime();
 
   await AuditLoggerService.logEvent({
     level: LogLevel.INFO,
@@ -49,7 +51,14 @@ async function processEscrowRelease(
     userId: SYSTEM_USER_ID,
     entityType: 'escrow',
     entityId: escrowId,
-    metadata: { mentorId, learnerId, trigger: 'auto-release-48h' },
+    actorType: SystemActor.AUTO_RELEASE,
+    metadata: { 
+      mentorId, 
+      learnerId, 
+      trigger: 'auto-release-48h',
+      jobId: job.id,
+      elapsedMs
+    },
   });
 }
 

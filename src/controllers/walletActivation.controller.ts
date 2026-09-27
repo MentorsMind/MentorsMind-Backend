@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { StellarAccountService } from "../services/stellarAccount.service";
 import { ResponseUtil } from "../utils/response.utils";
 

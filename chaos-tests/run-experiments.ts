@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { databaseFailureExperiment } from "../experiments/database-failure";
 import { networkPartitionExperiment } from "../experiments/network-partition";
 import { serviceOutageExperiment } from "../experiments/service-outage";
+import { redisFailureExperiment } from "../experiments/redis-failure";
 
 async function main(): Promise<void> {
   if (process.env.CHAOS_ENABLED !== "true") {
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
     databaseFailureExperiment().run(),
     networkPartitionExperiment().run(),
     serviceOutageExperiment().run(),
+    redisFailureExperiment().run(),
   ]);
   await writeFile("chaos-results.json", `${JSON.stringify(results, null, 2)}\n`, "utf8");
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);

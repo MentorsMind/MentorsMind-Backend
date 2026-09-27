@@ -43,6 +43,7 @@ import jobsRoutes from "../jobs.routes";
 // ── Middleware ────────────────────────────────────────────────────────────────
 import { asyncHandler } from "../../utils/asyncHandler.utils";
 import { JwksController } from "../../controllers/jwks.controller";
+import { SearchV2Controller } from "../../controllers/search-v2.controller";
 
 const router = Router();
 
@@ -72,6 +73,9 @@ router.use("/reviews", reviewsRoutes);
 router.use("/conversations", conversationsRoutes);
 router.use("/messages", messageSearchRoutes);
 router.use("/notifications", notificationsRoutes);
+// v2-only mentor search (replaces deprecated v1 findMentors, issue #1096).
+// Registered before the shared search routes so it takes precedence.
+router.get("/search/mentors", SearchV2Controller.searchMentors);
 router.use("/search", searchRoutes);
 
 // JWKS public endpoint — no auth required

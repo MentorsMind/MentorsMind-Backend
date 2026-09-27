@@ -30,7 +30,7 @@ import {
   API_VERSIONS,
   SUPPORTED_VERSIONS,
 } from "./config/api-versions.config";
-import { logger } from "./utils/logger";
+import { logger } from "./utils/logger.utils";
 import { initializeI18n } from "./config/i18n.config";
 import { tenantMiddleware } from "./middleware/tenant.middleware";
 import { requireJsonContentType } from "./middleware/content-type.middleware";
@@ -75,14 +75,88 @@ app.use(tenantMiddleware as any);
 app.use(requireJsonContentType);
 
 // Body parsing
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: true, limit: "100kb" }));
 
 app.use(sanitizeInput);
-    app.use(distributedGeneralLimiter);
-    app.use(metricsMiddleware);
+app.use(distributedGeneralLimiter);
+app.use(metricsMiddleware);
 app.use(versioningMiddleware);
 app.set("trust proxy", 1);
+
+// GraphQL endpoint — POST /api/graphql.
+// The endpoint itself is mounted by initializeGraphQL(app) (called from
+// src/server.ts → src/graphql/server.ts via Apollo's expressMiddleware), but
+// the Swagger/OpenAPI entry is declared here so it is discoverable alongside
+// the rest of the API documentation (issue #1078).
+/**
+ * @swagger
+ * /api/graphql:
+ *   post:
+ *     summary: Execute a GraphQL query or mutation
+ *     description: |
+ *       Single-endpoint GraphQL interface for the MentorMinds API.
+ *
+ *       Send a JSON body containing a `query` document (optionally with
+ *       `variables` and `operationName`). Authentication uses the same
+ *       `Authorization: Bearer <access_token>` header as the REST API.
+ *
+ *       **Exploring the schema:** outside production the Apollo GraphQL
+ *       Playground is served at this path (open `GET /api/graphql` in a
+ *       browser) and schema introspection is enabled, so you can discover
+ *       every available query, mutation, and type directly from the endpoint.
+ *     tags: [GraphQL]
+ *     security:
+ *       - bearerAuth: []
+ *     servers:
+ *       - url: /
+ *         description: GraphQL is mounted at /api/graphql (outside the /api/v1 prefix)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - query
+ *             properties:
+ *               query:
+ *                 type: string
+ *                 description: GraphQL query or mutation document
+ *                 example: "{ me { id email } }"
+ *               variables:
+ *                 type: object
+ *                 additionalProperties: true
+ *                 description: Values for variables declared in the query document
+ *               operationName:
+ *                 type: string
+ *                 description: Operation name when the document contains multiple operations
+ *     responses:
+ *       '200':
+ *         description: |
+ *           Generic GraphQL execution result — `data` is present on success,
+ *           `errors` is present when validation or execution fails.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   nullable: true
+ *                   description: Query/mutation result
+ *                 errors:
+ *                   type: array
+ *                   description: Execution or validation errors
+ *                   items:
+ *                     type: object
+ *       '400':
+ *         description: Malformed GraphQL request
+ *       '401':
+ *         description: Missing or invalid bearer token
+ *       '429':
+ *         description: Rate limit exceeded
+ */
 
 // Swagger docs (served on the current default version)
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -115,31 +189,12 @@ AdvancedCacheService.initialize().catch((err) => {
   logger.error("AdvancedCacheService initialization failed", { error: err });
 });
 
-// ─── GET /api/versions ────────────────────────────────────────────────────────
-app.get("/api/versions", (_req, res) => {
-  const versions = Object.values(API_VERSIONS).map((v) => ({
-    version: (v as any).version,
-    active: (v as any).active,
-    current: (v as any).version === CURRENT_VERSION,
-    ...((v as any).deprecatedAt && { deprecatedAt: (v as any).deprecatedAt }),
-    ...((v as any).sunsetAt && { sunsetAt: (v as any).sunsetAt }),
-    ...((v as any).deprecationMessage && {
-      deprecationMessage: (v as any).deprecationMessage,
-    }),
-    links: {
-      docs: (v as any).active ? `/api/${(v as any).version}/docs` : null,
-    },
-  }));
+import { ApiVersionsController } from "./controllers/api-versions.controller";
 
-  res.json({
-    status: "success",
-    data: {
-      current: CURRENT_VERSION,
-      supported: SUPPORTED_VERSIONS,
-      versions,
-    },
-  });
-});
+// ─── GET /api/versions ────────────────────────────────────────────────────────
+// Meta-endpoint: discover API versions, deprecation timelines, migration guides
+// No authentication required; publicly cacheable
+app.get("/api/versions", (req: any, res: any) => ApiVersionsController.getVersions(req, res));
 
 // ─── API Gateway (opt-in via GATEWAY_ENABLED) ────────────────────────────────
 // Service-discovery context is always attached (cheap, additive); the routing /

@@ -1,22 +1,64 @@
 /**
  * TenantContext — AsyncLocalStorage-based tenant isolation utility.
  *
- * Provides the following capabilities:
- *
  *  1. TenantContext.run(tenantId, fn)   — execute fn inside a tenant scope
  *  2. TenantContext.getTenantId()       — retrieve the current tenant ID (or null)
  *  3. TenantContext.requireTenantId()   — same but throws when not set
  *  4. withTenantFilter(query, params)   — append AND tenant_id = $N to a SQL query
  *  5. ADMIN_BYPASS_TENANT_ID            — sentinel value that disables tenant filters
  *
- * Design notes
- * ─────────────
- * • Uses Node.js built-in `AsyncLocalStorage` (Node 16+, stable in Node 18+).
- * • No external dependencies.
- * • The storage holds a plain `TenantStore` object so we can extend it later
- *   (e.g. add impersonation flags) without breaking the public API.
- * • `withTenantFilter` is a pure utility — it does not query the store itself;
- *   callers pass `tenantId` explicitly so models can use it directly.
+ * How it works
+ * ────────────
+ * Node's `AsyncLocalStorage` gives every request its own "slot" that follows
+ * the async call chain (awaits, callbacks, promises) without being passed as
+ * an argument. `TenantContext.run(tenantId, fn)` opens that slot; anything
+ * called from `fn` — services, models, helpers — can read it back with
+ * `TenantContext.getTenantId()`. Concurrent requests never see each other's
+ * tenant ID.
+ *
+ * There is no `setTenantId()`: the ID is fixed for the lifetime of the `run`
+ * callback. To change tenant, open a new scope with another `run` call.
+ *
+ * When to set / get the tenant ID
+ * ───────────────────────────────
+ * • HTTP requests: `tenantMiddleware` (src/middleware/tenant.middleware.ts)
+ *   already calls `TenantContext.run()` using the tenant resolved from the
+ *   hostname. Route handlers and services should only *read* the ID.
+ * • Background jobs, queue workers, cron tasks, scripts: there is no request,
+ *   so no context. Wrap the work in `TenantContext.run(tenantId, ...)`
+ *   yourself, otherwise `getTenantId()` returns `null` and queries are NOT
+ *   filtered.
+ * • Reading: use `requireTenantId()` wherever a tenant is mandatory (fails
+ *   loudly), `getTenantId()` only where running without a tenant is valid.
+ *
+ * Admin bypass sentinel
+ * ─────────────────────
+ * `ADMIN_BYPASS_TENANT_ID` ('__ADMIN_BYPASS__') is a special tenant ID that
+ * means "deliberately cross-tenant". `withTenantFilter` skips the tenant
+ * predicate for it, and the RLS policies (migration 106) allow every row when
+ * `app.tenant_id` equals it. Only `adminBypassTenantMiddleware` should set it,
+ * and only on routes already guarded by `authenticate` + `requireAdmin`.
+ * Never derive it from user input.
+ *
+ * Interaction with Row Level Security
+ * ───────────────────────────────────
+ * Isolation is enforced in two layers:
+ *   1. Application: `withTenantFilter` / `withCurrentTenantFilter` append
+ *      `AND tenant_id = $N` to your SQL.
+ *   2. Database: `TenantPoolManager` (src/config/database.ts) sets the
+ *      `app.tenant_id` session variable, which RLS policies compare against.
+ * Both layers treat `null` / '' as "no filtering". Queries sent through the
+ * plain `pool` / `db` export never set `app.tenant_id`, so RLS will not
+ * protect them — use `TenantPoolManager` for tenant-scoped data.
+ *
+ * @example
+ * // Background job: establish the scope, then query through both layers.
+ * await TenantContext.run(job.tenantId, async () => {
+ *   const tenantId = TenantContext.requireTenantId();
+ *   const { query, params } = withTenantFilter(
+ *     'SELECT * FROM bookings WHERE status = $1', ['confirmed'], tenantId);
+ *   await TenantPoolManager.withClient(tenantId, (c) => c.query(query, params));
+ * });
  *
  * Performance
  * ──────────────

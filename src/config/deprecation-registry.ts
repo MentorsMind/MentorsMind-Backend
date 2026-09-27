@@ -14,7 +14,11 @@ import { logger } from "../utils/logger.utils";
  * Register all deprecated endpoints here
  *
  * Format:
- * - endpoint: The full endpoint path (e.g., "GET /api/v1/users/:id")
+ * - endpoint: The full endpoint path (e.g., "GET /api/v1/search/mentors").
+ *   Matched literally against `${req.method} ${req.baseUrl}${req.path}`, so
+ *   route params like ":id" never match.
+ * - deprecatedDate: Fixed date the deprecation was announced. Always set it —
+ *   without it the Sunset date is recomputed from "now" on every boot.
  * - replacementEndpoint: The new endpoint to use instead
  * - migrationGuide: URL to migration documentation
  * - reason: Why the endpoint is being deprecated
@@ -22,55 +26,16 @@ import { logger } from "../utils/logger.utils";
  */
 
 export function initializeDeprecationRegistry(): void {
-  // Example: Deprecate old user endpoint
+  // v1 mentor search is superseded by v2 (SearchV2Controller) — issue #1096.
+  // Headers are applied by deprecationMiddleware on the v1 /search mount only
+  // (src/routes/v1/index.ts); search.routes.ts is shared with v2, so the key
+  // must stay version-qualified.
   deprecationManager.registerDeprecation(
-    createDeprecationConfig("GET /api/v1/users/:id", {
-      replacementEndpoint: "GET /api/v2/users/:id",
-      migrationGuide: "https://docs.mentorminds.com/migration/v1-to-v2-users",
-      reason: "Replaced with improved v2 API with better performance",
-      sunsetMonths: 6,
-    }),
-  );
-
-  // Example: Deprecate old booking endpoint
-  deprecationManager.registerDeprecation(
-    createDeprecationConfig("GET /api/v1/bookings", {
-      replacementEndpoint: "GET /api/v2/bookings",
-      migrationGuide:
-        "https://docs.mentorminds.com/migration/v1-to-v2-bookings",
-      reason: "Consolidated into v2 API with enhanced filtering",
-      sunsetMonths: 6,
-    }),
-  );
-
-  // Example: Deprecate old payment endpoint
-  deprecationManager.registerDeprecation(
-    createDeprecationConfig("POST /api/v1/payments/process", {
-      replacementEndpoint: "POST /api/v2/payments/initiate",
-      migrationGuide:
-        "https://docs.mentorminds.com/migration/v1-to-v2-payments",
-      reason: "New payment flow with improved security and error handling",
-      sunsetMonths: 6,
-    }),
-  );
-
-  // Example: Deprecate old session endpoint
-  deprecationManager.registerDeprecation(
-    createDeprecationConfig("GET /api/v1/sessions/:id", {
-      replacementEndpoint: "GET /api/v2/sessions/:id",
-      migrationGuide:
-        "https://docs.mentorminds.com/migration/v1-to-v2-sessions",
-      reason: "Enhanced session data structure with additional metadata",
-      sunsetMonths: 6,
-    }),
-  );
-
-  // Example: Deprecate old review endpoint
-  deprecationManager.registerDeprecation(
-    createDeprecationConfig("POST /api/v1/reviews", {
-      replacementEndpoint: "POST /api/v2/reviews",
-      migrationGuide: "https://docs.mentorminds.com/migration/v1-to-v2-reviews",
-      reason: "Improved review system with better rating validation",
+    createDeprecationConfig("GET /api/v1/search/mentors", {
+      deprecatedDate: new Date("2026-09-25T00:00:00Z"),
+      replacementEndpoint: "GET /api/v2/search/mentors",
+      migrationGuide: "https://docs.mentorminds.com/migration/v1-to-v2-search",
+      reason: "Superseded by v2 mentor search with richer filtering and ranking",
       sunsetMonths: 6,
     }),
   );

@@ -92,6 +92,7 @@ const REQUIRED_QUEUE_NAMES = [
     'INCIDENT_RESPONSE',
     'ONBOARDING_NUDGE',
     'TAX_REPORTING',
+    'REPUTATION_SYNC',
 ] as const;
 
 for (const queueKey of REQUIRED_QUEUE_NAMES) {

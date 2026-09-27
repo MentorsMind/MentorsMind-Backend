@@ -23,6 +23,26 @@ jest.mock('../../src/middleware/auth.middleware', () => ({
 }));
 
 describe('Booking Lifecycle API Integration', () => {
+  it('rejects a booking scheduled in the past with a 400 validation response', async () => {
+    const res = await request(app)
+      .post('/api/v1/bookings')
+      .send({
+        mentorId: '550e8400-e29b-41d4-a716-446655440000',
+        scheduledAt: new Date(Date.now() - 1000).toISOString(),
+        durationMinutes: 60,
+        topic: 'Past booking',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'scheduledAt must be at least 30 minutes in the future',
+        }),
+      ]),
+    );
+  });
+
   it('should create a booking via POST /api/v1/bookings', async () => {
     const res = await request(app)
       .post('/api/v1/bookings')

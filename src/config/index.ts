@@ -97,6 +97,7 @@ const config = {
 
   security: {
     bcryptRounds: parseInt(env.BCRYPT_ROUNDS, 10),
+    hstsMaxAge: Math.max(parseInt(env.HSTS_MAX_AGE, 10), 31_536_000),
   },
 
   platform: {

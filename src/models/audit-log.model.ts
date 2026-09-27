@@ -11,6 +11,7 @@
 import * as crypto from "crypto";
 import pool from "../config/database";
 import { logger } from "../utils/logger";
+import { TenantContext } from "../utils/tenant-context.utils";
 
 // ── Hash helpers ─────────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export interface AuditLogRecord {
   action: string;
   message: string;
   user_id: string | null;
+  /** Owning tenant UUID (NULL = system/shared entry). */
+  tenant_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
   metadata: Record<string, any>;
@@ -83,10 +86,22 @@ export const AuditLogModel = {
    * Uses a serializable read to minimise race conditions on concurrent inserts.
    */
   async create(
-    log: Omit<AuditLogRecord, "id" | "created_at" | "record_hash" | "previous_hash" | "hash_algorithm">,
+    log: Omit<
+      AuditLogRecord,
+      | "id"
+      | "created_at"
+      | "record_hash"
+      | "previous_hash"
+      | "hash_algorithm"
+      | "tenant_id"
+    > & { tenant_id?: string | null },
   ): Promise<AuditLogRecord | null> {
     const createdAt = new Date();
     const createdAtIso = createdAt.toISOString();
+
+    // Explicit tenant wins; otherwise fall back to TenantContext so callers
+    // inside a tenant-scoped request are tagged automatically.
+    const tenantId = log.tenant_id ?? TenantContext.getTenantId() ?? null;
 
     const client = await pool.connect();
     try {
@@ -123,9 +138,10 @@ export const AuditLogModel = {
         INSERT INTO audit_logs (
           level, action, message, user_id, entity_type, entity_id,
           metadata, ip_address, user_agent,
-          created_at, previous_hash, record_hash, hash_algorithm
+          created_at, previous_hash, record_hash, hash_algorithm,
+          tenant_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *;
       `;
 
@@ -143,6 +159,7 @@ export const AuditLogModel = {
         previousHash,
         recordHash,
         "hmac-sha256",
+        tenantId,
       ];
 
       const { rows } = await client.query<AuditLogRecord>(query, values);

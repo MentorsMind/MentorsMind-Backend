@@ -6,6 +6,10 @@ import {
 } from "../models/notification-delivery-tracking.model";
 import { logger } from "../utils/logger";
 import * as https from "https";
+import {
+  emailDeliveryFailuresTotal,
+  emailDeliverySuccessTotal,
+} from "../config/metrics";
 
 export interface EmailRequest {
   to: string[];
@@ -360,6 +364,7 @@ export class EmailService {
       try {
         const rendered = await this.renderContent(request);
         const { messageId } = await provider.send(request, rendered);
+        emailDeliverySuccessTotal.inc({ provider: provider.name.toLowerCase() });
 
         // Reset circuit breaker on success
         provider.isHealthy = true;
@@ -389,6 +394,7 @@ export class EmailService {
         };
       } catch (error) {
         lastError = error instanceof Error ? error.message : "Unknown error";
+        emailDeliveryFailuresTotal.inc({ provider: provider.name.toLowerCase() });
         this.handleProviderError(provider, lastError);
 
         if (request.trackingId) {

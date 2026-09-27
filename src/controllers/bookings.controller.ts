@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
+import { BookingModel } from "../models/booking.model";
 import { UsersService } from "../services/users.service";
 import { MeetingService } from "../services/meeting.service";
 import { NotificationService } from "../services/notification.service";
@@ -47,11 +48,27 @@ export const BookingsController = {
   confirmBooking: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    if (Array.isArray(id)) {
+    if (!id || Array.isArray(id)) {
       return ResponseUtil.error(res, "Invalid session ID", 400);
     }
 
-    // Find the session
+    const userId = (req as AuthenticatedRequest).user?.id ?? (req as AuthenticatedRequest).user?.userId;
+
+    // Check if this ID refers to a booking in the bookings table
+    const booking = await BookingModel.findById(id);
+    if (booking) {
+      if (!userId) {
+        return ResponseUtil.unauthorized(res, "Authentication required");
+      }
+      const confirmed = await BookingsService.confirmBooking(id, userId);
+      return ResponseUtil.success(
+        res,
+        { booking: confirmed, session: confirmed },
+        "Booking confirmed successfully",
+      );
+    }
+
+    // Find the session in sessions table
     const session = await SessionModel.findById(id);
 
     if (!session) {
@@ -381,6 +398,32 @@ export const BookingsController = {
       res,
       { booking },
       "No-show dispute resolved",
+    );
+  }),
+
+  /**
+   * Complete a booking
+   * PATCH /api/v1/bookings/:id/complete
+   * POST /api/v1/bookings/:id/complete
+   */
+  completeBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?.id ?? req.user?.userId;
+
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+
+    const booking = await BookingsService.completeBooking(id, userId);
+
+    return ResponseUtil.success(
+      res,
+      { booking, session: booking },
+      "Booking marked as completed successfully",
     );
   }),
 };

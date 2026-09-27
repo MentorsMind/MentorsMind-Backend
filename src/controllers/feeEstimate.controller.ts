@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { StellarFeesService } from "../services/stellarFees.service";
 import { ResponseUtil } from "../utils/response.utils";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 
 export const FeeEstimateController = {
   async getFeeEstimate(req: AuthenticatedRequest, res: Response) {

@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { MessagingService } from '../services/messaging.service';
 import { AttachmentService } from '../services/attachment.service';
 import { ResponseUtil } from '../utils/response.utils';

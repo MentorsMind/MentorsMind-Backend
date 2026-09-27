@@ -24,9 +24,12 @@ import { SessionSummaryModel } from "../models/session-summary.model";
 import { MentorsService } from "./mentors.service";
 import { LoyaltyService } from "./loyalty.service";
 import { scheduleNoShowCheck } from "../queues/session-no-show.queue";
+import { scheduleReputationSync } from "../queues/reputation-sync.queue";
 import config from "../config";
 import { withSpan } from "../utils/tracing.utils";
 import { EventStoreService } from "./event-store.service";
+import { DatabaseService } from "./database.service";
+import { emitBookingConfirmed } from "./outbox.service";
 import {
   BOOKING_AGGREGATE_TYPE,
   BookingProjectionEventType,
@@ -114,12 +117,20 @@ function isCancelledBeforeSession(booking: BookingRecord): boolean {
   return booking.scheduled_at > new Date();
 }
 
+let bookingsServiceInitialized = false;
+
 export const BookingsService = {
   /**
    * Initialize bookings service (starts background monitoring only).
    * Table schema is managed by migrations, not runtime DDL.
+   * Idempotent — safe to call multiple times.
    */
   async initialize(): Promise<void> {
+    if (bookingsServiceInitialized) {
+      logger.info("BookingsService already initialized, skipping");
+      return;
+    }
+    bookingsServiceInitialized = true;
     // Start pending escrow monitoring (background job)
     SorobanEscrowService.startPendingEscrowMonitoring();
   },
@@ -516,12 +527,13 @@ export const BookingsService = {
       throw createError(ErrorCode.BOOKING_NOT_CONFIRMED, 400);
     }
 
-    // Verify session time has passed
+    // Verify session time has passed or both participants have joined
     const sessionEnd = calculateEndTime(
       booking.scheduled_at,
       booking.duration_minutes,
     );
-    if (sessionEnd > new Date()) {
+    const bothJoined = !!(booking.mentor_joined_at && booking.mentee_joined_at);
+    if (sessionEnd > new Date() && !bothJoined) {
       throw createError(ErrorCode.BOOKING_SESSION_NOT_ENDED, 400);
     }
 

@@ -3,7 +3,7 @@
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { VerificationService } from '../services/verification.service';
 import { ResponseUtil } from '../utils/response.utils';
 
