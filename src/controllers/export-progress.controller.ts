@@ -19,7 +19,7 @@
  */
 
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ResponseUtil } from "../utils/response.utils";
 import { ExportJobModel, ExportFormat } from "../models/export-job.model";
 import { ExportService } from "../services/export.service";

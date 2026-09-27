@@ -1,5 +1,5 @@
 import { Response, NextFunction } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from './auth.middleware';
 import { ResponseUtil } from '../utils/response.utils';
 
 /**

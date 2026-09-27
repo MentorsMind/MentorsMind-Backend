@@ -4,15 +4,8 @@ import { AdvancedAnalyticsService } from "../services/advanced-analytics.service
 import { AIRecommendationsService } from "../services/ai-recommendations.service";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ErrorCode } from "../errors/error-codes";
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    userId: string;
-    role: string;
-  };
-}
 
 export const AnalyticsController = {
   /**

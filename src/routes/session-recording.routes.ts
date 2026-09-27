@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
 import { SessionRecordingController } from '../controllers/session-recording.controller';
 import { authenticate, requireRole } from '../middleware/auth.middleware';
 import {
@@ -201,6 +201,7 @@ router.get(
 
 router.post(
   '/recordings/:recordingId/upload',
+  express.json({ limit: '50mb' }),
   asyncHandler(SessionRecordingController.uploadRecording),
 );
 

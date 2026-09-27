@@ -14,6 +14,7 @@
 
 export enum ErrorCode {
   // ─── Authentication ─────────────────────────────────────────────────────────
+  UNAUTHORIZED = 'UNAUTHORIZED',
   AUTH_UNAUTHORIZED = 'AUTH_UNAUTHORIZED',
   AUTH_REQUIRED = 'AUTH_REQUIRED',
   AUTH_AUTHENTICATION_REQUIRED = 'AUTH_AUTHENTICATION_REQUIRED',
@@ -35,6 +36,7 @@ export enum ErrorCode {
   AUTH_WEAK_PASSWORD = 'AUTH_WEAK_PASSWORD',
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  FORBIDDEN = 'FORBIDDEN',
   AUTHZ_FORBIDDEN = 'AUTHZ_FORBIDDEN',
   AUTH_FORBIDDEN = 'AUTH_FORBIDDEN',
   AUTHZ_ACCESS_DENIED = 'AUTHZ_ACCESS_DENIED',
@@ -362,6 +364,7 @@ function entry(code: ErrorCode, httpStatus: number, message: string): [ErrorCode
  */
 export const ERROR_CATALOG = Object.fromEntries([
   // ─── Authentication ─────────────────────────────────────────────────────────
+  entry(ErrorCode.UNAUTHORIZED, 401, 'Unauthorized access'),
   entry(ErrorCode.AUTH_UNAUTHORIZED, 401, 'Unauthorized access'),
   entry(ErrorCode.AUTH_REQUIRED, 401, 'Authentication required'),
   entry(ErrorCode.AUTH_AUTHENTICATION_REQUIRED, 401, 'Authentication required'),
@@ -383,6 +386,7 @@ export const ERROR_CATALOG = Object.fromEntries([
   entry(ErrorCode.AUTH_WEAK_PASSWORD, 400, 'Password is too weak'),
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  entry(ErrorCode.FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTH_FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_ACCESS_DENIED, 403, 'You do not have access to this resource'),

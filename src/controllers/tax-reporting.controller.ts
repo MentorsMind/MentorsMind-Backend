@@ -1,10 +1,10 @@
 import { Response } from "express";
-import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { z } from "zod";
 import { TaxReportingService } from "../services/tax-reporting.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
+import { setFileDownloadHeaders } from "../utils/file-download.utils";
 
 const currentYear = new Date().getFullYear();
 
@@ -102,8 +102,7 @@ export const TaxReportingController = {
     }
     const exportData = await TaxReportingService.generateExport(userId, taxYear);
     if (!exportData) { ResponseUtil.error(res, "Tax report not found", 404); return; }
-    res.setHeader("Content-Type", exportData.mimeType);
-    res.setHeader("Content-Disposition", `attachment; filename="${exportData.fileName}"`);
+    setFileDownloadHeaders(res, exportData.fileName, exportData.mimeType);
     res.send(exportData.data);
   }),
 };

@@ -1,3 +1,11 @@
+/**
+ * Sessions Seed — Creates bookings (sessions) and payment transactions.
+ * 
+ * Pairs mentors with mentees, creates mix of completed (past) and upcoming (future) bookings.
+ * Each booking has a linked payment transaction with Stellar hash and escrow status.
+ * Sessions per mentor is size-configurable (2 in test, 5 in dev).
+ */
+
 import { PoolClient } from 'pg';
 import { SeedFn, SeedSize, SEED_SIZES, seededRandom, pick, daysAgo, daysFromNow } from '../../src/utils/seed-runner.utils';
 import { seededUsers } from './users.seed';

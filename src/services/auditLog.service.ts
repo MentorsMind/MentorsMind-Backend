@@ -17,7 +17,7 @@ import pool from "../config/database";
 import { Request } from "express";
 import { anonymizeIp } from "../utils/sanitization.utils";
 import { logger } from "../utils/logger.utils";
-import { auditLogQueueRejectionsTotal } from "../config/metrics";
+import { TenantContext } from "../utils/tenant-context.utils";
 
 // ── Hash configuration ──────────────────────────────────────────────────────
 
@@ -76,6 +76,7 @@ function computeRecordHmac(fields: {
 export interface AuditLogEntry {
   id: string;
   user_id: string | null;
+  tenant_id: string | null;
   action: string;
   resource_type: string;
   resource_id: string | null;
@@ -100,10 +101,17 @@ export interface LogAuditParams {
   ipAddress?: string | null;
   userAgent?: string | null;
   metadata?: Record<string, any>;
+  /**
+   * Owning tenant for this entry. Optional — when omitted, falls back to the
+   * current TenantContext (AsyncLocalStorage). Pass it explicitly for
+   * cross-context calls; leave unset for system jobs with no tenant.
+   */
+  tenantId?: string | null;
 }
 
 export interface AuditLogFilters {
   userId?: string;
+  tenantId?: string;
   action?: string;
   resourceType?: string;
   startDate?: string;
@@ -182,6 +190,12 @@ export const AuditLogService = {
     const createdAt = new Date();
     const createdAtIso = createdAt.toISOString();
 
+    // Resolve the tenant: explicit param wins, otherwise fall back to the
+    // AsyncLocalStorage tenant context. Null for system/background jobs.
+    // Note: tenant_id is intentionally NOT part of the HMAC canonical form —
+    // adding it would invalidate the hash chain of pre-existing entries.
+    const tenantId = params.tenantId ?? TenantContext.getTenantId() ?? null;
+
     // Step 1: Fetch the most recent record's hash to link the chain.
     // We use a transaction to ensure no concurrent insert races between
     // fetching the previous hash and inserting the new record.
@@ -213,9 +227,10 @@ export const AuditLogService = {
         INSERT INTO audit_logs (
           user_id, action, resource_type, resource_id,
           old_value, new_value, ip_address, user_agent, metadata,
-          created_at, previous_hash, record_hash, hash_algorithm
+          created_at, previous_hash, record_hash, hash_algorithm,
+          tenant_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
       `;
 
@@ -233,6 +248,7 @@ export const AuditLogService = {
         previousHash,
         recordHash,
         "hmac-sha256",
+        tenantId,
       ];
 
       const { rows } = await client.query<AuditLogEntry>(query, values);
@@ -263,6 +279,7 @@ export const AuditLogService = {
     const userId = (req as any).user?.id || null;
     const ipAddress = extractIpAddress(req);
     const userAgent = req.headers["user-agent"] || null;
+    const tenantId = (req as any).tenant?.id;
 
     return this.log({
       userId,
@@ -274,6 +291,7 @@ export const AuditLogService = {
       ipAddress,
       userAgent,
       metadata,
+      tenantId,
     });
   },
 
@@ -288,6 +306,11 @@ export const AuditLogService = {
     if (filters.userId) {
       conditions.push(`user_id = $${paramIndex++}`);
       values.push(filters.userId);
+    }
+
+    if (filters.tenantId) {
+      conditions.push(`tenant_id = $${paramIndex++}`);
+      values.push(filters.tenantId);
     }
 
     if (filters.action) {
@@ -349,6 +372,7 @@ export const AuditLogService = {
     const headers = [
       "ID",
       "User ID",
+      "Tenant ID",
       "Action",
       "Resource Type",
       "Resource ID",
@@ -369,6 +393,7 @@ export const AuditLogService = {
       const row = [
         log.id,
         log.user_id || "",
+        log.tenant_id || "",
         log.action,
         log.resource_type,
         log.resource_id || "",

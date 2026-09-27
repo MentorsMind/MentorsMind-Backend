@@ -205,8 +205,11 @@ export class SearchService {
    * Get autocomplete suggestions for mentor names with caching.
    */
   static async autocomplete(query: string, limit: number = 10): Promise<string[]> {
-    // Normalise query for cache key
+    // Early return for empty or too-short queries
     const normalised = query.toLowerCase().trim();
+    if (normalised.length < 2) {
+      return [];
+    }
     const cacheKey = `mm:search:autocomplete:${normalised}:${limit}`;
 
     const cached = await CacheService.get<string[]>(cacheKey);

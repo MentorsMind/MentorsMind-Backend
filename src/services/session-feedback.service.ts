@@ -5,6 +5,7 @@ import {
   SessionFeedback,
 } from "../models/session-feedback.model";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 
 export const SessionFeedbackService = {
   async submit(
@@ -16,14 +17,14 @@ export const SessionFeedbackService = {
       `SELECT id, mentor_id, mentee_id, status FROM sessions WHERE id = $1`,
       [payload.session_id],
     );
-    if (!rows.length) throw createError("Session not found", 404);
+    if (!rows.length) throw createError(ErrorCode.SESSION_NOT_FOUND, 404);
 
     const session = rows[0];
     if (session.mentee_id !== menteeId)
-      throw createError("Not authorized for this session", 403);
+      throw createError(ErrorCode.SESSION_NOT_AUTHORIZED, 403);
     if (session.status !== "completed")
       throw createError(
-        "Feedback can only be submitted for completed sessions",
+        ErrorCode.BOOKING_NOT_CONFIRMED,
         400,
       );
 

@@ -1,4 +1,5 @@
 import path from "path";
+import { Response } from "express";
 
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]+/g;
 const RESERVED_FILENAME_CHARS = /[\\/:*?"<>|]+/g;
@@ -43,6 +44,13 @@ export function buildAttachmentContentDisposition(filename: string): string {
   const asciiFallback = toAsciiFallback(safeFileName, "download");
 
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeRfc5987(safeFileName)}`;
+}
+
+export function setFileDownloadHeaders(res: Response, filename: string, contentType: string): void {
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", buildAttachmentContentDisposition(filename));
+  // Stop browsers from MIME-sniffing the download into an executable type (e.g. HTML).
+  res.setHeader("X-Content-Type-Options", "nosniff");
 }
 
 export function sanitizeArchiveEntryName(filename: string, fallback = "download.bin"): string {

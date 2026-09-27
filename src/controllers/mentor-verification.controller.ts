@@ -5,6 +5,7 @@ import { SkillTestService } from "../services/skill-test.service";
 import { BackgroundCheckService } from "../services/background-check.service";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 
 export const MentorVerificationController = {
   async getCertificationTypes(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -21,10 +22,10 @@ export const MentorVerificationController = {
   async createCertification(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const mentorId = req.user?.id;
-      if (!mentorId) throw createError("Unauthorized", 401);
+      if (!mentorId) throw createError(ErrorCode.UNAUTHORIZED, 401);
 
       const { certificationTypeId, verificationMethod, metadata, notes } = req.body;
-      if (!certificationTypeId) throw createError("Certification type ID is required", 400);
+      if (!certificationTypeId) throw createError(ErrorCode.VALIDATION_REQUIRED_FIELD, 400, { field: 'certificationTypeId' });
 
       const certification = await CertificationService.createCertification({
         mentorId, certificationTypeId, verificationMethod, metadata, notes,
@@ -42,7 +43,7 @@ export const MentorVerificationController = {
       const { includeExpired = "false" } = req.query;
 
       if (req.user?.role !== "admin" && req.user?.id !== mentorId) {
-        throw createError("Access denied", 403);
+        throw createError(ErrorCode.AUTHZ_ACCESS_DENIED, 403);
       }
 
       const certifications = await CertificationService.getMentorCertifications(mentorId, includeExpired === "true");
@@ -81,7 +82,7 @@ export const MentorVerificationController = {
   async startSkillTest(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const mentorId = req.user?.id;
-      if (!mentorId) throw createError("Unauthorized", 401);
+      if (!mentorId) throw createError(ErrorCode.UNAUTHORIZED, 401);
 
       const { testId } = req.params;
       const { certificationId } = req.body;
@@ -99,7 +100,7 @@ export const MentorVerificationController = {
     try {
       const { attemptId } = req.params;
       const { answers } = req.body;
-      if (!answers) throw createError("Answers are required", 400);
+      if (!answers) throw createError(ErrorCode.TEST_ANSWERS_REQUIRED, 400);
 
       const result = await SkillTestService.submitTestAnswers({ attemptId, answers });
       res.status(200).json({ success: true, data: result });
@@ -112,10 +113,10 @@ export const MentorVerificationController = {
   async initiateBackgroundCheck(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const mentorId = req.user?.id;
-      if (!mentorId) throw createError("Unauthorized", 401);
+      if (!mentorId) throw createError(ErrorCode.UNAUTHORIZED, 401);
 
       const { checkType, provider, certificationId, metadata } = req.body;
-      if (!checkType) throw createError("Background check type is required", 400);
+      if (!checkType) throw createError(ErrorCode.BACKGROUND_CHECK_INPUT_REQUIRED, 400);
 
       const check = await BackgroundCheckService.initiateBackgroundCheck({
         mentorId, checkType, provider, certificationId, metadata,
@@ -131,10 +132,10 @@ export const MentorVerificationController = {
     try {
       const { checkId } = req.params;
       const check = await BackgroundCheckService.getBackgroundCheck(checkId);
-      if (!check) throw createError("Background check not found", 404);
+      if (!check) throw createError(ErrorCode.BACKGROUND_CHECK_NOT_FOUND, 404);
 
       if (req.user?.role !== "admin" && req.user?.id !== check.mentorId) {
-        throw createError("Access denied", 403);
+        throw createError(ErrorCode.AUTHZ_ACCESS_DENIED, 403);
       }
 
       res.status(200).json({ success: true, data: check });
@@ -166,7 +167,7 @@ export const MentorVerificationController = {
       const { reason } = req.body;
       const revokedBy = req.user?.id ?? "";
 
-      if (!reason) throw createError("Revocation reason is required", 400);
+      if (!reason) throw createError(ErrorCode.VALIDATION_REQUIRED_FIELD, 400, { field: 'reason' });
 
       await CertificationService.revokeCertification(certificationId, reason, revokedBy);
       res.status(200).json({ success: true, message: "Certification revoked successfully" });

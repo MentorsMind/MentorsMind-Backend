@@ -18,7 +18,7 @@
 import { Response } from "express";
 import { z } from "zod";
 import pool from "../config/database";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ResponseUtil } from "../utils/response.utils";
 import { anonymizeIp } from "../utils/sanitization.utils";
 

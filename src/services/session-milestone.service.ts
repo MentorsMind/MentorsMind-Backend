@@ -3,6 +3,7 @@ import { CacheService } from "./cache.service";
 import { CacheKeys, CacheTTL } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import { BookingRecord } from "../models/booking.model";
 
 export interface SessionMilestoneMapping {
@@ -53,14 +54,14 @@ export const SessionMilestoneService = {
     // Check if mapping already exists
     const existingMapping = await this.getMappingByBookingId(bookingId);
     if (existingMapping) {
-      throw createError("Session is already linked to a milestone", 409);
+      throw createError(ErrorCode.SESSION_MILESTONE_ALREADY_LINKED, 409);
     }
 
     // Validate prerequisite requirements for milestone sessions
     if (sessionType === 'milestone') {
       const prerequisitesMet = await this.validatePrerequisites(milestoneId, userId);
       if (!prerequisitesMet) {
-        throw createError("Prerequisites not met for this milestone", 403);
+        throw createError(ErrorCode.MILESTONE_PREREQUISITES_NOT_MET, 403);
       }
     }
 
@@ -98,7 +99,7 @@ export const SessionMilestoneService = {
     // Get existing mapping to validate access
     const mapping = await this.getMappingByBookingId(bookingId);
     if (!mapping) {
-      throw createError("Session is not linked to any milestone", 404);
+      throw createError(ErrorCode.SESSION_MILESTONE_LINK_MISSING, 404);
     }
 
     // Validate user has access to the milestone
@@ -196,7 +197,7 @@ export const SessionMilestoneService = {
     );
 
     if (milestoneRows.length === 0) {
-      throw createError("Milestone not found", 404);
+      throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
     }
 
     const milestone = milestoneRows[0];
@@ -315,7 +316,7 @@ export const SessionMilestoneService = {
   ): Promise<SessionMilestoneMapping> {
     const mapping = await this.getMappingByBookingId(bookingId);
     if (!mapping) {
-      throw createError("Session is not linked to any milestone", 404);
+      throw createError(ErrorCode.SESSION_MILESTONE_LINK_MISSING, 404);
     }
 
     // Validate user has access to the milestone
@@ -421,14 +422,14 @@ export const SessionMilestoneService = {
     );
 
     if (rows.length === 0) {
-      throw createError("Milestone not found", 404);
+      throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
     }
 
     const milestone = rows[0];
     
     // Check if user is mentor or enrolled student
     if (milestone.mentor_id !== userId && milestone.student_id !== userId) {
-      throw createError("Access denied to this milestone", 403);
+      throw createError(ErrorCode.MILESTONE_ACCESS_DENIED, 403);
     }
 
     return milestone;
@@ -441,14 +442,14 @@ export const SessionMilestoneService = {
     );
 
     if (rows.length === 0) {
-      throw createError("Booking not found", 404);
+      throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
     }
 
     const booking = rows[0];
 
     // Check if user is mentee or mentor
     if (booking.mentee_id !== userId && booking.mentor_id !== userId) {
-      throw createError("Access denied to this booking", 403);
+      throw createError(ErrorCode.AUTHZ_ACCESS_DENIED, 403);
     }
 
     return booking;

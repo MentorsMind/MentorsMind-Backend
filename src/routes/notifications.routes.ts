@@ -40,7 +40,7 @@ const router = Router();
  *         schema:
  *           type: integer
  *           default: 20
- *           maximum: 100
+ *           maximum: 50
  *         description: Number of notifications per page
  *     responses:
  *       200:

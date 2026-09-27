@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { CDNHealthService } from '../services/cdn-health.service';
 import { CDNService } from '../services/cdn.service';
 import { ResponseUtil } from '../utils/response.utils';

@@ -11,6 +11,7 @@
     "start": "node dist/bootstrap.js",
     "start:worker": "node dist/worker-bootstrap.js",
     "lint": "node --max-old-space-size=4096 node_modules/eslint/bin/eslint.js .",
+    "audit": "npm audit --audit-level=high",
     "test:unit": "jest --config jest.unit.config.ts --runInBand",
     "test:integration": "jest --config jest.integration.config.ts --runInBand",
     "test:tenant-isolation": "jest --config tests/integration/jest.tenant-isolation.config.ts --runInBand --forceExit",

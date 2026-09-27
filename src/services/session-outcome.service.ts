@@ -3,6 +3,7 @@ import { CacheService } from "./cache.service";
 import { CacheKeys } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import { SessionMilestoneService } from "./session-milestone.service";
 import { MilestoneCompletionService } from "./milestone-completion.service";
 import { ProgressTrackingService } from "./progress-tracking.service";
@@ -72,19 +73,19 @@ export const SessionOutcomeService = {
     );
 
     if (bookingRows.length === 0) {
-      throw createError("Booking not found", 404);
+      throw createError(ErrorCode.BOOKING_NOT_FOUND, 404);
     }
 
     const booking = bookingRows[0];
 
     // Verify user is mentor or mentee
     if (booking.mentor_id !== userId && booking.mentee_id !== userId) {
-      throw createError("Access denied to this booking", 403);
+      throw createError(ErrorCode.AUTHZ_ACCESS_DENIED, 403);
     }
 
     // Check if booking is completed
     if (booking.status !== "completed") {
-      throw createError("Can only create outcomes for completed sessions", 400);
+      throw createError(ErrorCode.SESSION_OUTCOME_INVALID_STATE, 400);
     }
 
     // Get milestone mapping if exists
@@ -164,7 +165,7 @@ export const SessionOutcomeService = {
     // Get existing outcome
     const existing = await this.getSessionOutcome(outcomeId, userId);
     if (!existing) {
-      throw createError("Session outcome not found", 404);
+      throw createError(ErrorCode.SESSION_OUTCOME_NOT_FOUND, 404);
     }
 
     const fields: string[] = [];
@@ -361,12 +362,12 @@ export const SessionOutcomeService = {
     );
 
     if (accessRows.length === 0) {
-      throw createError("Milestone not found", 404);
+      throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
     }
 
     const access = accessRows[0];
     if (access.mentor_id !== userId && access.student_id !== userId) {
-      throw createError("Access denied to this milestone", 403);
+      throw createError(ErrorCode.MILESTONE_ACCESS_DENIED, 403);
     }
 
     const { rows } = await pool.query(
