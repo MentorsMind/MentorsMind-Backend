@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
+import { BookingModel } from "../models/booking.model";
 import { UsersService } from "../services/users.service";
 import { MeetingService } from "../services/meeting.service";
 import { NotificationService } from "../services/notification.service";
@@ -47,11 +48,27 @@ export const BookingsController = {
   confirmBooking: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    if (Array.isArray(id)) {
+    if (!id || Array.isArray(id)) {
       return ResponseUtil.error(res, "Invalid session ID", 400);
     }
 
-    // Find the session
+    const userId = (req as AuthenticatedRequest).user?.id ?? (req as AuthenticatedRequest).user?.userId;
+
+    // Check if this ID refers to a booking in the bookings table
+    const booking = await BookingModel.findById(id);
+    if (booking) {
+      if (!userId) {
+        return ResponseUtil.unauthorized(res, "Authentication required");
+      }
+      const confirmed = await BookingsService.confirmBooking(id, userId);
+      return ResponseUtil.success(
+        res,
+        { booking: confirmed, session: confirmed },
+        "Booking confirmed successfully",
+      );
+    }
+
+    // Find the session in sessions table
     const session = await SessionModel.findById(id);
 
     if (!session) {
@@ -65,8 +82,8 @@ export const BookingsController = {
 
     // Get mentor and mentee details
     const [mentor, mentee] = await Promise.all([
-      UsersService.findById(session.mentor_id),
-      UsersService.findById(session.mentee_id),
+      (UsersService as any).findById(session.mentor_id),
+      (UsersService as any).findById(session.mentee_id),
     ]);
 
     if (!mentor || !mentee) {
@@ -204,8 +221,10 @@ export const BookingsController = {
       return ResponseUtil.error(res, "Unauthorized", 401);
     }
 
-    const { upcoming, cursor, limit } = req.query as any;
-    
+    const { upcoming, cursor, limit: limitQuery, page: pageQuery, status } = req.query as any;
+    const page = pageQuery ? parseInt(pageQuery, 10) : 1;
+    const limit = limitQuery ? parseInt(limitQuery, 10) : 20;
+
     // We only support cursor pagination for the main list for now as per standardization requirements
     if (upcoming === "true") {
       const sessions = await SessionModel.findUpcomingByUserId(userId);
@@ -218,24 +237,37 @@ export const BookingsController = {
       return ResponseUtil.success(res, { data: sessionsData });
     }
 
-    const result = await SessionModel.findByUserIdPaginated(userId, { 
-      cursor, 
-      limit: limit ? parseInt(limit, 10) : 20 
+    const { bookings, total } = await BookingsService.listBookings(userId, {
+      status,
+      cursor,
+      page,
+      limit,
     });
 
-    const sessionsData = result.sessions.map((session) => ({
+    const sessionsData = bookings.map((session: any) => ({
       ...session,
       meeting_url: session.status === "confirmed" ? session.meeting_url : null,
       meeting_provider: session.status === "confirmed" ? session.meeting_provider : null,
       meeting_expires_at: session.status === "confirmed" ? session.meeting_expires_at : null,
     }));
 
-    ResponseUtil.success(res, { 
-      data: sessionsData,
-      next_cursor: result.next_cursor,
-      has_more: result.has_more,
-      total: result.total
-    });
+    const totalPages = Math.ceil(total / limit) || 1;
+    const meta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    ResponseUtil.success(
+      res,
+      sessionsData,
+      "Bookings retrieved successfully",
+      200,
+      meta,
+    );
   }),
 
   /**
@@ -366,6 +398,32 @@ export const BookingsController = {
       res,
       { booking },
       "No-show dispute resolved",
+    );
+  }),
+
+  /**
+   * Complete a booking
+   * PATCH /api/v1/bookings/:id/complete
+   * POST /api/v1/bookings/:id/complete
+   */
+  completeBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?.id ?? req.user?.userId;
+
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+
+    const booking = await BookingsService.completeBooking(id, userId);
+
+    return ResponseUtil.success(
+      res,
+      { booking, session: booking },
+      "Booking marked as completed successfully",
     );
   }),
 };

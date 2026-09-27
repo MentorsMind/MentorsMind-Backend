@@ -12,7 +12,7 @@ export const listNotificationsSchema = z.object({
             .string()
             .optional()
             .transform((v) => (v ? parseInt(v, 10) : 20))
-            .refine((v) => Number.isInteger(v) && v >= 1 && v <= 100, 'Limit must be between 1 and 100'),
+            .refine((v) => Number.isInteger(v) && v >= 1 && v <= 50, 'Limit must be between 1 and 50'),
     }),
 });
 

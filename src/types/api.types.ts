@@ -1,4 +1,4 @@
-import { Request } from 'express';
+export type { AuthenticatedRequest } from './auth.types';
 
 export interface ApiResponse<T = any> {
   status: 'success' | 'error' | 'fail';
@@ -23,10 +23,6 @@ export interface PaginationMeta {
   totalPages: number;
   hasNext: boolean;
   hasPrev: boolean;
-}
-
-export interface AuthenticatedRequest extends Request {
-  user?: Express.User;
 }
 
 export interface PaginationQuery {

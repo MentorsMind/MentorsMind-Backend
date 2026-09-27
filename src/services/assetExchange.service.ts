@@ -13,6 +13,7 @@ import { Asset } from '@stellar/stellar-sdk';
 import { server } from '../config/stellar';
 import { CacheService } from './cache.service';
 import { OracleService } from './oracle.service';
+import { OracleUnavailableError } from './oracle.service';
 import { createError } from '../middleware/errorHandler';
 import { ErrorCode } from '../errors/error-codes';
 import { logger } from '../utils/logger.utils';
@@ -310,6 +311,7 @@ export const AssetExchangeService = {
             rate,
             fetchedAt: oraclePrice.updatedAt,
             source: 'oracle',
+            ...(oraclePrice.fromFallback ? { warning: 'oracle_stale' as const } : {}),
           };
         }
 
@@ -319,11 +321,20 @@ export const AssetExchangeService = {
           asset: oracleAsset.symbol,
         });
       } catch (err) {
-        logger.warn('Oracle price lookup failed, falling back to SDEX', {
-          from,
-          to,
-          error: err instanceof Error ? err.message : err,
-        });
+        if (err instanceof OracleUnavailableError) {
+          logger.warn('Oracle contract unavailable — falling back to SDEX', {
+            from,
+            to,
+            contractError: err.contractError,
+            usedFallback: err.usedFallback,
+          });
+        } else {
+          logger.warn('Oracle price lookup failed, falling back to SDEX', {
+            from,
+            to,
+            error: err instanceof Error ? err.message : err,
+          });
+        }
       }
 
       const dexRate = await this._fetchRateFromDex(from, to);

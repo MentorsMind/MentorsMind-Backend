@@ -31,6 +31,7 @@ import subscriptionRoutes from "./subscriptions.routes";
 import taxRoutes from "./tax.routes";
 import oracleRoutes from "./oracle.routes";
 import vestingRoutes from "./vesting.routes";
+import stakingRoutes from "./staking.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -105,6 +106,7 @@ router.use("/developer", developerRoutes);
 router.use("/subscriptions", subscriptionRoutes);
 router.use("/tax", taxRoutes);
 router.use("/oracle", oracleRoutes);
+router.use("/staking", stakingRoutes);
 router.use("/admin/audit-logs", adminAuditRoutes);
 router.use("/admin/hsm", hsmAdminRoutes);
 router.use("/collaborative-learning", collaborativeLearningRoutes);

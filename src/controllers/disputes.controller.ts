@@ -5,14 +5,7 @@ import { DisputeModel } from "../models/dispute.model";
 import { routeParam } from "../utils/route-params.utils";
 import { RESOLUTION_TEMPLATES } from "../constants/resolution-templates.constant";
 import { z } from 'zod';
-import { AuditLogService } from '../services/audit-logger.service';
-
-const createDisputeSchema = z.object({
-  session_id: z.string().uuid(),
-  type: z.enum(['payment', 'service_quality', 'no_show', 'cancellation', 'other']),
-  reason: z.string().min(10).max(1000),
-  evidence: z.array(z.string()).optional()
-});
+import { AuditLoggerService } from '../services/audit-logger.service';
 
 export class DisputesController {
   static async openDispute(req: Request, res: Response): Promise<void> {
@@ -26,29 +19,29 @@ export class DisputesController {
         return;
       }
 
-      const validatedData = createDisputeSchema.parse(req.body);
+      const { session_id, type, reason } = req.body;
       const filed_by_id = req.user.userId;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
       const dispute = await DisputeService.openDispute(
-        validatedData.session_id,
+        session_id,
         filed_by_id,
-        validatedData.type,
-        validatedData.reason,
+        type,
+        reason,
         ipAddress,
         userAgent
       );
 
       // Log dispute creation for audit
-      await AuditLogService.log({
+      await AuditLoggerService.logEvent({
         action: 'DISPUTE_OPENED',
         userId: filed_by_id,
         entityType: 'dispute',
         entityId: dispute.id,
         metadata: {
-          sessionId: validatedData.session_id,
-          disputeType: validatedData.type
+          sessionId: session_id,
+          disputeType: type
         },
         ipAddress,
         userAgent

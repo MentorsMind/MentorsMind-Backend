@@ -109,7 +109,20 @@ Use the **Authorize** button (🔒) above to set your token for all requests.
       { name: 'Feedback', description: 'Session feedback submission and retrieval' },
       { name: 'Analytics', description: 'Platform and learning analytics' },
       { name: 'Documentation', description: 'API documentation portal and guides' },
+      {
+        name: 'GraphQL',
+        description:
+          'GraphQL endpoint (POST /api/graphql) — query/mutation execution with bearer auth',
+      },
     ],
   },
-  apis: ['./src/routes/*.ts', './src/routes/v1/*.ts', './src/routes/admin/*.ts', './src/docs/schemas/*.ts'],
+  apis: [
+    './src/routes/*.ts',
+    './src/routes/v1/*.ts',
+    './src/routes/admin/*.ts',
+    './src/docs/schemas/*.ts',
+    // GraphQL endpoint declaration (@swagger annotation for POST /api/graphql)
+    './src/app.ts',
+    './src/graphql/server.ts',
+  ],
 };

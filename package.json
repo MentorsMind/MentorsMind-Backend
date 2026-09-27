@@ -17,7 +17,7 @@
     "test:validators": "ts-node --transpile-only src/validators/__tests__/run.ts",
     "test:cors": "ts-node --transpile-only src/middleware/__tests__/run.ts",
     "test:cache": "ts-node --transpile-only src/middleware/__tests__/run-cache.ts",
-    "test:smart-scheduling": "ts-node --transpile-only src/services/__tests__/run-smart-scheduling.ts",
+    "test:smart-scheduling": "jest --config jest.unit.config.ts --runInBand src/services/__tests__/smart-scheduling.unit.test.ts",
     "test:verification": "ts-node --transpile-only src/services/__tests__/run-verification.ts",
     "test:audit-archival": "ts-node --transpile-only src/jobs/__tests__/run-audit-archival.ts",
     "lint:fix": "eslint . --fix",

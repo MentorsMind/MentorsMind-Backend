@@ -1,5 +1,5 @@
 import { Response, NextFunction, Request } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from './auth.middleware';
 import { requireRole } from './rbac.middleware';
 import { AuditLoggerService } from '../services/audit-logger.service';
 import { LogLevel, AuditAction } from '../utils/log-formatter.utils';

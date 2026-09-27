@@ -2,6 +2,7 @@ import helmet from 'helmet';
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
+import config from '../config';
 import { validationConfig } from '../config/validation.config';
 
 export const securityMiddleware = helmet({
@@ -18,12 +19,13 @@ export const securityMiddleware = helmet({
       mediaSrc: ["'self'"],
       manifestSrc: ["'self'"],
       workerSrc: ["'self'"],
+      reportUri: ['/api/v1/csp-report'],
       upgradeInsecureRequests: [],
     },
     reportOnly: false,
   },
   hsts: {
-    maxAge: 31536000, // 1 year
+    maxAge: config.security.hstsMaxAge,
     includeSubDomains: true,
     preload: true,
   },

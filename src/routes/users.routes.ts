@@ -15,6 +15,7 @@ import { idParamSchema } from "../validators/schemas/common.schemas";
 import { RecommendationController } from "../controllers/recommendation.controller";
 import { MAX_AVATAR_SIZE_BYTES } from "../services/upload.service";
 import { createImageUploadMiddleware } from "../middleware/image-upload.middleware";
+import { noCacheMiddleware } from "../middleware/no-cache.middleware";
 
 // ---------------------------------------------------------------------------
 // Multer — in-memory storage for avatar uploads
@@ -57,7 +58,7 @@ router.use(authenticate);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/me", asyncHandler(UsersController.getMe));
+router.get("/me", noCacheMiddleware, asyncHandler(UsersController.getMe));
 
 /**
  * @swagger

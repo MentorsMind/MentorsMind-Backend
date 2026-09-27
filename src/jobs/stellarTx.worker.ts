@@ -59,7 +59,7 @@ async function processVerificationTx(job: Job<StellarTxJobData>): Promise<void> 
   });
 }
 
-async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
+export async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
   const {
     txEnvelopeXdr,
     userId,
@@ -119,14 +119,13 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
     if (maxTime < now) {
       logger.warn("Stellar transaction expired, rebuilding", { jobId: job.id });
-      const sourceAccount = await stellarService.server.getAccount(tx.source);
-      tx = new TransactionBuilder(sourceAccount, {
+      const sourceAccount = await stellarService.getAccount(tx.source);
+      const builder = new TransactionBuilder(sourceAccount as any, {
         fee: tx.fee,
         networkPassphrase,
-      })
-        .setTimeout(30)
-        .addOperations(tx.operations)
-        .build();
+      }).setTimeout(30);
+      tx.operations.forEach((op) => builder.addOperation(op as any));
+      tx = builder.build();
         
       const kp = getPlatformKeypair();
       if (kp) tx.sign(kp);
@@ -141,18 +140,21 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
     const txResultCode = err?.response?.data?.extras?.result_codes?.transaction;
     if (txResultCode === "tx_bad_seq") {
       logger.warn("tx_bad_seq encountered, rebuilding transaction", { jobId: job.id });
-      const sourceAccount = await stellarService.server.getAccount(tx.source);
-      tx = new TransactionBuilder(sourceAccount, {
+      const sourceAccount = await stellarService.getAccount(tx.source);
+      const builder = new TransactionBuilder(sourceAccount as any, {
         fee: tx.fee,
         networkPassphrase,
-      })
-        .setTimeout(30)
-        .addOperations(tx.operations)
-        .build();
+      }).setTimeout(30);
+      tx.operations.forEach((op) => builder.addOperation(op as any));
+      tx = builder.build();
       const kp = getPlatformKeypair();
       if (kp) tx.sign(kp);
       xdr = tx.toXDR();
-      result = await stellarService.submitTransaction(xdr);
+      try {
+        result = await stellarService.submitTransaction(xdr);
+      } catch (retryErr: any) {
+        err = retryErr;
+      }
     } else if (txResultCode === "tx_insufficient_fee") {
       logger.warn("tx_insufficient_fee encountered, bumping fee", { jobId: job.id });
       const newFee = String(parseInt(tx.fee, 10) * 2);
@@ -165,12 +167,28 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
       const kp = getPlatformKeypair();
       if (kp) feeBumpTx.sign(kp);
       xdr = feeBumpTx.toXDR();
-      result = await stellarService.submitTransaction(xdr);
-    } else {
+      try {
+        result = await stellarService.submitTransaction(xdr);
+      } catch (retryErr: any) {
+        err = retryErr;
+      }
+    }
+
+    if (!result) {
+      let stellarTxHash: string | undefined;
+      try {
+        stellarTxHash = (job.data as any).txHash || (tx ? tx.hash().toString("hex") : undefined);
+      } catch {
+        stellarTxHash = (job.data as any).txHash;
+      }
+
       logger.error("Stellar transaction rejected", {
-        jobId: job.id,
-        error: err.message,
-        extras: err?.response?.data?.extras,
+        stellar_tx_hash: stellarTxHash,
+        stellar_result_code: err?.response?.data?.extras?.result_codes,
+        ledger_sequence: err?.response?.data?.extras?.ledger,
+        job_id: job.id,
+        attempt_number: job.attemptsMade + 1,
+        error_message: err.message,
       });
 
       if (paymentId) {
@@ -200,8 +218,8 @@ async function processStellarTx(job: Job<StellarTxJobData>): Promise<void> {
 
   logger.info("Stellar transaction confirmed", {
     jobId: job.id,
-    hash: result.hash,
-    ledger: result.ledger,
+    stellar_tx_hash: result.hash,
+    ledger_sequence: result.ledger,
     paymentId,
   });
 

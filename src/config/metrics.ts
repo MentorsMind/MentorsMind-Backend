@@ -253,6 +253,20 @@ export const notificationDeliveryAttemptsTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
+export const emailDeliveryFailuresTotal = new Counter<string>({
+  name: "email_delivery_failures_total",
+  help: "Total email delivery failures, partitioned by provider",
+  labelNames: ["provider"],
+  registers: [metricsRegistry],
+});
+
+export const emailDeliverySuccessTotal = new Counter<string>({
+  name: "email_delivery_success_total",
+  help: "Total successful email deliveries, partitioned by provider",
+  labelNames: ["provider"],
+  registers: [metricsRegistry],
+});
+
 export const pushTokenInvalidTotal = new Counter<string>({
   name: "push_token_invalid_total",
   help: "Total invalid push tokens encountered",

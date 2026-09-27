@@ -152,7 +152,65 @@ export function createMockStellarService() {
       ledger: 12345,
       created_at: new Date().toISOString(),
     })),
+
+    getTransaction: jest.fn(async (txHash: string) => ({
+      successful: true,
+      hash: txHash,
+      source_account: TEST_MENTEE_KEYPAIR.publicKey(),
+      created_at: new Date().toISOString(),
+    })),
+
+    getTransactionOperations: jest.fn(async (_txHash: string) => {
+      if (_mockPaymentOperation) {
+        return [{
+          id: 'op-mock-1',
+          type: 'payment',
+          amount: parseFloat(_mockPaymentOperation.amount || '50').toFixed(7),
+          to: _mockPaymentOperation.to || TEST_PLATFORM_KEYPAIR.publicKey(),
+          asset_type: 'native',
+          source_account: TEST_MENTEE_KEYPAIR.publicKey(),
+        }];
+      }
+
+      const pgUrl = process.env.DATABASE_URL;
+      if (pgUrl) {
+        try {
+          const { Pool } = await import('pg');
+          const p = new Pool({ connectionString: pgUrl, max: 1 });
+          const res = await p.query(
+            "SELECT amount, to_address FROM transactions WHERE status = 'pending' ORDER BY created_at DESC LIMIT 1"
+          );
+          await p.end();
+          if (res.rows[0]) {
+            return [{
+              id: 'op-mock-1',
+              type: 'payment',
+              amount: parseFloat(res.rows[0].amount).toFixed(7),
+              to: res.rows[0].to_address || TEST_PLATFORM_KEYPAIR.publicKey(),
+              asset_type: 'native',
+              source_account: TEST_MENTEE_KEYPAIR.publicKey(),
+            }];
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      return [{
+        id: 'op-mock-1',
+        type: 'payment',
+        amount: '50.0000000',
+        to: TEST_PLATFORM_KEYPAIR.publicKey(),
+        asset_type: 'native',
+        source_account: TEST_MENTEE_KEYPAIR.publicKey(),
+      }];
+    }),
   };
+}
+
+let _mockPaymentOperation: { amount?: string; to?: string } | null = null;
+export function setMockPaymentOperation(op: { amount?: string; to?: string } | null): void {
+  _mockPaymentOperation = op;
 }
 
 // ─── Module-level mock injection ─────────────────────────────────────────────

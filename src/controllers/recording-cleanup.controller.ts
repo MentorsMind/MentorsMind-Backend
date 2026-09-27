@@ -8,7 +8,7 @@
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { ResponseUtil } from '../utils/response.utils';
 import { db } from '../config/database';
 import { recordingCleanupQueue } from '../queues/recordingCleanup.queue';

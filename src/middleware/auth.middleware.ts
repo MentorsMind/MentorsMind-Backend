@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { logger } from "../utils/logger.utils";
@@ -12,21 +12,8 @@ const LAST_ACTIVE_DEBOUNCE_MS = 60 * 1000; // 1 minute
 // In-memory debounce map: userId -> last update timestamp
 const lastActiveDebounce = new Map<string, number>();
 
-export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    userId: string;
-    email?: string;
-    role: string;
-    mfaVerified?: boolean;
-    /** Set to true when this request is authenticated via an impersonation token */
-    isImpersonation?: boolean;
-    /** The admin user ID who initiated the impersonation */
-    impersonatedBy?: string;
-    /** The impersonation session ID — used for revocation checks */
-    impersonationSessionId?: string;
-  };
-}
+// Re-exported so existing `AuthenticatedRequest` imports from this module keep working.
+export type { AuthenticatedRequest };
 
 export const authenticate = async (
   req: AuthenticatedRequest,
@@ -166,13 +153,21 @@ export const authenticate = async (
     next();
   } catch (error: any) {
     if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({ success: false, error: "Token expired." });
+      res.status(401).json({
+        success: false,
+        error: "Token expired.",
+        code: "TOKEN_EXPIRED",
+      });
       return;
     }
     if (error?.code === ErrorCode.AUTH_UNAUTHORIZED) {
       return next(error);
     }
-    res.status(401).json({ success: false, error: "Invalid token." });
+    res.status(401).json({
+      success: false,
+      error: "Invalid token.",
+      code: "TOKEN_INVALID",
+    });
   }
 };
 

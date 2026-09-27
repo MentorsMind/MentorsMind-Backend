@@ -558,4 +558,33 @@ router.post(
   BookingsController.resolveNoShowDispute,
 );
 
+/**
+ * @swagger
+ * /api/v1/bookings/{id}/complete:
+ *   patch:
+ *     summary: Complete a booking
+ *     tags: [Bookings]
+ *     security:
+ *       - bearerAuth: true
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: Booking ID
+ *     responses:
+ *       200:
+ *         description: Booking marked as completed
+ *       400:
+ *         description: Booking not confirmed or session not ended
+ *       403:
+ *         description: Not a participant of this booking
+ *       404:
+ *         description: Booking not found
+ */
+router.patch("/:id/complete", authenticate, BookingsController.completeBooking);
+router.post("/:id/complete", authenticate, BookingsController.completeBooking);
+
 export default router;

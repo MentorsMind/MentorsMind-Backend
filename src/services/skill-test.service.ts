@@ -1,6 +1,7 @@
 import pool from "../config/database";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   SkillTest,
   TestAttempt,
@@ -71,7 +72,7 @@ export const SkillTestService = {
       );
 
       if (existingRows.length > 0) {
-        throw createError("Test attempt already in progress", 409);
+        throw createError(ErrorCode.TEST_ATTEMPT_IN_PROGRESS, 409);
       }
 
       // Create new attempt

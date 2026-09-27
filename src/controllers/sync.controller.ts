@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { OfflineSyncService, SyncChange, SyncEntityType } from '../services/offline-sync.service';
 import { OfflineQueueService } from '../services/offline-queue.service';
 import { asyncHandler } from '../utils/asyncHandler.utils';
