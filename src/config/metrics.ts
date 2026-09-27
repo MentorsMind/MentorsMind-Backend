@@ -305,3 +305,10 @@ export const walletDiscrepanciesTotal = new Counter<string>({
   labelNames: ["asset_type"],
   registers: [metricsRegistry],
 });
+
+export const deprecatedApiCallsTotal = new Counter<string>({
+  name: "deprecated_api_calls_total",
+  help: "Total calls made to deprecated API versions, partitioned by version",
+  labelNames: ["version"],
+  registers: [metricsRegistry],
+});
