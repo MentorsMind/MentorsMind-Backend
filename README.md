@@ -463,3 +463,5 @@ The final `runner` image uses Debian slim and `npm ci --omit=dev`. If the image 
 - **Reward:** $2
 - **Source:** GitHub-Paid
 - **Date:** 2026-04-27
+
+<!-- Updated documentation reference -->
