@@ -1,5 +1,5 @@
-import { CacheService } from './cache.service';
-import { logger } from '../utils/logger';
+﻿import { CacheService } from './cache.service';
+import { logger } from '../utils/logger.utils';
 
 export interface DomainHealth {
   domain: string;
@@ -253,3 +253,4 @@ export class CDNHealthService {
 }
 
 export default CDNHealthService;
+

@@ -1,11 +1,11 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { TranscriptionService } from '../services/transcription.service';
 import { transcriptionQueue } from '../queues/transcription.queue';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 import pool from '../config/database';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export const TranscriptionController = {
   /**

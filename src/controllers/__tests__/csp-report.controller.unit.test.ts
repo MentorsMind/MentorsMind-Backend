@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { CspReportController } from '../csp-report.controller';
-import { logger } from '../../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 jest.mock('../../utils/logger', () => ({
   logger: {

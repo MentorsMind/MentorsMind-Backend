@@ -1,7 +1,7 @@
-import { SessionRecordingModel, CreateRecordingPayload, UpdateRecordingStatusPayload } from '../models/session-recording.model';
+﻿import { SessionRecordingModel, CreateRecordingPayload, UpdateRecordingStatusPayload } from '../models/session-recording.model';
 import { StorageService } from './storage.service';
 import { AuditLogModel } from '../models/audit-log.model';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { DateTime } from 'luxon';
 import videoRecordingService from './video-recording.service';
 import recordingTranscriptionService from './recording-transcription.service';

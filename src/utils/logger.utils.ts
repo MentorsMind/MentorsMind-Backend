@@ -1,4 +1,4 @@
-// Re-export the pino logger as the canonical logger instance.
-// All existing `import { logger } from '../utils/logger.utils'` imports
-// continue to work without any changes.
-export { logger } from "./logger";
+﻿// Re-export the pino logger and Logger class as canonical exports.
+// All existing imports from './logger.utils' continue to work unchanged.
+export { logger, Logger } from "./logger";
+export default logger;

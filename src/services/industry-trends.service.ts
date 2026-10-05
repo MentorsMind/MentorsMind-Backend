@@ -1,5 +1,5 @@
-import { Pool } from "pg";
-import { logger } from "../utils/logger";
+﻿import { Pool } from "pg";
+import { Logger } from "../utils/logger.utils";
 
 export interface IndustryTrend {
   skill: string;

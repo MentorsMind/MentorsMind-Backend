@@ -1,4 +1,4 @@
-import bcrypt from "bcryptjs";
+﻿import bcrypt from "bcryptjs";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -277,7 +277,7 @@ export const AuthService = {
       ]);
     } catch (error) {
       // Don't fail auth if logging fails
-      console.error('Failed to log auth attempt:', error);
+      logger.error('Failed to log auth attempt:', error);
     }
   }
 };

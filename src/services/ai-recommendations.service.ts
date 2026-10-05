@@ -1,6 +1,6 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import {
   RecommendationEngine,
   UserProfile,
@@ -9,7 +9,7 @@ import {
   OutcomePrediction,
 } from "../ml/recommendation-engine";
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface RecommendationRequest {
   userId: string;
@@ -43,7 +43,7 @@ export interface OutcomeReport {
   generatedAt: string;
 }
 
-// ─── Service ─────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Service â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const CACHE_TTL = 600; // 10 minutes
 
@@ -156,7 +156,7 @@ export const AIRecommendationsService = {
     return RecommendationEngine.getABTestResults(testId, variantConversions);
   },
 
-  // ─── Data access helpers ───────────────────────────────────────────────────
+  // â”€â”€â”€ Data access helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   async getUserProfile(userId: string): Promise<UserProfile | null> {
     try {
@@ -414,3 +414,4 @@ export const AIRecommendationsService = {
     }
   },
 };
+

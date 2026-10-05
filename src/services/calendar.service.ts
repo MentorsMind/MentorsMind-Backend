@@ -1,4 +1,4 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import { google } from "googleapis";
 import { redis } from "../config/redis";
 import { pool } from "../config/database";
@@ -9,7 +9,7 @@ import {
   generateICalToken,
   ICalSession,
 } from "../utils/ical.utils";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import { EncryptionUtil } from "../utils/encryption.utils";
 import {
   NotificationService,
@@ -267,7 +267,7 @@ export const CalendarService = {
     const sessions = await fetchSessionsForUser(user.id);
     const feed = buildICalFeed(
       sessions,
-      `MentorMinds – ${user.first_name} ${user.last_name}`,
+      `MentorMinds â€“ ${user.first_name} ${user.last_name}`,
     );
 
     await redis.set(cacheKey, feed, "EX", 300);
@@ -641,3 +641,4 @@ export const CalendarService = {
     }
   },
 };
+

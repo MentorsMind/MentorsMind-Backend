@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Session Participant Middleware
  *
  * Verifies that the authenticated user is a participant (mentor or mentee)
@@ -16,7 +16,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import pool from '../config/database';
 import { ResponseUtil } from '../utils/response.utils';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface SessionParticipants {
   sessionId: string;

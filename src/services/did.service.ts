@@ -1,9 +1,9 @@
-import crypto from "crypto";
+﻿import crypto from "crypto";
 import { pool } from "../config/database";
 import { JwksService } from "./jwks.service";
 import { server, networkPassphrase, getPlatformKeypair } from "../config/stellar";
 import { signStellarTransaction } from "./hsmStellarSigner.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { TransactionBuilder, Memo } from "@stellar/stellar-sdk";
 
 const PLATFORM_DID = process.env.PLATFORM_DID || "did:web:api.mentorminds.com";

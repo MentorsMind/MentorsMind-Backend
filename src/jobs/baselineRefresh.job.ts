@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Baseline Refresh Job
  *
  * Nightly job that refreshes the Redis-backed rolling baselines consumed by
@@ -15,7 +15,7 @@
 
 import { AccessRiskModel } from "../models/access-risk.model";
 import { BaselineStore } from "../services/baseline-store.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 const BASELINE_WINDOW_DAYS = 30;
 

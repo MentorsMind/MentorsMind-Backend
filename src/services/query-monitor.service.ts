@@ -1,4 +1,4 @@
-/**
+﻿/**
  * query-monitor.service.ts
  *
  * Implements P50/P95/P99 latency percentile tracking per query fingerprint
@@ -8,7 +8,7 @@
 
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { QueryAnalyzer } from "../utils/query-analyzer";
 
 // Redis key prefix for per-fingerprint execution-time sorted sets.

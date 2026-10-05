@@ -1,10 +1,10 @@
-import passport from 'passport';
+﻿import passport from 'passport';
 import { Strategy as GoogleStrategy, Profile as GoogleProfile } from 'passport-google-oauth20';
 import { Strategy as GitHubStrategy, Profile as GitHubProfile } from 'passport-github2';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import pool from './database';
 import oauthConfig from './oauth.config';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { EncryptionUtil } from '../utils/encryption.utils';
 const fetch = require('node-fetch');
 

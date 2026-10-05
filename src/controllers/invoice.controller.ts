@@ -1,7 +1,7 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { InvoiceService } from "../services/invoice.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export class InvoiceController {
   static async createInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {

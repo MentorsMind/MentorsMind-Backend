@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Incident Response Service
  *
  * Comprehensive automated security incident response system providing:
@@ -20,7 +20,7 @@
  */
 
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { NotificationService } from "./notification.service";
 import { NotificationType, NotificationChannel } from "../models/notifications.model";
 import { AuditLogService } from "./auditLog.service";

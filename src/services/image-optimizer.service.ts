@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Image optimization and delivery (issue #863).
  *
  * Wraps the sharp helpers in `utils/image.utils` with the delivery concerns:
@@ -11,7 +11,7 @@
  */
 
 import crypto from "crypto";
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   cdnConfig,
   negotiateImageFormat,

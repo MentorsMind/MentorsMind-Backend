@@ -1,4 +1,4 @@
-/**
+﻿/**
  * InsightGeneratorService
  *
  * Role-based analytics insight generation and personalized delivery.
@@ -8,7 +8,7 @@
 
 import { randomUUID } from "crypto";
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { AdvancedAnalyticsService, Insight } from "./advanced-analytics.service";
 import { SocketService } from "./socket.service";
 import { insightGenerationQueue } from "../queues/insightGeneration.queue";

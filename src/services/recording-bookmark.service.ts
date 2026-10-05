@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger';
+﻿import { Logger } from "../utils/logger.utils";
 import pool from '../config/database';
 
 interface BookmarkOptions {

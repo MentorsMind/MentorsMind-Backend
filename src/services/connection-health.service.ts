@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Connection Health Monitoring Service
  * Monitors connection health, validates connections, and triggers recovery
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { PoolOptimizationConfig, ConnectionHealth } from '../config/pool-optimization';
 
 export class ConnectionHealthService extends EventEmitter {

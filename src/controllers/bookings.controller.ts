@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
 import { BookingModel } from "../models/booking.model";
@@ -9,7 +9,7 @@ import { BookingsService } from "../services/bookings.service";
 import { EventStoreService } from "../services/event-store.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 /**
  * Bookings Controller - Handles session booking operations with meeting URL generation

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Service Discovery Middleware
  *
  * Bridges the API gateway's service registry into the normal Express request
@@ -18,7 +18,7 @@ import { getServiceRegistry } from "../gateway/service-registry";
 import { selectInstance } from "../gateway/load-balancer";
 import gatewayConfig from "../gateway/gateway.config";
 import type { LoadBalancingStrategy, ServiceInstance } from "../gateway/types";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,8 +1,8 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { EventReplayService, ReplayProgress } from '../services/event-replay.service';
 import { ResponseUtil } from '../utils/response.utils';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 /**
  * Admin controllers for event store replay and recovery operations.

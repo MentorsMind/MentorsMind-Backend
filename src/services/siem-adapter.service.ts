@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SIEM Adapter Service
  *
  * Provides outbound SIEM integration for the incident response pipeline.
@@ -27,7 +27,7 @@
  */
 
 import elasticsearchService from './elasticsearch.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import type { SiemPushPayload } from './incident-response.service';
 
 // ─── Elastic event schema ─────────────────────────────────────────────────────

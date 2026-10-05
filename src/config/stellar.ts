@@ -1,7 +1,7 @@
-import * as StellarSdk from "@stellar/stellar-sdk";
+﻿import * as StellarSdk from "@stellar/stellar-sdk";
 import { env } from "./env";
 import config from "./index";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { traceStore } from '../middleware/tracing.middleware';
 
 /**

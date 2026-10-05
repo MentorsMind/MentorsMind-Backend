@@ -1,19 +1,12 @@
-import { Queue, Worker, Job } from "bullmq";
+﻿import { Queue, Worker, Job } from "bullmq";
 import config from "../config";
 import { BulkService } from "../services/bulk.service";
 import { BulkJobModel } from "../models/bulk-job.model";
 import { logger } from "../utils/logger.utils";
 
-const redisUrl = config.redis.url || "redis://localhost:6379";
-const url = new URL(redisUrl);
+import { redisConnection } from "../queues/queue.config";
 
-const connection = {
-  host: url.hostname,
-  port: parseInt(url.port, 10) || 6379,
-  password: url.password || undefined,
-};
-
-export const bulkQueue = new Queue("bulk-queue", { connection });
+export const bulkQueue = new Queue("bulk-queue", { connection: redisConnection });
 
 export const bulkWorker = new Worker(
   "bulk-queue",
@@ -22,7 +15,7 @@ export const bulkWorker = new Worker(
     await BulkService.processJob(jobId, jobType, payload, requestedBy);
   },
   { 
-    connection, 
+    connection: redisConnection, 
     concurrency: 2,
     limiter: {
       max: 100,

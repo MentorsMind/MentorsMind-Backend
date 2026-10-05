@@ -1,7 +1,7 @@
-import cron from 'node-cron';
+﻿import cron from 'node-cron';
 import { CDNHealthService } from '../services/cdn-health.service';
 import { CDNService } from '../services/cdn.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 let healthCheckInterval: cron.ScheduledTask | null = null;
 

@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { Logger } from "../utils/logger.utils";
 import { TranscriptionSegment } from "./ai-transcription.service";
 
 export interface ActionItem {

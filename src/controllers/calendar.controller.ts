@@ -1,9 +1,9 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { CalendarService } from "../services/calendar.service";
 import { env } from "../config/env";
 import { createError } from "../middleware/errorHandler";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export const CalendarController = {
   // ---- iCal ----------------------------------------------------------------

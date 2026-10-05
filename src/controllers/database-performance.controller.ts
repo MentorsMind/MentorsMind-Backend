@@ -1,4 +1,4 @@
-/**
+﻿/**
  * database-performance.controller.ts
  *
  * Admin endpoints for database query performance monitoring (issue #742).
@@ -11,7 +11,7 @@
 import { Request, Response } from "express";
 import { ResponseUtil } from "../utils/response.utils";
 import QueryMonitorService from "../services/query-monitor.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export const DatabasePerformanceController = {
   /**

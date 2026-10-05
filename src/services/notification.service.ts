@@ -1,4 +1,4 @@
-import {
+﻿import {
   NotificationsModel,
   NotificationInput,
   NotificationType,
@@ -13,7 +13,7 @@ import { enqueueEmail } from "../queues/email.queue";
 import { SocketService } from "./socket.service";
 import { PushService } from "./push.service";
 import { DeepLinkService } from "./deepLink.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export enum NotificationChannel {
   EMAIL = "email",

@@ -1,7 +1,7 @@
-import Redis, { Cluster } from "ioredis";
+﻿import Redis, { Cluster } from "ioredis";
 import { env } from "./env";
 import { redisConfig } from "./redis.config";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 let redisClient: Redis | Cluster;
 

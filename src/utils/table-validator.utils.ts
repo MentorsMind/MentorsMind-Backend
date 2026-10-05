@@ -1,5 +1,5 @@
-import pool from '../config/database';
-import { logger } from '../utils/logger.utils';
+﻿import pool from '../config/database';
+import { logger } from './logger.utils';
 
 /**
  * Database Table Validator

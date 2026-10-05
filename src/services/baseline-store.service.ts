@@ -1,5 +1,5 @@
-/**
- * Baseline Store — Redis-backed rolling per-user event-count baselines.
+﻿/**
+ * Baseline Store â€” Redis-backed rolling per-user event-count baselines.
  *
  * Backs MlSecurityService.scoreDeviation() with a real historical baseline
  * instead of requiring every caller to gather samples from scratch on the
@@ -7,13 +7,13 @@
  * daily event counts:
  *
  *   key:    baseline:daily-count:<userId>
- *   score:  UTC day number (days since epoch) — used to trim the window
- *   member: `${dayNumber}:${count}` — unique per day, so a re-write for the
+ *   score:  UTC day number (days since epoch) â€” used to trim the window
+ *   member: `${dayNumber}:${count}` â€” unique per day, so a re-write for the
  *           same day replaces rather than duplicates (ZADD overwrites by
  *           score+member pair only if member is identical; we therefore
  *           remove the old entry for that day before adding the new one)
  *
- * Reads (`getSamples`) are a single ZRANGEBYSCORE — O(log N + M) — so they
+ * Reads (`getSamples`) are a single ZRANGEBYSCORE â€” O(log N + M) â€” so they
  * are cheap enough for the hot path (zero-trust middleware / login-event
  * analysis). Writes happen only from the nightly refresh job
  * (src/jobs/baselineRefresh.job.ts), never from a request path.
@@ -23,7 +23,7 @@
  */
 
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 
 const BASELINE_WINDOW_DAYS = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -39,7 +39,7 @@ function baselineKey(userId: string): string {
 export const BaselineStore = {
   /**
    * Upsert the event count for a single UTC day for a user, then trim the
-   * sorted set down to the rolling 30-day window. Idempotent — calling this
+   * sorted set down to the rolling 30-day window. Idempotent â€” calling this
    * again for the same `date` overwrites the previous count for that day.
    */
   async recordDailyCount(userId: string, date: Date, count: number): Promise<void> {
@@ -70,7 +70,7 @@ export const BaselineStore = {
   /**
    * Load the rolling 30-day baseline samples (one number per recorded day)
    * for a user. Returns an empty array if the user has no baseline yet
-   * (e.g. never refreshed, or refresh job hasn't run) — callers should treat
+   * (e.g. never refreshed, or refresh job hasn't run) â€” callers should treat
    * that the same as "not enough data" (mirrors scoreDeviation's own
    * <2-sample handling).
    */
@@ -93,3 +93,4 @@ export const BaselineStore = {
     }
   },
 };
+

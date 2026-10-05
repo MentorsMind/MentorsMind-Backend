@@ -1,5 +1,5 @@
-import { CronJob } from 'cron';
-import { logger } from '../utils/logger';
+﻿import { CronJob } from 'cron';
+import { Logger } from "../utils/logger.utils";
 import config from '../config';
 import { NotificationService } from './notification.service';
 import pool from '../config/database';

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Edge function registry and dispatcher (issue #863).
  *
  * Edge functions are small, synchronous-ish transforms that run per request:
@@ -15,7 +15,7 @@
  * origin behaves the same as one served from a POP.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   cdnConfig,
   type CDNConfiguration,

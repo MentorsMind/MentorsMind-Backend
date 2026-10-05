@@ -1,6 +1,6 @@
-import { Queue, Worker, Job } from 'bullmq';
+﻿import { Queue, Worker, Job } from 'bullmq';
 import config from '../config';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 import pool from '../config/database';
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { SocketService } from '../services/socket.service';
@@ -180,3 +180,4 @@ async function scanWithClamAV(fileBuffer: Buffer): Promise<'clean' | 'infected' 
     return 'error';
   }
 }
+

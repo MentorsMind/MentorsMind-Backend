@@ -1,11 +1,11 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { ResponseUtil } from "../utils/response.utils";
 import { TenantEmailTemplatesModel } from "../models/tenant-email-templates.model";
 import { TenantEmailTemplateVersionsModel } from "../models/tenant-email-template-versions.model";
 import { TemplateEngineService } from "../services/template-engine.service";
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 function extractVariablesFromContent(content: string): string[] {
   const matches = content.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g) || [];

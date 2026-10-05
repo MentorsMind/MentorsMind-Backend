@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Federated GraphQL gateway (issue #866).
  *
  * Holds the composed supergraph, plans which subgraph answers which root
@@ -12,7 +12,7 @@
  */
 
 import crypto from "crypto";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import type { SubgraphDefinition } from "../graphql/federation/directives";
 import SchemaCompositorService, {
   type CompositionResult,

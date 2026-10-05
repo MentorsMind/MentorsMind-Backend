@@ -1,8 +1,8 @@
-import crypto from 'crypto';
+﻿import crypto from 'crypto';
 import config from '../config';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
 import { WebhookIdempotencyService } from './webhook-idempotency.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface SendGridEvent {
   event: string;

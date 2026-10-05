@@ -1,8 +1,8 @@
-import { Queue, Worker, Job } from 'bullmq';
+﻿import { Queue, Worker, Job } from 'bullmq';
 import zlib from 'zlib';
 import { redisConnection, defaultJobOptions, QUEUE_NAMES } from '../config/queue';
 import pool from '../config/database';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { env } from '../config/env';
 import { StorageService } from '../services/storage.service';
 

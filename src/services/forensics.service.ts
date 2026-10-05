@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Forensics Service
  *
  * Digital forensics collection and evidence preservation for security incidents.
@@ -19,7 +19,7 @@
 import crypto from "crypto";
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   SecurityIncidentModel,
   type EvidenceType,

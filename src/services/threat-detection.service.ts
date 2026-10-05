@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Threat Detection Service
  *
  * Correlates recent login/access signals for a user and produces a combined
@@ -26,7 +26,7 @@
 import { AccessRiskModel } from "../models/access-risk.model";
 import { LoginAttemptsService } from "./loginAttempts.service";
 import { MlSecurityService } from "./ml-security.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export type ThreatSeverity = "low" | "medium" | "high" | "critical";
 

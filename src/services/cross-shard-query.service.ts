@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cross-shard query execution (issue #865).
  *
  * A query carrying its table's shard key touches exactly one shard. Anything
@@ -11,7 +11,7 @@
  */
 
 import type { QueryResultRow } from "pg";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import shardingConfig from "../config/sharding.config";
 import ShardManagerService from "./shard-manager.service";
 
@@ -46,7 +46,7 @@ export class CrossShardError extends Error {
  * Run the same statement on many shards and merge.
  *
  * Declared at module scope rather than as an object method so generic calls
- * from other members are typed — a method referenced through `this` in an
+ * from other members are typed â€” a method referenced through `this` in an
  * object literal is untyped, and `this.fanout<T>()` will not compile.
  */
 export async function fanout<T extends QueryResultRow = QueryResultRow>(
@@ -194,3 +194,4 @@ export const CrossShardQueryService = {
 };
 
 export default CrossShardQueryService;
+

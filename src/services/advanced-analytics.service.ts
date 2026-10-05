@@ -1,6 +1,6 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import { AnalyticsService } from "./analytics.service";
 
 // Enhanced interfaces for advanced analytics
@@ -83,7 +83,7 @@ export interface CurrencyBreakdown {
   transactionCount: number;
 }
 
-// ─── Real-Time & Custom Reporting Interfaces ────────────────────────────────
+// â”€â”€â”€ Real-Time & Custom Reporting Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface EngagementMetrics {
   activeUsers: number;
@@ -653,7 +653,7 @@ export const AdvancedAnalyticsService = {
     return AnalyticsService.parsePeriod(period);
   },
 
-  // ─── Real-Time Metrics ───────────────────────────────────────────────────
+  // â”€â”€â”€ Real-Time Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Get real-time engagement metrics (bypasses cache).
@@ -765,7 +765,7 @@ export const AdvancedAnalyticsService = {
     };
   },
 
-  // ─── Custom Reporting ────────────────────────────────────────────────────
+  // â”€â”€â”€ Custom Reporting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /**
    * Generate a custom analytics report.
@@ -932,7 +932,7 @@ export const AdvancedAnalyticsService = {
     };
   },
 
-  // ─── Private helpers ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   generateReportSummary(
     reportData: Record<string, unknown>[],
@@ -949,3 +949,4 @@ export const AdvancedAnalyticsService = {
     };
   },
 };
+

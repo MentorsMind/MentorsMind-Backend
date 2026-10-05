@@ -1,7 +1,7 @@
-import pool, { db } from "../config/database";
+﻿import pool, { db } from "../config/database";
 import { CollaborationState } from "../types/collaboration.types";
 import { PaginationUtil } from "../utils/pagination.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   TenantContext,
   withTenantFilter,
@@ -394,3 +394,4 @@ export const SessionModel = {
 };
 
 export default SessionModel;
+

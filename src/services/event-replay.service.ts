@@ -1,8 +1,8 @@
-import { EventStoreService } from './event-store.service';
+﻿import { EventStoreService } from './event-store.service';
 import { ProjectionService } from './projection.service';
 import { cache } from '../config/cache';
 import { db } from '../config/database';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { DomainEvent } from '../models';
 
 export interface ReplayProgress {

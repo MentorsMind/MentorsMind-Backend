@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API Gateway configuration
  *
  * Reads gateway tunables from the environment with safe defaults so the module
@@ -10,7 +10,7 @@
  */
 
 import type { LoadBalancingStrategy, ServiceDefinition } from "./types";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 function num(value: string | undefined, fallback: number): number {
   const parsed = Number(value);

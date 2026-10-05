@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Search Service
  *
  * Provides mentor search via Elasticsearch (primary) or PostgreSQL (fallback).
@@ -319,7 +319,7 @@ export class SearchService {
         total += mentorResult.meta?.total ?? mentors.length;
       } catch (err) {
         // Non-fatal: continue with other types
-        console.error('[globalSearch] mentor search failed:', err);
+        logger.error('[globalSearch] mentor search failed:', err);
       }
     }
 
@@ -356,7 +356,7 @@ export class SearchService {
         results.push(...sessions);
         total += parseInt(sessionRows.rows[0]?.total_count ?? '0', 10);
       } catch (err) {
-        console.error('[globalSearch] session search failed:', err);
+        logger.error('[globalSearch] session search failed:', err);
       }
     }
 
@@ -372,7 +372,7 @@ export class SearchService {
         results.push(...messages);
         total += messageResult.total;
       } catch (err) {
-        console.error('[globalSearch] message search failed:', err);
+        logger.error('[globalSearch] message search failed:', err);
       }
     }
 

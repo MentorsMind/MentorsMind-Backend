@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TranscriptionService
  *
  * Integrates with AWS Transcribe to auto-transcribe completed sessions.
@@ -21,7 +21,7 @@ import { Readable } from 'stream';
 import pool from '../config/database';
 import { env } from '../config/env';
 import { StorageService } from './storage.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 const transcribeClient = new TranscribeClient({
   region: env.AWS_REGION,

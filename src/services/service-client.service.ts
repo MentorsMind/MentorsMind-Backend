@@ -1,5 +1,5 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
-import { logger } from "../utils/logger";
+﻿import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import { Logger } from "../utils/logger.utils";
 import { redis } from "../config/redis";
 
 // Retry Policy Interface

@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Search Analytics Service
  * Tracks search performance and provides insights
  * Issue #872
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface SearchMetrics {
   queryId: string;

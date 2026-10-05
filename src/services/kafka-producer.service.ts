@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Kafka producer (issue #861).
  *
  * Every message leaves as a versioned envelope, so a consumer can tell what it
@@ -12,7 +12,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 const logger = new Logger("KafkaProducer");
 

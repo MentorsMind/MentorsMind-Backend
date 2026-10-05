@@ -1,4 +1,4 @@
-/**
+﻿/**
  * HSM-Backed Stellar Signer Service — Issue #982
  *
  * Routes all Soroban / Stellar transaction signing through the Hardware
@@ -18,7 +18,7 @@
 
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { env } from "../config/env";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { hsmService, type HsmKeyMetadata } from "./hsm.service";
 import hsmConfig from "../config/hsm.config";
 

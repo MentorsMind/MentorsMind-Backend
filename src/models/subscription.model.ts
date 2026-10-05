@@ -1,5 +1,5 @@
-import pool from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export type SubscriptionTier = "free" | "pro" | "premium" | "enterprise";
 export type SubscriptionStatus = "active" | "cancelled" | "expired" | "trial";
@@ -123,3 +123,4 @@ export const SubscriptionModel = {
     }
   },
 };
+

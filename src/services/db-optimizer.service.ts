@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Database optimisation surface (issue #859).
  *
  * Three concerns the issue groups together, kept separate here because they
@@ -13,10 +13,10 @@
 
 import type { Pool, QueryResult, QueryResultRow } from "pg";
 import primaryPool from "../config/database";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import databaseTuning from "../config/database-tuning";
 
-// ─── L1: in-process cache ────────────────────────────────────────────────────
+// â”€â”€â”€ L1: in-process cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface L1Entry<T> {
   value: T;
@@ -116,7 +116,7 @@ export function registerSharedCache(cache: SharedCache | null): void {
   sharedCache = cache;
 }
 
-// ─── Read replicas ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Read replicas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface ReplicaState {
   pool: Pool;
@@ -146,7 +146,7 @@ export function registerReplicas(pools: Array<{ pool: Pool; url: string }>): voi
  * Pick a replica for a read, or null to use the primary.
  *
  * Round-robin over healthy replicas. Returns null when replicas are disabled,
- * none are registered, or all are unhealthy — the primary is always a correct
+ * none are registered, or all are unhealthy â€” the primary is always a correct
  * answer, so there is no failure mode where a read has nowhere to go.
  */
 export function pickReadPool(): Pool | null {
@@ -177,7 +177,7 @@ export function markReplicaHealthy(url: string): void {
   state.healthy = true;
 }
 
-// ─── Pool health ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Pool health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface PoolHealth {
   total: number;
@@ -205,7 +205,7 @@ export function poolHealth(target: Pool = primaryPool): PoolHealth {
   };
 }
 
-// ─── Public surface ──────────────────────────────────────────────────────────
+// â”€â”€â”€ Public surface â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const DbOptimizerService = {
   /**
@@ -299,3 +299,4 @@ export const DbOptimizerService = {
 };
 
 export default DbOptimizerService;
+

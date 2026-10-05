@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Stale Data Cleanup Admin Routes
  * 
  * Admin endpoints for managing stale data cleanup operations,
@@ -6,7 +6,9 @@
  */
 
 import databaseMaintenanceManager from '../../utils/stale-data-cleanup.utils';
+import { logger } from '../../utils/logger.utils';
 import staleDataCleanupJob from '../../jobs/stale-data-cleanup.job';
+import { logger } from '../../utils/logger.utils';
 
 type Request = any;
 type Response = any;
@@ -108,7 +110,7 @@ router.post = (path: string, handler: Function) => {
 
         // Run in background
         staleDataCleanupJob.triggerCleanup().catch((error) => {
-          console.error('Cleanup operation failed:', error);
+          logger.error('Cleanup operation failed:', error);
         });
       } catch (error) {
         res.status(400).json({
@@ -135,7 +137,7 @@ router.post = (path: string, handler: Function) => {
         });
 
         staleDataCleanupJob.triggerNotificationCleanup().catch((error) => {
-          console.error('Notification cleanup failed:', error);
+          logger.error('Notification cleanup failed:', error);
         });
       } catch (error) {
         res.status(400).json({
@@ -162,7 +164,7 @@ router.post = (path: string, handler: Function) => {
         });
 
         staleDataCleanupJob.triggerTokenCleanup().catch((error) => {
-          console.error('Token cleanup failed:', error);
+          logger.error('Token cleanup failed:', error);
         });
       } catch (error) {
         res.status(400).json({
@@ -189,7 +191,7 @@ router.post = (path: string, handler: Function) => {
         });
 
         staleDataCleanupJob.triggerAuditLogCleanup().catch((error) => {
-          console.error('Audit log cleanup failed:', error);
+          logger.error('Audit log cleanup failed:', error);
         });
       } catch (error) {
         res.status(400).json({
@@ -216,7 +218,7 @@ router.post = (path: string, handler: Function) => {
         });
 
         staleDataCleanupJob.triggerSessionArchival().catch((error) => {
-          console.error('Session archival failed:', error);
+          logger.error('Session archival failed:', error);
         });
       } catch (error) {
         res.status(400).json({

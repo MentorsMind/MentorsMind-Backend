@@ -1,4 +1,4 @@
-import { Worker, Job } from "bullmq";
+﻿import { Worker, Job } from "bullmq";
 import { createManagedQueue, enableJobResultCache } from "./queue.manager";
 import { QUEUE_NAMES, redisConnection } from "./queue.config";
 import { ExportFormat } from "../models/export-job.model";
@@ -7,7 +7,7 @@ import { EarningsReportService } from "../services/earningsReport.service";
 import { ExportJobModel } from "../models/export-job.model";
 import { AuditLoggerService } from "../services/audit-logger.service";
 import { LogLevel } from "../utils/log-formatter.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export interface ExportJobData {
   userId: string;
@@ -40,7 +40,7 @@ export const exportWorker = new Worker<ExportJobData>(
         endDate,
       );
     } else {
-      // Full GDPR data export — delegates to dataExport.job.ts
+      // Full GDPR data export â€” delegates to dataExport.job.ts
       await runDataExportJob(job as any);
     }
   },
@@ -75,3 +75,4 @@ exportWorker.on("failed", async (job, err) => {
     }
   }
 });
+

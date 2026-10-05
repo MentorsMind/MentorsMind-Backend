@@ -1,5 +1,5 @@
-import pool from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export interface NotificationRecord {
   id: string;
@@ -116,7 +116,7 @@ export const NotificationsModel = {
 
   /**
    * Get notifications for a user with filtering options.
-   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) — verified correct, no bare paramCount interpolation.
+   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) â€” verified correct, no bare paramCount interpolation.
    */
   async getByUserId(
     userId: string,
@@ -363,3 +363,4 @@ export const NotificationsModel = {
     }
   },
 };
+

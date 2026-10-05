@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Region-Aware Routing Middleware
  *
  * Express middleware that:
@@ -9,8 +9,11 @@
  */
 
 import { Request, Response, NextFunction } from "express";
+import { logger } from '../utils/logger.utils';
 import { getRegionRoutingService } from "../services/region-routing.service";
+import { logger } from '../utils/logger.utils';
 import regionConfig from "../config/region.config";
+import { logger } from '../utils/logger.utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -80,12 +83,12 @@ export function createRegionMiddleware() {
 
       // Log region routing decision (for debugging)
       if (process.env.NODE_ENV !== "production") {
-        console.log(`[Region] ${routing.regionId} - ${routing.reason}`);
+        logger.info(`[Region] ${routing.regionId} - ${routing.reason}`);
       }
 
       next();
     } catch (error) {
-      console.error("Region routing error:", error);
+      logger.error("Region routing error:", error);
       next();
     }
   };
@@ -216,7 +219,7 @@ export function createFailoverMiddleware() {
 
       // In production, would proxy the request to failover region
       // For now, just mark as failed and let app handle gracefully
-      console.warn(
+      logger.warn(
         `Failover from ${primaryRegion} to ${healthyRoute.regionId}`
       );
     }

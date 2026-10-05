@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Zero-Downtime Database Migration Utility
  *
  * Implements the expand-contract pattern, shadow-table strategy, and
@@ -11,7 +11,7 @@
  */
 
 import pool from "../config/database";
-import { logger } from "../utils/logger.utils";
+import { logger } from "./logger.utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -1,10 +1,10 @@
-import pool from '../config/database';
+﻿import pool from '../config/database';
 import { AuditLogModel, AuditLogRecord } from '../models/audit-log.model';
 import {
   formatAuditLogJSON,
   StructuredLogPayload,
 } from '../utils/log-formatter.utils';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 import { TenantContext } from '../utils/tenant-context.utils';
 
 export interface AuditLogSearchParams {
@@ -212,3 +212,4 @@ export const AuditLoggerService = {
     };
   }
 };
+

@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Personality Assessment Service
  * Evaluates personality compatibility for mentor-mentee matching
  * Issue #874
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface PersonalityTraits {
   openness: number; // 0-100

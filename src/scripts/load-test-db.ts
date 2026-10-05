@@ -1,6 +1,6 @@
-import { createOptimizedPool } from "../config/database";
+﻿import { createOptimizedPool } from "../config/database";
 import { QueryMonitor } from "../utils/query-monitor.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export interface LoadTestResult {
   concurrentUsers: number;

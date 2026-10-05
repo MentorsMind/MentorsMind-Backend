@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Shard routing and topology management (issue #865).
  *
  * Key placement uses a consistent-hash ring. The alternative, `hash % n`,
@@ -9,7 +9,7 @@
 
 import crypto from "crypto";
 import type { Pool } from "pg";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import shardingConfig, { type ShardDefinition } from "../config/sharding.config";
 
 export interface ShardHealth {

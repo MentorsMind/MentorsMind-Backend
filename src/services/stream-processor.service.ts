@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Stream processing for real-time analytics (issue #861).
  *
  * A small topology over the consumer's event stream: filter, map, and tumbling
@@ -11,7 +11,7 @@
  * corrupting a window that was already emitted.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import type { EventEnvelope } from "./kafka-producer.service";
 
 const logger = new Logger("StreamProcessor");

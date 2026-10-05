@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Booking projection handlers — registers concrete read-model updaters
  * with ProjectionService for the Booking aggregate.
  *
@@ -14,7 +14,7 @@ import { DomainEvent } from "../models/event.model";
 import { ProjectionService } from "../services/projection.service";
 import { QueueService } from "../services/queue.service";
 import { db } from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   BOOKING_AGGREGATE_TYPE,
   BookingProjectionEventType,

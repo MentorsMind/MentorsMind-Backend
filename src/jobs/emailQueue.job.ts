@@ -1,7 +1,7 @@
-import { Queue, Worker, Job } from 'bullmq';
+﻿import { Queue, Worker, Job } from 'bullmq';
 import { redisConnection, defaultJobOptions, QUEUE_NAMES } from '../config/queue';
 import { EmailService, EmailRequest } from '../services/email.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface EmailJobData extends EmailRequest {
     jobType: 'send-email';

@@ -1,5 +1,4 @@
-// @ts-nocheck
-import pool from '../config/database';
+﻿import pool from '../config/database';
 import { JwtUtils, TokenPayload, DecodedToken } from '../utils/jwt.utils';
 import crypto from 'crypto';
 import { SocketService } from './socket.service';

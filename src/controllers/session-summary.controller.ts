@@ -1,7 +1,7 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { SessionSummaryModel } from '../models/session-summary.model';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export const SessionSummaryController = {
   async generateSummary(req: AuthenticatedRequest, res: Response) {

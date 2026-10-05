@@ -1,11 +1,11 @@
-import {
+﻿import {
   TaxReportModel,
   TaxReport,
   TaxDocument,
 } from "../models/tax-report.model";
 import { getTaxRate, resolveJurisdiction, getExportFormat } from "../jurisdictions/tax-jurisdictions";
 import { generateTaxExport } from "./tax-export.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 /** Threshold above which a 1099 must be generated (USD equivalent) */
 const FORM_1099_THRESHOLD = 600;

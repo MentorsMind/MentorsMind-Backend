@@ -1,8 +1,8 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { DeepLinkService, DeepLinkType } from "../services/deepLink.service";
 import { extractClientIp } from "../utils/log-formatter.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export const DeepLinkController = {
   /**

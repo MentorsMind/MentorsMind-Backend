@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API v1 Route Aggregator
  *
  * All routes mounted here are served under /api/v1/
@@ -67,7 +67,7 @@ import cspReportRoutes from "../csp-report.routes";
 import stakingRoutes from "../staking.routes";
 
 import { BookingsService } from "../../services/bookings.service";
-import { logger } from "../../utils/logger";
+import { logger } from "../../utils/logger.utils";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
 import { deprecationMiddleware } from "../../middleware/deprecation.middleware";
 import { initializeDeprecationRegistry } from "../../config/deprecation-registry";
@@ -139,7 +139,7 @@ router.use("/session-quality", sessionQualityRoutes);
 router.use("/docs", apiDocsPortalRoutes);
 
 // Sandbox fixture routes for the docs portal "Try it out" flow (issue #784).
-// Gated by SANDBOX_MODE — see src/routes/sandbox.routes.ts.
+// Gated by SANDBOX_MODE â€” see src/routes/sandbox.routes.ts.
 router.use("/sandbox", sandboxRoutes);
 
 // Multi-tenant routes
@@ -152,13 +152,13 @@ router.use("/pricing", dynamicPricingRoutes);
 router.use("/onboarding", mentorOnboardingRoutes);
 router.use("/chatbot", chatbotRoutes);
 
-// Feature Flags (issue #688) — real-time rollout/targeting evaluation + admin CRUD
+// Feature Flags (issue #688) â€” real-time rollout/targeting evaluation + admin CRUD
 router.use("/", featureFlagRoutes);
 
-// Offline sync — snapshot/delta/queue endpoints for mobile clients (issue #689)
+// Offline sync â€” snapshot/delta/queue endpoints for mobile clients (issue #689)
 router.use("/offline", offlineRoutes);
 
-// Offline sync v2 — vector-clock batch sync endpoints (issue #689)
+// Offline sync v2 â€” vector-clock batch sync endpoints (issue #689)
 router.use("/sync", syncRoutes);
 
 // Unified global search across mentors, sessions, and messages (issue #738)
@@ -173,13 +173,13 @@ router.use("/errors", errorsRoutes);
 // Developer API key management (issue #838)
 router.use("/developer", developerRoutes);
 
-// Tax reporting export (issue #978) — /api/v1/tax
+// Tax reporting export (issue #978) â€” /api/v1/tax
 router.use("/tax", taxRoutes);
 
 // Staking integration (issue #995)
 router.use("/staking", stakingRoutes);
 
-// Inbound provider webhooks (issue #979) — unauthenticated, signature-verified
+// Inbound provider webhooks (issue #979) â€” unauthenticated, signature-verified
 router.use("/webhooks/email", emailWebhookRoutes);
 
 // Verifiable Credentials (DID / W3C VC)
@@ -195,3 +195,4 @@ router.use("/leaderboard", leaderboardRoutes);
 router.use("/csp-report", cspReportRoutes);
 
 export default router;
+

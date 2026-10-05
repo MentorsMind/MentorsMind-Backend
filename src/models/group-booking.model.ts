@@ -1,7 +1,7 @@
-import { db } from "../config/database";
-import { logger } from "../utils/logger";
+﻿import { db } from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
-// ─── Interfaces ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface GroupBookingRecord {
   id: string;
@@ -15,7 +15,7 @@ export interface GroupBookingRecord {
   current_participants: number;
   total_amount: string;
   currency: string;
-  payment_split_method: "equal" | "mentor固定" | "custom";
+  payment_split_method: "equal" | "mentorå›ºå®š" | "custom";
   payment_splits: PaymentSplit[];
   status: "pending" | "confirmed" | "in_progress" | "completed" | "cancelled";
   meeting_url: string | null;
@@ -55,7 +55,7 @@ export interface CreateGroupBookingPayload {
   maxParticipants: number;
   totalAmount: string;
   currency: string;
-  paymentSplitMethod: "equal" | "mentor固定" | "custom";
+  paymentSplitMethod: "equal" | "mentorå›ºå®š" | "custom";
   paymentSplits?: PaymentSplit[];
   participantIds: string[];
   recordingEnabled?: boolean;
@@ -71,7 +71,7 @@ export interface UpdateGroupBookingPayload {
   meetingUrl?: string;
 }
 
-// ─── Model ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const GroupBookingModel = {
   /**
@@ -366,7 +366,7 @@ export const GroupBookingModel = {
    */
   calculateSplits(
     totalAmount: string,
-    method: "equal" | "mentor固定" | "custom",
+    method: "equal" | "mentorå›ºå®š" | "custom",
     participantCount: number,
   ): PaymentSplit[] {
     const total = parseFloat(totalAmount);
@@ -385,7 +385,7 @@ export const GroupBookingModel = {
       }));
     }
 
-    if (method === "mentor固定") {
+    if (method === "mentorå›ºå®š") {
       const mentorShare = total * 0.7;
       const remainingPerParticipant =
         (total - mentorShare) / (participantCount - 1);
@@ -432,3 +432,4 @@ export const GroupBookingModel = {
     return rows[0] || null;
   },
 };
+

@@ -1,10 +1,10 @@
-import { Worker, Job } from 'bullmq';
+﻿import { Worker, Job } from 'bullmq';
 import {
   redisConnection,
   CONCURRENCY,
   QUEUE_NAMES,
 } from '../config/queue';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 import { ThreatDetectionService } from '../services/threat-detection.service';
 import { IncidentResponseService } from '../services/incident-response.service';
 import type { SecurityAnalysisJobData } from '../queues/security-analysis.queue';
@@ -38,7 +38,7 @@ async function processSecurityAnalysis(
     return;
   }
 
-  logger.warn('Threat detected — dispatching incident response', {
+  logger.warn('Threat detected â€” dispatching incident response', {
     userId,
     incidentType: detection.incidentType,
     severity: detection.severity,
@@ -75,3 +75,4 @@ securityAnalysisWorker.on('failed', (job, err) => {
 securityAnalysisWorker.on('error', (err) => {
   logger.error('Security analysis worker error', { error: err.message });
 });
+

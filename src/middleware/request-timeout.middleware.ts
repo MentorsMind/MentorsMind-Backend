@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Request Timeout Middleware (issue #1114)
  *
  * Prevents hung requests from holding sockets indefinitely. Any request that
@@ -11,7 +11,7 @@
  */
 
 import type { NextFunction, Request, Response } from "express";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export interface RequestTimeoutOptions {
   /** Budget in milliseconds before a request is considered hung. */

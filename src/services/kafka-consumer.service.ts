@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Kafka consumer (issue #861).
  *
  * At-least-once delivery with per-message isolation: one poisoned message must
@@ -14,7 +14,7 @@
  * logic is unit-testable without a broker.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import type { EventEnvelope } from "./kafka-producer.service";
 
 const logger = new Logger("KafkaConsumer");

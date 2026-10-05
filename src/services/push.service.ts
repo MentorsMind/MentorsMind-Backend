@@ -1,8 +1,8 @@
-import * as admin from "firebase-admin";
+﻿import * as admin from "firebase-admin";
 import { PushTokensModel } from "../models/push-tokens.model";
 import { UsersService } from "./users.service";
 import { NotificationChannel } from "./notification.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { env } from "../config/env";
 import {
   pushTokenInvalidTotal,

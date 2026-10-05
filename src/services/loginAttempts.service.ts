@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Login Attempts Service
  * Tracks failed login attempts per email in Redis with progressive lockout.
  *
@@ -9,7 +9,7 @@
  *   20 attempts → permanent lockout (requires admin unlock)
  */
 
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { EmailService } from './email.service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────

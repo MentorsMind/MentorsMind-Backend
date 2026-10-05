@@ -1,9 +1,9 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdvancedAnalyticsService } from "../services/advanced-analytics.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { analyticsRefreshQueue } from "../queues/analyticsRefresh.queue";
 
 export const AdvancedAnalyticsController = {

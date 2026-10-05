@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Subscription federation (issue #866).
  *
  * Subscriptions do not federate the way queries do. A query fans out and
@@ -11,7 +11,7 @@
  * the process runs out of handles.
  */
 
-import { logger } from "../../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export interface UpstreamSubscription {
   subgraph: string;

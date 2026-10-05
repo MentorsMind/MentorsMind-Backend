@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { Request, Response, NextFunction } from "express";
+﻿import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { PresenceService } from "../services/presence.service";
 import { redis } from "../config/redis"; // your existing ioredis instance

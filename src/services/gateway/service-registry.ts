@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Service registry and discovery (issue #860).
  *
  * The migration this supports is a strangler-fig: the monolith keeps serving
@@ -7,7 +7,7 @@
  * file — a service only takes traffic once it is registered *and* healthy.
  */
 
-import { logger } from "../../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export type ServiceName = "user-service" | "booking-service" | "payment-service";
 

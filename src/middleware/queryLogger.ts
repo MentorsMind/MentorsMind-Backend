@@ -1,4 +1,4 @@
-/**
+﻿/**
  * queryLogger.ts
  *
  * PostgreSQL query performance middleware (issue #742).
@@ -19,7 +19,7 @@
 
 import * as crypto from "crypto";
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { dbQueryDurationMs, dbQueryDurationHistogram } from "../config/metrics";
 import QueryMonitorService from "../services/query-monitor.service";
 

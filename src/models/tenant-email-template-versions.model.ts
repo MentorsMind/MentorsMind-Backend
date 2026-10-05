@@ -1,5 +1,5 @@
-import pool from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export interface TenantEmailTemplateVersionRecord {
   id: number;
@@ -98,3 +98,4 @@ export const TenantEmailTemplateVersionsModel = {
     }
   },
 };
+

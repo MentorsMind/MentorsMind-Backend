@@ -1,5 +1,5 @@
-import pool, { db } from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool, { db } from "../config/database";
+import { Logger } from "../utils/logger.utils";
 import {
   AISummaryService,
   ActionItem,
@@ -327,3 +327,4 @@ export const SessionSummaryModel = {
 };
 
 export default SessionSummaryModel;
+

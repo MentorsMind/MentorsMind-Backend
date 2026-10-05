@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Schema composition and validation (issue #866).
  *
  * Composition is the step that catches a broken federation *before* it serves
@@ -10,7 +10,7 @@
  * subgraph author fixes the whole set in one pass.
  */
 
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   extractEntityKeys,
   extractExtendedTypes,

@@ -1,10 +1,10 @@
-import config from "../config";
+﻿import config from "../config";
 import { NotificationTemplatesModel } from "../models/notification-templates.model";
 import {
   NotificationDeliveryTrackingModel,
   DeliveryStatus,
 } from "../models/notification-delivery-tracking.model";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import * as https from "https";
 import {
   emailDeliveryFailuresTotal,

@@ -1,8 +1,8 @@
-import { Queue, Worker, Job } from 'bullmq';
+﻿import { Queue, Worker, Job } from 'bullmq';
 import { redisConnection, defaultJobOptions, QUEUE_NAMES } from '../config/queue';
 import { CDNService } from '../services/cdn.service';
 import { db } from '../config/database';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface CDNInvalidationJobData {
   jobType: 'cdn-invalidate';

@@ -1,8 +1,8 @@
-import axios, { AxiosError } from 'axios';
+﻿import axios, { AxiosError } from 'axios';
 import jwt from 'jsonwebtoken';
 import meetingConfig, { MeetingProvider } from '../config/meeting.config';
 import { calculateMeetingExpiry, generateJitsiRoomName } from '../utils/meeting.utils';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface MeetingRoomOptions {
   sessionId: string;

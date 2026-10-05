@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Cache warming and preloading (issue #864).
  *
  * A warmer names a set of cache keys and how to load them. Warmers run on
@@ -10,7 +10,7 @@
  * concurrency limit and one warmer's failure never stops the others.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   cacheOrchestrator,
   CacheOrchestrator,

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Predictive autoscaler (issue #862).
  *
  * Turns a load prediction into a replica count, subject to the constraints that
@@ -19,7 +19,7 @@
  * Kubernetes, a cloud ASG, or a dry run.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   MIN_ACTIONABLE_CONFIDENCE,
   type LoadPrediction,

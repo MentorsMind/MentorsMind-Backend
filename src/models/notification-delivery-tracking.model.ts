@@ -1,5 +1,5 @@
-import pool, { db } from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool, { db } from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export interface NotificationDeliveryTrackingRecord {
   id: string;
@@ -227,3 +227,4 @@ export const NotificationDeliveryTrackingModel = {
     }
   },
 };
+

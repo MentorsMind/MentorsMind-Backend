@@ -1,5 +1,5 @@
-import { db } from "../config/database";
-import { logger } from "../utils/logger";
+﻿import { db } from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export interface DomainEvent {
   id: string;
@@ -145,3 +145,4 @@ export const EventStoreModel = {
     return state;
   },
 };
+

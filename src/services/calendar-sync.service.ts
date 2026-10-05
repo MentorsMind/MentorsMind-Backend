@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { logger } from "../utils/logger.utils";
 import { CalendarEvent } from "./smart-calendar.service";
 
 export interface SyncStatus {
@@ -133,3 +133,4 @@ export class CalendarSyncService {
 }
 
 export const calendarSyncService = new CalendarSyncService();
+

@@ -1,11 +1,11 @@
-import {
+﻿import {
   GamificationModel,
   Achievement,
   Badge,
   AchievementCategory,
   AchievementRarity,
 } from '../models/gamification.model';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 
 /**
  * AchievementService
@@ -204,3 +204,4 @@ export class AchievementService {
 }
 
 export default AchievementService;
+

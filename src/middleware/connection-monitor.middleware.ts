@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Connection Monitor Middleware
  * Tracks connection usage and provides real-time monitoring
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export class ConnectionMonitorMiddleware {
   private logger: Logger;

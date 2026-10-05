@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Event sourcing and CQRS (issue #861).
  *
  * `event-store.service.ts` already persists domain events. This is the layer
@@ -16,7 +16,7 @@
  * database, and so `EventStoreService` stays the single writer in production.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import type {
   KafkaProducerService,
   OutboundMessage,

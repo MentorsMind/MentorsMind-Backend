@@ -1,5 +1,5 @@
-import { Pool } from "pg";
-import { logger } from "../utils/logger";
+﻿import { Pool } from "pg";
+import { logger } from "../utils/logger.utils";
 
 export interface AdaptiveTest {
   id: string;
@@ -358,3 +358,4 @@ export class AdaptiveTestingService {
     }
   }
 }
+

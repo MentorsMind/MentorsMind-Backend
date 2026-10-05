@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Per-endpoint webhook circuit breaker (issue #783).
  *
  * A single misbehaving subscriber endpoint should never be able to starve
@@ -12,7 +12,7 @@
  */
 import crypto from 'crypto';
 import { redis } from '../config/redis';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { webhookCircuitBreakerState } from '../config/metrics';
 
 const FAILURE_WINDOW_MS = 5 * 60 * 1000;

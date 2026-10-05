@@ -1,4 +1,4 @@
-/**
+﻿/**
  * security-headers-check.ts (issue #785)
  *
  * Verifies that every required security header is present on API responses.
@@ -78,23 +78,23 @@ async function main(): Promise<void> {
   for (const result of results) {
     if (result.missing.length > 0) {
       hasFailure = true;
-      console.error(
+      logger.error(
         `[FAIL] ${result.path} (status: ${result.status}) — missing/invalid headers: ${result.missing.join(", ")}`,
       );
     } else {
-      console.log(`[PASS] ${result.path} (status: ${result.status})`);
+      logger.info(`[PASS] ${result.path} (status: ${result.status})`);
     }
   }
 
   if (hasFailure) {
-    console.error("\nSecurity headers check failed — see docs/SECURITY_SCANNING_RUNBOOK.md for remediation.");
+    logger.error("\nSecurity headers check failed — see docs/SECURITY_SCANNING_RUNBOOK.md for remediation.");
     process.exit(1);
   }
 
-  console.log("\nAll required security headers present.");
+  logger.info("\nAll required security headers present.");
 }
 
 main().catch((error) => {
-  console.error("security-headers-check crashed:", error);
+  logger.error("security-headers-check crashed:", error);
   process.exit(1);
 });

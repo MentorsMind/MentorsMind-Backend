@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { Logger } from "../utils/logger.utils";
 
 export interface TimezoneInfo {
   timezone: string;

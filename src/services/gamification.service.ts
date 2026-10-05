@@ -1,4 +1,4 @@
-import {
+﻿import {
   GamificationModel,
   UserProgress,
   Achievement,
@@ -9,7 +9,7 @@ import {
   RewardLog,
   Reward,
 } from '../models/gamification.model';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { AchievementService } from './achievement.service';
 import { LeaderboardService } from './leaderboard.service';
 

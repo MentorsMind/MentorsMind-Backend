@@ -1,5 +1,5 @@
-import { db } from "../config/database";
-import { logger } from "../utils/logger";
+﻿import { db } from "../config/database";
+import { Logger } from "../utils/logger.utils";
 import { withCurrentTenantFilter } from "../utils/tenant-context.utils";
 
 export interface Payment {
@@ -77,7 +77,7 @@ export const PaymentModel = {
    * Delete payments (transactions) older than given number of years.
    * Returns number of records deleted.
    *
-   * Note: This is a system maintenance operation — it runs across all tenants
+   * Note: This is a system maintenance operation â€” it runs across all tenants
    * intentionally and should only be called from admin/maintenance contexts.
    */
   async deleteOlderThanYears(years: number): Promise<number> {
@@ -98,3 +98,4 @@ export const PaymentModel = {
     }
   },
 };
+

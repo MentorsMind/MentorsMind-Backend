@@ -1,5 +1,4 @@
-// @ts-nocheck
-/**
+﻿/**
  * PaymentQuote Controller
  *
  * GET /api/v1/payments/assets        — list supported assets with XLM rates

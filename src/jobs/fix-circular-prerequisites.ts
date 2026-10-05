@@ -1,4 +1,4 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
 import { logger } from "../utils/logger.utils";
 import { PrerequisiteValidatorService, Prerequisite } from "../services/prerequisite-validator.service";
 
@@ -79,7 +79,7 @@ if (require.main === module) {
   run()
     .then(() => process.exit(0))
     .catch((err) => {
-      console.error(err);
+      logger.error(err);
       process.exit(1);
     });
 }

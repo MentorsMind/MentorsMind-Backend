@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { logger } from "../utils/logger.utils";
 
 export interface TranscriptionSegment {
   id: string;
@@ -139,3 +139,4 @@ export class AITranscriptionService {
 }
 
 export const aiTranscriptionService = new AITranscriptionService();
+

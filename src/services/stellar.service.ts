@@ -1,5 +1,4 @@
-// @ts-nocheck
-import {
+﻿import {
   Horizon,
   TransactionBuilder,
   StrKey,

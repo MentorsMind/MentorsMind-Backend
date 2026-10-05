@@ -1,6 +1,6 @@
-import pool, { db } from "../config/database";
+﻿import pool, { db } from "../config/database";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 
 // Track materialized view availability
 let viewsAvailable = false;
@@ -457,3 +457,4 @@ export const AnalyticsService = {
     }
   },
 };
+

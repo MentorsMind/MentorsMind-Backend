@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Scaling optimizer worker (issue #862).
  *
  * Samples load, feeds the predictor, asks the scaler what to do, and records the
@@ -9,7 +9,7 @@
  * leave the cluster where it is, not crash the worker that keeps it sized.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   AutoScalerService,
   autoScaler,

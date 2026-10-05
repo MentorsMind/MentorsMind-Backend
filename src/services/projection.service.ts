@@ -1,5 +1,5 @@
-import { DomainEvent } from '../models';
-import { logger } from '../utils/logger';
+﻿import { DomainEvent } from '../models';
+import { Logger } from "../utils/logger.utils";
 
 interface EventHandler {
   aggregateType: string;

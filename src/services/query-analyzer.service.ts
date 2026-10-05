@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Query analysis and index recommendation (issue #859).
  *
  * `middleware/queryLogger` already captures slow queries and their EXPLAIN
@@ -11,7 +11,7 @@
  */
 
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import databaseTuning from "../config/database-tuning";
 
 export interface PlanNode {

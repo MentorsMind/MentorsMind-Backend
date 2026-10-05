@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Data Quality Service
  * Validates and monitors data quality in ETL pipelines
  * Issue #873
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface DataQualityRule {
   name: string;

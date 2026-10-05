@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Email CDN Asset Service — Issue #752
  *
  * Provides CDN-backed URL resolution for email template assets (logos, icons,
@@ -20,7 +20,7 @@
 
 import { env } from "../config/env";
 import { CDNService } from "./cdn.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Asset path constants — paths relative to the CDN / static root

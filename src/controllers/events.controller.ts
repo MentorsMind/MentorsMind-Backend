@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { EventStoreService } from '../services/event-store.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export const getEventHistory = async (req: Request, res: Response): Promise<void> => {
   try {

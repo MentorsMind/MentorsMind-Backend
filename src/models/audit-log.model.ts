@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Audit Log Model
  *
  * Handles persistence of audit log entries using the "legacy" schema
@@ -10,10 +10,10 @@
 
 import * as crypto from "crypto";
 import pool from "../config/database";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { TenantContext } from "../utils/tenant-context.utils";
 
-// ── Hash helpers ─────────────────────────────────────────────────────────────
+// â”€â”€ Hash helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getHmacSecret(): string {
   const secret = process.env.AUDIT_HMAC_SECRET;
@@ -52,7 +52,7 @@ function computeLegacyRecordHmac(fields: {
     .digest("hex");
 }
 
-// ── Interfaces ───────────────────────────────────────────────────────────────
+// â”€â”€ Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface AuditLogRecord {
   id: string; // UUID
@@ -73,7 +73,7 @@ export interface AuditLogRecord {
   hash_algorithm: string | null;
 }
 
-// ── Model ────────────────────────────────────────────────────────────────────
+// â”€â”€ Model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Audit Log Model for interacting directly with the PostgreSQL database.
@@ -126,7 +126,7 @@ export const AuditLogModel = {
         previousHash,
       });
 
-      // Determine columns present in the table — the table may use either
+      // Determine columns present in the table â€” the table may use either
       // the legacy schema (level/message/entity_type/entity_id) or the new
       // schema (resource_type/resource_id/old_value/new_value). We check which
       // columns exist and insert into whichever set is available.
@@ -203,3 +203,4 @@ export const AuditLogModel = {
     }
   },
 };
+

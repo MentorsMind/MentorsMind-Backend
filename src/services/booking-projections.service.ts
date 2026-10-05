@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file booking-projections.service.ts
  * @description Rebuilds the `bookings` table (read model) from the event stream.
  *
@@ -30,7 +30,7 @@ import {
 import { EventStoreService } from './event-store.service';
 import { ProjectionService } from './projection.service';
 import { db } from '../config/database';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 
 // ---------------------------------------------------------------------------
 // Internal helper types
@@ -43,7 +43,7 @@ import { logger } from '../utils/logger';
  * need to read the discriminant column.
  */
 type RawDomainEvent = DomainEvent & {
-  /** Raw pg column — present on rows returned directly from SQL queries */
+  /** Raw pg column â€” present on rows returned directly from SQL queries */
   event_type?: string;
   aggregate_id?: string;
 };
@@ -62,8 +62,8 @@ type BookingState = Partial<BookingRecord> & { version?: number };
 /**
  * Projection service for the `Booking` aggregate.
  *
- * All methods are static — no instance state is needed because the projection
- * logic is purely functional (event → state fold) and I/O is delegated to
+ * All methods are static â€” no instance state is needed because the projection
+ * logic is purely functional (event â†’ state fold) and I/O is delegated to
  * the shared `db` pool.
  */
 export class BookingProjectionsService {
@@ -200,7 +200,7 @@ export class BookingProjectionsService {
       default:
         logger.warn(
           { eventType, aggregateId: event.aggregateId ?? raw.aggregate_id },
-          'BookingProjectionsService.applyEvent: unknown event type — skipping',
+          'BookingProjectionsService.applyEvent: unknown event type â€” skipping',
         );
         return state;
     }
@@ -263,7 +263,7 @@ export class BookingProjectionsService {
     }
 
     if (!state.id) {
-      // No BookingCreated event was found — nothing to upsert.
+      // No BookingCreated event was found â€” nothing to upsert.
       logger.warn(
         { bookingId },
         'BookingProjectionsService.projectToDatabase: state has no id, skipping upsert',
@@ -483,3 +483,4 @@ export class BookingProjectionsService {
     );
   }
 }
+

@@ -1,8 +1,8 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { SessionRecordingService } from '../services/session-recording.service';
 import recordingTranscriptionService from '../services/recording-transcription.service';
 import recordingBookmarkService from '../services/recording-bookmark.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { AuditLogService } from '../services/auditLog.service';
 import RecordingConsentService from '../services/recording-consent.service';

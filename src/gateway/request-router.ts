@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Request router & reverse proxy
  *
  * Resolves an inbound request to a service + instance (via the registry and
@@ -13,7 +13,7 @@ import type { RouteResolution, ServiceDefinition } from "./types";
 import { selectInstance } from "./load-balancer";
 import { ServiceRegistry } from "./service-registry";
 import gatewayConfig from "./gateway.config";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 const HOP_BY_HOP = new Set([
   "connection",

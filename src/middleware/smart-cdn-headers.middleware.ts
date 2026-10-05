@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Smart CDN Cache Headers Middleware — Issue #745
  *
  * Applies correct Cache-Control, Vary, Surrogate-Control, and CDN-vendor
@@ -29,7 +29,7 @@ import {
   getApiCacheStrategy,
 } from "../config/cdn-geo.config";
 import { CDNService } from "../services/cdn.service";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Surrogate / cache tag helper

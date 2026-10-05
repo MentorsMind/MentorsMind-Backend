@@ -1,21 +1,21 @@
-/**
+﻿/**
  * Incident Handler Worker
  *
  * BullMQ worker that processes security incident response jobs from the
  * INCIDENT_RESPONSE queue. Each job triggers the full response playbook:
  *
  *   Job type: "run-playbook"
- *     → Classifies the threat, executes containment/alert/record playbook,
+ *     â†’ Classifies the threat, executes containment/alert/record playbook,
  *       collects forensic evidence, pushes to SIEM.
  *
  *   Job type: "collect-forensics"
- *     → Runs ForensicsService.collectForIncident for an existing incident.
+ *     â†’ Runs ForensicsService.collectForIncident for an existing incident.
  *
  *   Job type: "reconstruct-timeline"
- *     → Rebuilds the incident timeline and logs a snapshot.
+ *     â†’ Rebuilds the incident timeline and logs a snapshot.
  *
  *   Job type: "siem-push"
- *     → Sends a single incident payload to the configured SIEM.
+ *     â†’ Sends a single incident payload to the configured SIEM.
  *
  * The worker is intentionally separate from the security-analysis worker so
  * that incident response (potentially slow: DB writes, notifications, HTTP
@@ -31,13 +31,13 @@ import {
   QUEUE_NAMES,
   defaultJobOptions,
 } from "../config/queue";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import { IncidentResponseService, type SiemPushPayload } from "../services/incident-response.service";
 import { ForensicsService } from "../services/forensics.service";
 import { SecurityIncidentModel } from "../models/security-incident.model";
 import type { SecuritySeverity, SecurityIncidentStatus, IncidentCategory } from "../models/security-incident.model";
 
-// ─── Job data types ───────────────────────────────────────────────────────────
+// â”€â”€â”€ Job data types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface RunPlaybookJobData {
   type: "run-playbook";
@@ -86,7 +86,7 @@ export type IncidentHandlerJobData =
   | SiemPushJobData
   | UpdateIncidentStatusJobData;
 
-// ─── Queue ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const incidentResponseQueue = new Queue<IncidentHandlerJobData>(
   QUEUE_NAMES.INCIDENT_RESPONSE,
@@ -94,7 +94,7 @@ export const incidentResponseQueue = new Queue<IncidentHandlerJobData>(
     connection: redisConnection,
     defaultJobOptions: {
       ...defaultJobOptions,
-      // Incident jobs are high priority — use shorter backoff
+      // Incident jobs are high priority â€” use shorter backoff
       attempts: 3,
       backoff: { type: "exponential", delay: 1000 },
       removeOnComplete: { count: 200 },
@@ -103,7 +103,7 @@ export const incidentResponseQueue = new Queue<IncidentHandlerJobData>(
   },
 );
 
-// ─── Convenience enqueuing functions ─────────────────────────────────────────
+// â”€â”€â”€ Convenience enqueuing functions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Enqueue a full incident response playbook job.
@@ -142,7 +142,7 @@ export async function enqueueSiemPush(payload: SiemPushPayload): Promise<void> {
   });
 }
 
-// ─── Job processor ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Job processor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function processIncidentJob(
   job: Job<IncidentHandlerJobData>,
@@ -294,13 +294,13 @@ async function processIncidentJob(
     }
 
     default: {
-      logger.warn({ jobId: job.id, type }, "Unknown incident job type — skipping");
+      logger.warn({ jobId: job.id, type }, "Unknown incident job type â€” skipping");
       break;
     }
   }
 }
 
-// ─── Worker ───────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Worker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const incidentHandlerWorker = new Worker<IncidentHandlerJobData>(
   QUEUE_NAMES.INCIDENT_RESPONSE,
@@ -311,7 +311,7 @@ export const incidentHandlerWorker = new Worker<IncidentHandlerJobData>(
   },
 );
 
-// ─── Worker event handlers ────────────────────────────────────────────────────
+// â”€â”€â”€ Worker event handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 incidentHandlerWorker.on("completed", (job) => {
   logger.info(
@@ -333,9 +333,10 @@ incidentHandlerWorker.on("failed", (job, err) => {
 });
 
 incidentHandlerWorker.on("stalled", (jobId) => {
-  logger.warn({ jobId }, "Incident handler job stalled — will be re-queued");
+  logger.warn({ jobId }, "Incident handler job stalled â€” will be re-queued");
 });
 
 incidentHandlerWorker.on("error", (err) => {
   logger.error({ error: err.message }, "Incident handler worker error");
 });
+

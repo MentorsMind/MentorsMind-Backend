@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Multi-layered cache orchestrator (issue #864).
  *
  * Fronts the existing cache stack with a tier hierarchy and a dependency graph:
@@ -17,7 +17,7 @@
  * instance serves stale data until its TTL expires.
  */
 
-import { Logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 const logger = new Logger("CacheOrchestrator");
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * secrets.ts
  *
  * Fetches runtime secrets from AWS Secrets Manager or HashiCorp Vault on
@@ -16,7 +16,7 @@
  *   during the rotation window.
  */
 
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export type SecretsProvider = "aws" | "vault" | "env";
 

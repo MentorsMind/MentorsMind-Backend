@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Recording Consent Service
  *
  * Manages explicit, revocable consent for session recordings.
@@ -12,7 +12,7 @@
 
 import pool from '../config/database';
 import { AuditLogService } from './auditLog.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Types

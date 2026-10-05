@@ -1,6 +1,6 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
 import { EmailWebhookService } from '../services/emailWebhook.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export const EmailWebhookController = {
   /**

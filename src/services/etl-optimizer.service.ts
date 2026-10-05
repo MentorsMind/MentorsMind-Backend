@@ -1,10 +1,10 @@
-/**
+﻿/**
  * ETL Pipeline Optimizer Service
  * Optimizes data extraction, transformation, and loading operations
  * Issue #873
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { EventEmitter } from 'events';
 
 export interface ETLJob {

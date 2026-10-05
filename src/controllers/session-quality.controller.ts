@@ -1,8 +1,8 @@
-import { Response } from "express";
+﻿import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionQualityService } from "../services/session-quality.service";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export const SessionQualityController = {
   /**

@@ -1,5 +1,5 @@
-import pool from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool from "../config/database";
+import { Logger } from "../utils/logger.utils";
 
 export interface PushTokenRecord {
   id: string;
@@ -245,3 +245,4 @@ export const PushTokensModel = {
     }
   },
 };
+

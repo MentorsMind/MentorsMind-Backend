@@ -1,7 +1,7 @@
-import { Response, NextFunction } from 'express';
+﻿import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { GoalService } from '../services/goal.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export class GoalController {
   static async create(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {

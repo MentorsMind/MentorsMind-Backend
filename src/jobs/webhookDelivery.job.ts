@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Webhook Delivery Worker
  *
  * Processes outbound webhook delivery jobs from the webhook-delivery-queue.
@@ -10,7 +10,7 @@ import { redisConnection } from '../queues/queue.config';
 import { WEBHOOK_QUEUE_NAME, WebhookDeliveryJobData, webhookQueue } from '../queues/webhook.queue';
 import { WebhookService } from '../services/webhook.service';
 import { WebhookCircuitBreaker } from '../services/webhook-circuit-breaker.service';
-import { logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 /** How long a delivery is deferred while its endpoint's circuit is open (issue #783). */
 const CIRCUIT_OPEN_DEFER_MS = 5 * 60 * 1000;

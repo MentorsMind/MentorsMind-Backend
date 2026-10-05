@@ -1,6 +1,6 @@
-import pinoHttp from "pino-http";
+﻿import pinoHttp from "pino-http";
 import type { Response } from "express";
-import { logger } from "../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import { maskPII } from "../utils/pii-mask";
 
 /**

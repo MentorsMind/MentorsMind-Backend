@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Entity reference resolvers (issue #866).
  *
  * When one subgraph returns `{ __typename: "User", id }`, the gateway must ask
@@ -10,7 +10,7 @@
  * graph is slower than the monolith it replaced.
  */
 
-import { logger } from "../../utils/logger";
+import { Logger } from "../utils/logger.utils";
 
 export interface EntityReference {
   __typename: string;

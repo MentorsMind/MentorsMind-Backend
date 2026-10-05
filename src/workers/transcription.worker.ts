@@ -1,8 +1,8 @@
-import { Worker, Job } from 'bullmq';
+﻿import { Worker, Job } from 'bullmq';
 import { redisConnection, QUEUE_NAMES } from '../queues/queue.config';
 import { TranscriptionService } from '../services/transcription.service';
 import { transcriptionQueue, TranscriptionJobData } from '../queues/transcription.queue';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 
 export const transcriptionWorker = new Worker<TranscriptionJobData>(
   QUEUE_NAMES.TRANSCRIPTION,
@@ -54,3 +54,4 @@ transcriptionWorker.on('failed', (job, err) => {
 transcriptionWorker.on('error', (err) => {
   logger.error('[TranscriptionWorker] Worker error', { error: err.message });
 });
+

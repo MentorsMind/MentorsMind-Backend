@@ -1,4 +1,4 @@
-/**
+﻿/**
  * API gateway (issue #860).
  *
  * Sits in front of the monolith and forwards a route to an extracted service
@@ -12,7 +12,7 @@
  */
 
 import type { NextFunction, Request, Response } from "express";
-import { logger } from "../../utils/logger";
+import { Logger } from "../utils/logger.utils";
 import {
   pickInstance,
   recordInstanceResult,
