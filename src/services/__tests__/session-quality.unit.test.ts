@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for SessionQualityService
  *
  * Tests the core scoring logic:
@@ -18,7 +18,7 @@ import {
 import pool from "../../config/database";
 
 jest.mock("../../config/database");
-jest.mock("../../utils/logger", () => ({
+jest.mock("../../utils/logger.utils", () => ({
   logger: {
     error: jest.fn(),
     info: jest.fn(),

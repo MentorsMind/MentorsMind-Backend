@@ -1,4 +1,4 @@
-import https from "https";
+﻿import https from "https";
 import { EmailService, IEmailProvider } from "../email.service";
 import {
   NotificationDeliveryTrackingModel,
@@ -54,7 +54,7 @@ jest.mock("../../models/notification-delivery-tracking.model", () => ({
   },
 }));
 
-jest.mock("../../utils/logger", () => ({
+jest.mock("../../utils/logger.utils", () => ({
   __esModule: true,
   default: {
     info: jest.fn(),

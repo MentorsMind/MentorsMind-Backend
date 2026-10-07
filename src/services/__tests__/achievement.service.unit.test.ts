@@ -1,4 +1,4 @@
-jest.mock('../../utils/logger', () => ({
+﻿jest.mock('../../utils/logger.utils', () => ({
   logger: {
     info: jest.fn(),
     warn: jest.fn(),

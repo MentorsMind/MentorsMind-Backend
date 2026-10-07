@@ -1,4 +1,4 @@
-import { logger } from "./utils/logger";
+﻿import { logger } from "./utils/logger.utils";
 import { AdvancedAnalyticsService } from "./services/advanced-analytics.service";
 import { initializeAnalyticsPipeline } from "./workers/analytics-pipeline.worker";
 

@@ -1,4 +1,4 @@
-import {
+﻿import {
   NotificationChannel,
   NotificationService,
 } from "../notification.service";
@@ -67,7 +67,7 @@ jest.mock("../deepLink.service", () => ({
   },
 }));
 
-jest.mock("../../utils/logger", () => ({
+jest.mock("../../utils/logger.utils", () => ({
   logger: {
     error: jest.fn(),
   },
