@@ -827,6 +827,18 @@ export const BookingsService = {
       throw createError(ErrorCode.BOOKING_RESCHEDULE_NOT_ALLOWED, 400);
     }
 
+    // Issue #1299: new time must be at least 30 minutes in the future —
+    // mirrors `futureScheduledAt` in bookings.schemas.ts. Guard here so
+    // non-HTTP callers (queues, offline sync) get the same rule before any
+    // DB writes.
+    if (
+      !(newScheduledAt instanceof Date) ||
+      Number.isNaN(newScheduledAt.getTime()) ||
+      newScheduledAt.getTime() <= Date.now() + 30 * 60 * 1000
+    ) {
+      throw createError(ErrorCode.BOOKING_INVALID_TIME, 400);
+    }
+
     // Check for conflicts at new time
     const hasConflict = await BookingModel.checkConflict(
       booking.mentor_id,

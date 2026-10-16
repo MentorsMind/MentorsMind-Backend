@@ -322,3 +322,27 @@ export const auditLogQueueRejectionsTotal = new Counter<string>({
   labelNames: ["reason"],
   registers: [metricsRegistry],
 });
+
+// ─── Backups (issue #1303) ────────────────────────────────────────────────
+
+export const backupDurationSeconds = new Histogram<string>({
+  name: "backup_duration_seconds",
+  help: "Backup operation duration in seconds, partitioned by backup type",
+  labelNames: ["type"],
+  buckets: [0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300],
+  registers: [metricsRegistry],
+});
+
+export const backupOperationsTotal = new Counter<string>({
+  name: "backup_operations_total",
+  help: "Total backup operations, partitioned by type and status (success, failure)",
+  labelNames: ["type", "status"],
+  registers: [metricsRegistry],
+});
+
+export const backupSizeBytes = new Gauge<string>({
+  name: "backup_size_bytes",
+  help: "Last completed backup file size in bytes, partitioned by backup type",
+  labelNames: ["type"],
+  registers: [metricsRegistry],
+});

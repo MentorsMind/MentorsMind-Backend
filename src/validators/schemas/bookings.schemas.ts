@@ -6,6 +6,26 @@
 import { z } from 'zod';
 import { idParamSchema, shortTextSchema, longTextSchema, paginationSchema } from './common.schemas';
 
+/**
+ * Shared 30-minute future check used by both booking creation and
+ * rescheduling (issue #1299). Extracted so both paths enforce the same rule.
+ */
+export const futureScheduledAt = z
+  .string()
+  .min(1, 'Scheduled time is required')
+  .datetime({ message: 'scheduledAt must be an ISO 8601 datetime string' })
+  .refine(
+    (v) => new Date(v) > new Date(Date.now() + 30 * 60 * 1000),
+    { message: 'scheduledAt must be at least 30 minutes in the future' }
+  );
+
+/** Service-layer guard mirroring `futureScheduledAt` for non-HTTP callers. */
+export function isFutureScheduledAt(value: Date | string): boolean {
+  const time = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  if (Number.isNaN(time)) return false;
+  return time > Date.now() + 30 * 60 * 1000;
+}
+
 export const createBookingSchema = z.object({
   body: z.object({
     mentorId: z.string().uuid('Mentor ID must be a valid UUID'),
@@ -58,14 +78,7 @@ export const updateBookingSchema = z.object({
 export const rescheduleBookingSchema = z.object({
   params: idParamSchema.shape.params,
   body: z.object({
-    scheduledAt: z
-      .string()
-      .min(1, 'New scheduled time is required')
-      .datetime({ message: 'scheduledAt must be an ISO 8601 datetime string' })
-      .refine(
-        (v) => new Date(v) > new Date(),
-        { message: 'Booking must be scheduled in the future' }
-      ),
+    scheduledAt: futureScheduledAt,
     reason: shortTextSchema.optional(),
   }).strict(),
 });

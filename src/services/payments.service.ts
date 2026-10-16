@@ -133,7 +133,7 @@ export const PaymentsService = {
       isPathPayment = quote.pathPaymentRequired;
 
       // Enforce 30-second quote expiry
-      if (Date.now() - quote.createdAt > 30000) {
+      if (Date.now() > new Date(quote.expiresAt).getTime()) {
         throw createError(ErrorCode.PAYMENT_QUOTE_EXPIRED, 400);
       }
     }
@@ -208,6 +208,90 @@ export const PaymentsService = {
       stellarTxHash: payment.stellar_tx_hash,
       updatedAt: payment.updated_at,
     };
+  },
+
+  /**
+   * Idempotent status transition for Stellar monitor retries / duplicate
+   * webhook delivery (issue #1285).
+   *
+   * Uses `SELECT ... FOR UPDATE` inside a transaction so concurrent retries
+   * serialize on the payment row:
+   * - terminal (`completed`/`failed`) rows are never overwritten; same hash
+   *   returns the existing record, different hash throws CONFLICT.
+   * - non-terminal rows with an existing hash different from the incoming
+   *   hash throw CONFLICT (prevents two hashes landing on one payment).
+   */
+  async updatePaymentStatus(
+    paymentId: string,
+    stellarTxHash: string,
+    status: PaymentStatus = "completed",
+  ): Promise<PaymentRecord> {
+    if (!stellarTxHash || typeof stellarTxHash !== "string") {
+      throw createError(ErrorCode.PAYMENT_INVALID_TX_HASH, 400);
+    }
+
+    return DatabaseService.withTransaction(async (client) => {
+      const { rows } = await client.query<PaymentRecord>(
+        `SELECT * FROM transactions WHERE id = $1 FOR UPDATE`,
+        [paymentId],
+      );
+      const existing = rows[0];
+      if (!existing) throw createError(ErrorCode.PAYMENT_NOT_FOUND, 404);
+
+      // Terminal states are immutable: same hash = idempotent replay,
+      // different hash = conflicting retry.
+      if (existing.status === "completed" || existing.status === "failed") {
+        if (
+          existing.stellar_tx_hash &&
+          existing.stellar_tx_hash !== stellarTxHash
+        ) {
+          throw createError(ErrorCode.CONFLICT, 409, {
+            paymentId,
+            existingHash: existing.stellar_tx_hash,
+          });
+        }
+        return existing;
+      }
+
+      // Non-terminal row already bound to a different hash.
+      if (
+        existing.stellar_tx_hash &&
+        existing.stellar_tx_hash !== stellarTxHash
+      ) {
+        throw createError(ErrorCode.CONFLICT, 409, {
+          paymentId,
+          existingHash: existing.stellar_tx_hash,
+        });
+      }
+
+      // Same hash + same status replay.
+      if (
+        existing.stellar_tx_hash === stellarTxHash &&
+        existing.status === status
+      ) {
+        return existing;
+      }
+
+      const { rows: updatedRows } = await client.query<PaymentRecord>(
+        `UPDATE transactions
+         SET status = $2,
+             stellar_tx_hash = $3,
+             external_reference = COALESCE(external_reference, $3),
+             completed_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE completed_at END,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [paymentId, status, stellarTxHash],
+      );
+
+      if (!updatedRows[0])
+        throw createError(ErrorCode.PAYMENT_CONFIRM_FAILED, 500);
+      logger.info("Payment status updated (idempotent)", {
+        paymentId,
+        status,
+      });
+      return updatedRows[0];
+    });
   },
 
   async confirmPayment(
@@ -470,7 +554,10 @@ export const PaymentsService = {
       payments: data,
       next_cursor,
       has_more,
-      total: parseInt(rows[0]?.total_count ?? '0', 10),
+      total: parseInt(
+        (rows[0] as unknown as { total_count?: string })?.total_count ?? "0",
+        10,
+      ),
     };
   },
 
