@@ -19,6 +19,7 @@ export const CacheKeys = {
   // User cache keys
   user: (id: string) => `mm:user:${id}`,
   userPublic: (id: string) => `mm:user:${id}:public`,
+  userStats: (id: string) => `mm:user:${id}:stats`,
 
   // Mentor cache keys
   mentorProfile: (id: string) => `mm:mentor:${id}`,
