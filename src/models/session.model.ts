@@ -1,4 +1,4 @@
-﻿import pool, { db } from "../config/database";
+import pool, { db } from "../config/database";
 import { CollaborationState } from "../types/collaboration.types";
 import { PaginationUtil } from "../utils/pagination.utils";
 import { Logger } from "../utils/logger.utils";
@@ -8,6 +8,18 @@ import {
   withCurrentTenantFilter,
 } from "../utils/tenant-context.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
+
+export const SESSION_STATUSES = [
+  "scheduled",
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+  "no_show",
+] as const;
+
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export interface Session {
   id: string;
@@ -217,6 +229,14 @@ export const SessionModel = {
     id: string,
     status: string,
   ): Promise<SessionRecord | null> {
+    const valid = SESSION_STATUSES as readonly string[];
+    if (!valid.includes(status)) {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'Invalid session status: ' + status + '. Allowed: ' + valid.join(', '),
+        field: 'status',
+        value: status,
+      });
+    }
     const { query, params } = withCurrentTenantFilter(
       `UPDATE sessions SET status = $1, updated_at = NOW() WHERE id = $2`,
       [status, id],
@@ -403,4 +423,5 @@ export const SessionModel = {
 };
 
 export default SessionModel;
+
 
