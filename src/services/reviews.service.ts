@@ -276,14 +276,16 @@ export const ReviewsService = {
     try {
       await client.query("BEGIN");
 
-      // Verify a completed booking exists where id = session_id and mentee_id = reviewerId
+      // Verify a completed booking exists where id = session_id (issue #1302:
+      // participant check below, at service layer, so it applies regardless of call path)
       const bookingResult = await client.query<{
         id: string;
         mentor_id: string;
+        mentee_id: string;
       }>(
-        `SELECT id, mentor_id FROM bookings
-         WHERE id = $1 AND mentee_id = $2 AND status = 'completed'`,
-        [payload.session_id, reviewerId],
+        `SELECT id, mentor_id, mentee_id FROM bookings
+         WHERE id = $1 AND status = 'completed'`,
+        [payload.session_id],
       );
 
       if (bookingResult.rows.length === 0) {
@@ -294,6 +296,16 @@ export const ReviewsService = {
       }
 
       const booking = bookingResult.rows[0];
+
+      // Issue #1302: reviewer must be a booking participant (mentee or mentor).
+      // Blocks fraudulent reviews from non-participants guessing a valid bookingId.
+      if (booking.mentee_id !== reviewerId && booking.mentor_id !== reviewerId) {
+        throw createError(
+          "You are not a participant of this booking",
+          403,
+        );
+      }
+
       const mentorId = booking.mentor_id;
 
       // Prevent self-review: reviewer cannot be the same as reviewee
@@ -907,3 +919,4 @@ export const ReviewsService = {
   // Expose recalculateMentorRating for use in tests
   recalculateMentorRating,
 };
+
