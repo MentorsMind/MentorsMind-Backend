@@ -1,5 +1,5 @@
 ﻿import pool, { db } from "../config/database";
-import { CollaborationState } from "../types/collaboration.types";
+import { CollaborationState, getDefaultCollaborationState } from "../types/collaboration.types";
 import { PaginationUtil } from "../utils/pagination.utils";
 import { Logger } from "../utils/logger.utils";
 import {
@@ -79,7 +79,7 @@ export const SessionModel = {
       RETURNING *
     `;
 
-    const defaultState = null;
+    const defaultState = getDefaultCollaborationState();
     const { rows } = await db.query(query, [
       tenantId,
       payload.mentorId,
@@ -88,7 +88,7 @@ export const SessionModel = {
       payload.description || null,
       payload.scheduledAt,
       payload.durationMinutes,
-      defaultState,
+      JSON.stringify(defaultState),
     ]);
 
     return rows[0];
