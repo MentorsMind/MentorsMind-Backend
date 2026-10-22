@@ -36,6 +36,7 @@ describe('worker lifecycle logging', () => {
         'ONBOARDING_NUDGE',
         'TAX_REPORTING',
         'REPUTATION_SYNC',
+        'RETENTION_ENFORCEMENT',
       ].map((name) => [name, name])),
     }));
     jest.doMock('../../utils/logger.utils', () => ({ logger }));

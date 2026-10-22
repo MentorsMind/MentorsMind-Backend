@@ -1,5 +1,5 @@
-﻿import { Pool } from "pg";
-import { Logger } from "../utils/logger.utils";
+import { Pool } from "pg";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface IndustryTrend {
   skill: string;
@@ -145,7 +145,7 @@ export class IndustryTrendsService {
       const forecast = this.calculateForecast(historyResult.rows, months);
 
       logger.info(
-        { skill, months, forecast: forecast.forecastedDemand },
+        { skill, months, forecast: forecast.forecasted },
         "Generated skill forecast",
       );
 

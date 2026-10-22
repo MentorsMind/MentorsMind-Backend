@@ -19,7 +19,7 @@ import type {
 } from "./types";
 import gatewayConfig from "./gateway.config";
 import { CircuitBreaker } from "./circuit-breaker";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 function normalizeUrl(url: string): string {
   return url.trim().replace(/\/+$/, "");

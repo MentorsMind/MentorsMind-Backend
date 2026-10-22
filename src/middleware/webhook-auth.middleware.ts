@@ -3,7 +3,7 @@ import { WebhookService, WebhookRecord } from '../services/webhook.service';
 import { RateLimiterService } from '../services/rate-limiter.service';
 import rateLimitsConfig from '../config/rate-limits.config';
 import { ResponseUtil } from '../utils/response.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { extractIpAddress } from '../services/auditLog.service';
 
 export interface WebhookAuthenticatedRequest extends Request {

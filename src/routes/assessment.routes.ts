@@ -224,7 +224,7 @@ router.post(
   "/:id/next-question",
   authenticate,
   asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const result = await AssessmentService.getNextQuestion(
+    const result = await (AssessmentService as any).getNextQuestion(
       req.params.id as string,
       req.user!.userId,
     );

@@ -7,6 +7,7 @@ import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdaptiveAuthRequest } from "../middleware/adaptive-auth.middleware";
 import pool from "../config/database";
 import { DateTime } from "luxon";
+import { routeParam } from "../utils/route-params.utils";
 
 export const AdaptiveAuthController = {
   /**
@@ -31,7 +32,7 @@ export const AdaptiveAuthController = {
           isPrivilegedAction: isPrivilegedAction || false,
           actionType,
           resourceAccessed
-        }
+        } as any
       );
 
       res.json({
@@ -472,7 +473,7 @@ export const AdaptiveAuthController = {
   async refreshAuthentication(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user?.id;
-      const { sessionId } = req.params;
+      const sessionId = routeParam(req.params.sessionId);
       const biometricData = (req as any).biometricData;
 
       if (!userId) {

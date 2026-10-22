@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Region-Aware Routing Middleware
  *
  * Express middleware that:
@@ -11,9 +11,7 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from '../utils/logger.utils';
 import { getRegionRoutingService } from "../services/region-routing.service";
-import { logger } from '../utils/logger.utils';
 import regionConfig from "../config/region.config";
-import { logger } from '../utils/logger.utils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +30,14 @@ declare global {
         latitude: number;
         longitude: number;
       };
+      regionContext?: {
+        regionId: string;
+        endpoint: string;
+        isDegraded: boolean;
+      };
+    }
+    interface User {
+      isDev?: boolean;
     }
   }
 }

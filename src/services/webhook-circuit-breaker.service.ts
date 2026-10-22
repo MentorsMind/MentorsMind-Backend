@@ -12,7 +12,7 @@
  */
 import crypto from 'crypto';
 import { redis } from '../config/redis';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { webhookCircuitBreakerState } from '../config/metrics';
 
 const FAILURE_WINDOW_MS = 5 * 60 * 1000;

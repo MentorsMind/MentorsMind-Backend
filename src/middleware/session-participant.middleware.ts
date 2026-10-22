@@ -16,7 +16,7 @@ import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import pool from '../config/database';
 import { ResponseUtil } from '../utils/response.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface SessionParticipants {
   sessionId: string;

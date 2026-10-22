@@ -1,4 +1,4 @@
-﻿import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
+import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import Redis from 'ioredis';
 import config from '../config';
 import { logger } from './logger.utils';
@@ -7,7 +7,7 @@ const redisConfig = config.redis ? { url: config.redis.url } : { url: "redis://l
 // Use configuration URL if present, else default
 const redis = redisConfig.url
   ? new Redis(redisConfig.url)
-  : new Redis({ host: redisConfig.host, port: Number(redisConfig.port) || 6379 });
+  : new Redis({ host: (redisConfig as any).host, port: Number((redisConfig as any).port) || 6379 });
 
 export interface QueryOptions {
   useCache?: boolean;

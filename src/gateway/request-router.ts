@@ -13,7 +13,7 @@ import type { RouteResolution, ServiceDefinition } from "./types";
 import { selectInstance } from "./load-balancer";
 import { ServiceRegistry } from "./service-registry";
 import gatewayConfig from "./gateway.config";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 const HOP_BY_HOP = new Set([
   "connection",

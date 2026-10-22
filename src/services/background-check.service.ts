@@ -246,8 +246,9 @@ export const BackgroundCheckService = {
     return process.env.NODE_ENV === "production" ? "checkr" : "mock";
   },
 
-  getAdapter(provider = this.getProviderName()): BackgroundCheckAdapter {
-    if (provider.toLowerCase() === "checkr") {
+  getAdapter(provider?: string): BackgroundCheckAdapter {
+    const resolvedProvider = provider ?? this.getProviderName();
+    if (resolvedProvider.toLowerCase() === "checkr") {
       return new CheckrBackgroundCheckAdapter();
     }
     return new MockBackgroundCheckAdapter();

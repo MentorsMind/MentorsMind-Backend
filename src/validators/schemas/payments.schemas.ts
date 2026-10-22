@@ -73,4 +73,3 @@ export const getPaymentByIdSchema = idParamSchema;
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>['body'];
 export type ConfirmPaymentInput = z.infer<typeof confirmPaymentSchema>['body'];
 export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
-export type ListPaymentsQuery = z.infer<typeof listPaymentsSchema>['query'];

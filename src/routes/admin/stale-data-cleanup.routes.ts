@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Stale Data Cleanup Admin Routes
  * 
  * Admin endpoints for managing stale data cleanup operations,
@@ -8,7 +8,6 @@
 import databaseMaintenanceManager from '../../utils/stale-data-cleanup.utils';
 import { logger } from '../../utils/logger.utils';
 import staleDataCleanupJob from '../../jobs/stale-data-cleanup.job';
-import { logger } from '../../utils/logger.utils';
 
 type Request = any;
 type Response = any;

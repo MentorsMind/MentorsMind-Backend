@@ -29,6 +29,34 @@ interface GraphQLContext {
 
 const toDatabaseBookingStatus = (status?: string) => status?.toLowerCase();
 
+type MentorSortBy = 'CREATED_AT' | 'HOURLY_RATE' | 'AVERAGE_RATING' | 'TOTAL_SESSIONS';
+type SortOrder = 'ASC' | 'DESC';
+type ServiceMentorSortBy = 'createdAt' | 'hourlyRate' | 'averageRating' | 'totalSessions';
+type ServiceSortOrder = 'asc' | 'desc';
+
+const mentorSortByMap: Record<MentorSortBy, ServiceMentorSortBy> = {
+  CREATED_AT: 'createdAt',
+  HOURLY_RATE: 'hourlyRate',
+  AVERAGE_RATING: 'averageRating',
+  TOTAL_SESSIONS: 'totalSessions',
+};
+
+const mentorSortOrderMap: Record<SortOrder, ServiceSortOrder> = {
+  ASC: 'asc',
+  DESC: 'desc',
+};
+
+const getMentorSortValue = (
+  mentor: MentorRecord,
+  sortBy: ServiceMentorSortBy,
+): number | null | undefined =>
+  sortBy === 'hourlyRate'
+    ? mentor.hourly_rate
+    : sortBy === 'averageRating'
+      ? mentor.average_rating
+      : sortBy === 'totalSessions'
+        ? mentor.total_sessions_completed
+        : undefined;
 
 const resolvers = {
   Query: {
@@ -39,7 +67,7 @@ const resolvers = {
       const user = await UsersService.findById(context.user.userId);
       return {
         ...user,
-        mfaEnabled: user.mfa_enabled ?? false,
+        mfaEnabled: (user as any).mfa_enabled ?? false,
       };
     },
 

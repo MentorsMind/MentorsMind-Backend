@@ -215,6 +215,7 @@ class DeprecationMaintenanceJob {
             entry,
           ): entry is {
             endpoint: string;
+            status: "active" | "deprecated" | "sunset";
             sunsetDate: Date;
             migrationGuide?: string;
           } => Boolean(entry),

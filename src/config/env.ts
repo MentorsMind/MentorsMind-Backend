@@ -387,6 +387,25 @@ export const envSchema = z.object({
   // When CDN_BASE_URL is set, EmailCDNService uses it; otherwise this provides
   // the fallback absolute URL prefix so email clients always get absolute URLs.
   EMAIL_ASSETS_BASE_URL: z.string().url().optional(),
+
+  // Multi-region replication & failover (consumed by config/region.config.ts)
+  REPLICATION_ENABLED: z.enum(["true", "false"]).optional(),
+  REPLICATION_MAX_LAG_MS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_MAX_ATTEMPTS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_BACKOFF_MS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_MAX_BACKOFF_MS: z.string().regex(/^\d+$/).optional(),
+  AUTOMATIC_FAILOVER: z.enum(["true", "false"]).optional(),
+  HEALTH_CHECK_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
+  CIRCUIT_BREAKER_ENABLED: z.enum(["true", "false"]).optional(),
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.string().regex(/^\d+$/).optional(),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
+
+  // Stale data cleanup (consumed by jobs/stale-data-cleanup.job.ts)
+  PUSH_TOKEN_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  NOTIFICATION_DELIVERY_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  WEBHOOK_DELIVERY_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  CHATBOT_MESSAGE_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  STALE_CLEANUP_DRY_RUN: z.enum(["true", "false"]).optional(),
 }).superRefine((data, ctx) => {
   if (['production', 'staging'].includes(data.NODE_ENV) && !data.PII_ENCRYPTION_KEYS) {
     ctx.addIssue({

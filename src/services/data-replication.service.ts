@@ -507,8 +507,3 @@ export {
   ReplicationStrategyExecutor,
   ConflictResolver,
 };
-export type {
-  ReplicationEvent,
-  ReplicationStatus,
-  ReplicationConfig,
-};

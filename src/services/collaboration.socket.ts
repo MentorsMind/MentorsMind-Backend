@@ -10,6 +10,7 @@ import {
 import { CodeCollaborationService } from './code-collaboration.service';
 import { OTOperation } from '../utils/operational-transform.utils';
 import { CacheService } from './cache.service';
+import { logger } from '../utils/logger.utils';
 
 interface JoinPayload {
   sessionId: string;

@@ -9,7 +9,7 @@ import { BookingsService } from "../services/bookings.service";
 import { EventStoreService } from "../services/event-store.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 /**
  * Bookings Controller - Handles session booking operations with meeting URL generation

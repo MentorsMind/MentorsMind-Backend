@@ -20,7 +20,7 @@
  */
 
 import pool from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { NotificationService } from "./notification.service";
 import { NotificationType, NotificationChannel } from "../models/notifications.model";
 import { AuditLogService } from "./auditLog.service";

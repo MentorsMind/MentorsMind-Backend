@@ -12,7 +12,7 @@
 
 import pool from '../config/database';
 import { AuditLogService } from './auditLog.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Types

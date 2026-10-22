@@ -1,6 +1,6 @@
-﻿import pool from "../config/database";
+import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { GroupBookingModel, GroupBookingRecord, GroupParticipant } from "../models/group-booking.model";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ export const GroupSessionsService = {
       maxParticipants,
       totalAmount,
       currency,
-      paymentSplitMethod,
+      paymentSplitMethod: paymentSplitMethod as any,
       paymentSplits,
       participantIds,
       recordingEnabled,

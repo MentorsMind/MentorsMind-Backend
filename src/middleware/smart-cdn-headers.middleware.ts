@@ -29,7 +29,7 @@ import {
   getApiCacheStrategy,
 } from "../config/cdn-geo.config";
 import { CDNService } from "../services/cdn.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Surrogate / cache tag helper

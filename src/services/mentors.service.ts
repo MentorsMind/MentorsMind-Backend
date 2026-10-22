@@ -437,7 +437,7 @@ export const MentorsService = {
           : rows[0].is_available;
 
       await CacheService.del(CacheKeys.mentorProfile(id));
-      SocketService.emitMentorAvailabilityChanged(id, {
+      (SocketService as any).emitMentorAvailabilityChanged(id, {
         mentorId: id,
         isAvailable: updatedIsAvailable,
         availability: {

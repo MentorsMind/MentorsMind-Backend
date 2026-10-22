@@ -5,7 +5,6 @@ import { QUEUE_NAMES } from '../config/queue';
 import * as Sentry from '@sentry/node';
 import type { Worker } from 'bullmq';
 import { logger } from '../utils/logger.utils';
-import { registerWorkerLifecycleLogging } from './lifecycle';
 
 import { emailWorker } from './email.worker';
 import { paymentWorker } from './payment.worker';
@@ -110,6 +109,7 @@ const REQUIRED_QUEUE_NAMES = [
     'ONBOARDING_NUDGE',
     'TAX_REPORTING',
     'REPUTATION_SYNC',
+    'RETENTION_ENFORCEMENT',
 ] as const;
 
 for (const queueKey of REQUIRED_QUEUE_NAMES) {

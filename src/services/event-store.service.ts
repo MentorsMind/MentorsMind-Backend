@@ -1,6 +1,6 @@
 ﻿import { EventStoreModel, DomainEvent, Snapshot } from '../models';
 import { db } from '../config/database';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { v4 as uuidv4 } from 'uuid';
 import { ProjectionService } from './projection.service';
 import {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Mentor Validation Schemas
  */
 
@@ -10,7 +10,7 @@ import { idParamSchema, nameSchema, longTextSchema, urlSchema, cursorPaginationS
 // ---------------------------------------------------------------------------
 
 const hourlyRateSchema = z
-  .number({ invalid_type_error: 'Hourly rate must be a number' })
+  .number()
   .min(0, 'Hourly rate must be non-negative')
   .max(10000, 'Hourly rate cannot exceed 10000');
 

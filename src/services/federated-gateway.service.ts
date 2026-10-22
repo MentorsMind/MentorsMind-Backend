@@ -12,7 +12,7 @@
  */
 
 import crypto from "crypto";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import type { SubgraphDefinition } from "../graphql/federation/directives";
 import SchemaCompositorService, {
   type CompositionResult,

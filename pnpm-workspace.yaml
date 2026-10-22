@@ -1,6 +1,15 @@
 packages:
   - '.'
 
+# Mirrors package.json "pnpm.overrides" — pnpm 10+ reads overrides from this file.
+overrides:
+  toml: 4.2.0
+  protobufjs: 8.8.0
+  '@opentelemetry/propagator-jaeger': 2.11.0
+  'brace-expansion@<2.1.6': 2.1.6
+  '@graphql-tools/utils@<12.0.1': 12.1.0
+  'handlebars@<4.7.10': 4.7.10
+
 allowBuilds:
   '@apollo/protobufjs': true
   '@firebase/util': true

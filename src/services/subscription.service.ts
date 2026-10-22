@@ -5,7 +5,7 @@ import {
   BillingCycle,
   SubscriptionRecord,
 } from "../models/subscription.model";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 // ─── Tier definitions ─────────────────────────────────────────────────────────
 

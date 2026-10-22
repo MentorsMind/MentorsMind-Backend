@@ -218,7 +218,6 @@ export async function withAdvisoryLock(
   client: AdvisoryLockClient,
   key: string,
   timeoutMs?: number,
-  options?: AdvisoryLockOptions,
 ): Promise<boolean>;
 export async function withAdvisoryLock<T>(
   client: AdvisoryLockClient,

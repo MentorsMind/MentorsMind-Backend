@@ -6,6 +6,7 @@ import { routeParam } from "../utils/route-params.utils";
 import { RESOLUTION_TEMPLATES } from "../constants/resolution-templates.constant";
 import { z } from 'zod';
 import { AuditLoggerService } from '../services/audit-logger.service';
+import { LogLevel } from '../utils/log-formatter.utils';
 
 export class DisputesController {
   static async openDispute(req: Request, res: Response): Promise<void> {
@@ -35,7 +36,9 @@ export class DisputesController {
 
       // Log dispute creation for audit
       await AuditLoggerService.logEvent({
+        level: LogLevel.INFO,
         action: 'DISPUTE_OPENED',
+        message: `Dispute ${dispute.id} opened for session ${session_id}`,
         userId: filed_by_id,
         entityType: 'dispute',
         entityId: dispute.id,
@@ -54,7 +57,7 @@ export class DisputesController {
 
   static async getDispute(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const dispute = await DisputeModel.findById(id);
 
       if (!dispute) {

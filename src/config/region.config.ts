@@ -481,5 +481,3 @@ export function findClosestRegion(
 
   return closest;
 }
-
-export type { RegionConfig, MultiRegionConfig };

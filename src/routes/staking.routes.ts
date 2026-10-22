@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { StakingService } from '../services/staking.service';
-import { authenticateJWT } from '../middleware/auth.middleware';
+import { authenticate } from '../middleware/auth.middleware';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
+import { routeParam } from '../utils/route-params.utils';
 import { WalletModel } from '../models/wallet.model';
 
 const router = Router();
@@ -18,7 +19,7 @@ const router = Router();
  */
 router.get(
   '/positions',
-  authenticateJWT,
+  authenticate,
   asyncHandler(async (req, res) => {
     const userId = req.user?.id;
     if (!userId) {
@@ -51,9 +52,9 @@ router.get(
  */
 router.get(
   '/positions/:mentorId',
-  authenticateJWT,
+  authenticate,
   asyncHandler(async (req, res) => {
-    const { mentorId } = req.params;
+    const mentorId = routeParam(req.params.mentorId);
 
     try {
       // Check if mentorId is a Stellar public key (starts with G) or a User ID

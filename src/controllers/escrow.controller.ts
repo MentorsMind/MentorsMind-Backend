@@ -1,7 +1,8 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { EscrowApiService } from '../services/escrow-api.service';
 import { ResponseUtil } from '../utils/response.utils';
+import { routeParam } from '../utils/route-params.utils';
 import { 
   CreateEscrowInput, 
   DisputeEscrowInput, 
@@ -44,7 +45,7 @@ export const EscrowController = {
 
   /** GET /api/v1/escrow/:id - Get escrow details */
   async getEscrow(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const userId = req.user!.id;
 
     try {
@@ -69,7 +70,7 @@ export const EscrowController = {
 
   /** POST /api/v1/escrow/:id/release - Release funds to mentor */
   async releaseEscrow(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const userId = req.user!.id;
     const { stellarTxHash } = req.body || {};
 
@@ -97,7 +98,7 @@ export const EscrowController = {
 
   /** POST /api/v1/escrow/:id/dispute - Open a dispute */
   async openDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const userId = req.user!.id;
     const { reason } = req.body as DisputeEscrowInput;
 
@@ -123,7 +124,7 @@ export const EscrowController = {
 
   /** POST /api/v1/escrow/:id/resolve - Resolve dispute (admin only) */
   async resolveDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const { mentor_pct, notes, stellarTxHash } = req.body as ResolveDisputeInput;
 
     try {
@@ -151,7 +152,7 @@ export const EscrowController = {
 
   /** GET /api/v1/escrow/:id/status - Check escrow status */
   async getEscrowStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const userId = req.user!.id;
 
     try {
@@ -177,7 +178,7 @@ export const EscrowController = {
 
   /** POST /api/v1/escrow/:id/refund - Process refund to learner */
   async refundEscrow(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     const userId = req.user!.id;
     const { stellarTxHash } = req.body || {};
 

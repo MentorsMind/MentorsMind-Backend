@@ -1,4 +1,5 @@
-import { NotificationType, NotificationChannel } from "../services/notification.service";
+import { NotificationChannel } from "../services/notification.service";
+import { NotificationType } from "../models/notifications.model";
 import { Worker, Job } from 'bullmq';
 import {
   redisConnection,
@@ -346,7 +347,7 @@ async function processNoShowCheck(
       // Notify mentee (received automatic partial/full refund)
       await NotificationService.sendNotification({
         userId: menteeId,
-        type: 'session_no_show',
+        type: NotificationType.SESSION_NO_SHOW,
         title:
           refundPercent >= 100
             ? 'Session No-Show - Automatic Refund Issued'
@@ -355,7 +356,7 @@ async function processNoShowCheck(
           refundPercent >= 100
             ? `Your mentor did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. A full refund has been automatically processed to your wallet.`
             : `Your mentor did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. A partial refund (${refundPercentLabel} as any) has been processed; the rest is held pending the dispute window.`,
-        channels: ['email', 'in_app', 'push'],
+        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP, NotificationChannel.PUSH],
         data: {
           bookingId,
           mentorId,
@@ -370,10 +371,10 @@ async function processNoShowCheck(
       // Notify mentor (warning about no-show + dispute window)
       await NotificationService.sendNotification({
         userId: mentorId,
-        type: 'session_no_show',
+        type: NotificationType.SESSION_NO_SHOW,
         title: 'Session No-Show Recorded - Dispute Window Open',
         message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. The mentee has been refunded and ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()} as any).`,
-        channels: ['email', 'in_app', 'push'],
+        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP, NotificationChannel.PUSH],
         data: {
           bookingId,
           menteeId,
@@ -388,10 +389,10 @@ async function processNoShowCheck(
       // Notify mentor (receives reduced payout as compensation)
       await NotificationService.sendNotification({
         userId: mentorId,
-        type: 'session_no_show',
+        type: NotificationType.SESSION_NO_SHOW,
         title: 'Session No-Show - Reduced Payout Issued',
         message: `The mentee did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. You will receive a reduced payout of ${payoutPercentLabel} for the attended session time.`,
-        channels: ['email', 'in_app', 'push'],
+        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP, NotificationChannel.PUSH],
         data: {
           bookingId,
           menteeId,
@@ -405,10 +406,10 @@ async function processNoShowCheck(
       // Notify mentee (warning about no-show + dispute window)
       await NotificationService.sendNotification({
         userId: menteeId,
-        type: 'session_no_show',
+        type: NotificationType.SESSION_NO_SHOW,
         title: 'Session No-Show Recorded - Dispute Window Open',
         message: `You did not join the session scheduled for ${new Date(scheduledStart).toLocaleString()}. ${penaltyPoints} penalty points were levied. You can dispute this within ${DISPUTE_WINDOW_HOURS}h (until ${disputeDeadline.toLocaleString()} as any).`,
-        channels: ['email', 'in_app', 'push'],
+        channels: [NotificationChannel.EMAIL, NotificationChannel.IN_APP, NotificationChannel.PUSH],
         data: {
           bookingId,
           mentorId,

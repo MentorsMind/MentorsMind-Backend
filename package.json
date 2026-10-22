@@ -34,7 +34,7 @@
     "migrate:renumber": "ts-node database/renumber-migrations.ts",
     "sunset:check": "ts-node --transpile-only scripts/check-api-sunset.ts",
     "elk:setup": "ts-node --transpile-only scripts/setup-elk-index-template.ts",
-    "test:tenant-isolation": "jest --config jest.config.ts --testPathPattern='src/graphql/__tests__/tenant-isolation|src/middleware/__tests__/tenant-isolation' --forceExit",
+    "test:tenant-isolation": "jest --config jest.config.ts --testPathPattern='src/graphql/__tests__/tenant-isolation|src/middleware/__tests__/tenant-isolation' --coverage=false --forceExit",
     "test:e2e": "jest --config jest.e2e.config.ts --forceExit",
     "test:e2e:verbose": "E2E_VERBOSE=1 jest --config jest.e2e.config.ts --forceExit --verbose",
     "test:e2e:single": "jest --config jest.e2e.config.ts --forceExit",
@@ -63,7 +63,7 @@
   "license": "MIT",
   "type": "commonjs",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=22.15.0",
     "pnpm": ">=8.0.0"
   },
   "lint-staged": {
@@ -121,7 +121,7 @@
     "googleapis": "^171.4.0",
     "graphql": "^16.8.0",
     "graphql-tag": "^2.12.6",
-    "handlebars": "^4.7.8",
+    "handlebars": "^4.7.10",
     "helmet": "^8.1.0",
     "i18next": "^23.7.0",
     "i18next-fs-backend": "^2.3.0",
@@ -149,7 +149,7 @@
     "qrcode": "^1.5.4",
     "rate-limit-redis": "^4.3.1",
     "raw-body": "^3.0.2",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "socket.io": "^4.8.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
@@ -216,7 +216,9 @@
       "toml": "4.2.0",
       "protobufjs": "8.8.0",
       "@opentelemetry/propagator-jaeger": "2.11.0",
-      "brace-expansion@<2.1.4": "2.1.4"
+      "brace-expansion@<2.1.6": "2.1.6",
+      "@graphql-tools/utils@<12.0.1": "12.1.0",
+      "handlebars@<4.7.10": "4.7.10"
     }
   }
 }

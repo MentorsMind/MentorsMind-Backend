@@ -1,4 +1,4 @@
-﻿/**
+/**
  * API v1 Route Aggregator
  *
  * All routes mounted here are served under /api/v1/
@@ -71,6 +71,7 @@ import { logger } from "../../utils/logger.utils";
 import { adminAllowlistMiddleware } from "../../middleware/ipFilter.middleware";
 import { deprecationMiddleware } from "../../middleware/deprecation.middleware";
 import { initializeDeprecationRegistry } from "../../config/deprecation-registry";
+import { notificationCleanupService } from "../../services/notification-cleanup.service";
 
 const router = Router();
 

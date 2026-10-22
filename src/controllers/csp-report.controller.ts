@@ -1,5 +1,5 @@
 ﻿import { Request, Response } from 'express';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export const CspReportController = {
   report(req: Request, res: Response): void {

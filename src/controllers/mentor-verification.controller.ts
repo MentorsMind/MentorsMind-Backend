@@ -6,6 +6,7 @@ import { BackgroundCheckService } from "../services/background-check.service";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
+import { routeParam } from "../utils/route-params.utils";
 
 export const MentorVerificationController = {
   async getCertificationTypes(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -39,7 +40,7 @@ export const MentorVerificationController = {
 
   async getMentorCertifications(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { mentorId } = req.params;
+      const mentorId = routeParam(req.params.mentorId);
       const { includeExpired = "false" } = req.query;
 
       if (req.user?.role !== "admin" && req.user?.id !== mentorId) {
@@ -56,7 +57,7 @@ export const MentorVerificationController = {
 
   async getMentorBadges(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { mentorId } = req.params;
+      const mentorId = routeParam(req.params.mentorId);
       const summary = await CertificationService.getMentorCertificationSummary(mentorId);
       res.status(200).json({
         success: true,
@@ -70,7 +71,7 @@ export const MentorVerificationController = {
 
   async getCertificationSummary(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { mentorId } = req.params;
+      const mentorId = routeParam(req.params.mentorId);
       const summary = await CertificationService.getMentorCertificationSummary(mentorId);
       res.status(200).json({ success: true, data: summary });
     } catch (error) {
@@ -84,7 +85,7 @@ export const MentorVerificationController = {
       const mentorId = req.user?.id;
       if (!mentorId) throw createError(ErrorCode.UNAUTHORIZED, 401);
 
-      const { testId } = req.params;
+      const testId = routeParam(req.params.testId);
       const { certificationId } = req.body;
 
       const attempt = await SkillTestService.startTestAttempt(mentorId, testId, certificationId);
@@ -98,7 +99,7 @@ export const MentorVerificationController = {
 
   async submitSkillTest(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { attemptId } = req.params;
+      const attemptId = routeParam(req.params.attemptId);
       const { answers } = req.body;
       if (!answers) throw createError(ErrorCode.TEST_ANSWERS_REQUIRED, 400);
 
@@ -115,11 +116,11 @@ export const MentorVerificationController = {
       const mentorId = req.user?.id;
       if (!mentorId) throw createError(ErrorCode.UNAUTHORIZED, 401);
 
-      const { checkType, provider, certificationId, metadata } = req.body;
+      const { checkType, provider, certificationId } = req.body;
       if (!checkType) throw createError(ErrorCode.BACKGROUND_CHECK_INPUT_REQUIRED, 400);
 
       const check = await BackgroundCheckService.initiateBackgroundCheck({
-        mentorId, checkType, provider, certificationId, metadata,
+        mentorId, checkType, provider, certificationId,
       });
       res.status(201).json({ success: true, data: check });
     } catch (error) {
@@ -130,7 +131,7 @@ export const MentorVerificationController = {
 
   async getBackgroundCheck(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { checkId } = req.params;
+      const checkId = routeParam(req.params.checkId);
       const check = await BackgroundCheckService.getBackgroundCheck(checkId);
       if (!check) throw createError(ErrorCode.BACKGROUND_CHECK_NOT_FOUND, 404);
 
@@ -147,7 +148,7 @@ export const MentorVerificationController = {
 
   async verifyCertification(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { certificationId } = req.params;
+      const certificationId = routeParam(req.params.certificationId);
       const { score, notes } = req.body;
       const verifiedBy = req.user?.id;
 
@@ -163,7 +164,7 @@ export const MentorVerificationController = {
 
   async revokeCertification(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { certificationId } = req.params;
+      const certificationId = routeParam(req.params.certificationId);
       const { reason } = req.body;
       const revokedBy = req.user?.id ?? "";
 

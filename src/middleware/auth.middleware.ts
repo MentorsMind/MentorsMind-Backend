@@ -32,36 +32,6 @@ export const stopAuthDebounceCleanup = (): void => {
   clearInterval(lastActiveCleanupInterval);
 };
 
-/**
- * Remove debounce entries older than LAST_ACTIVE_DEBOUNCE_MS * 2 so the map
- * stays bounded in long-running processes. Returns the number evicted.
- */
-export function evictStaleDebounceEntries(now: number = Date.now()): number {
-  let evicted = 0;
-  for (const [userId, ts] of lastActiveDebounce) {
-    if (now - ts > DEBOUNCE_EVICTION_AGE_MS) {
-      lastActiveDebounce.delete(userId);
-      evicted += 1;
-    }
-  }
-  return evicted;
-}
-
-let debounceCleanupInterval: NodeJS.Timeout | null = setInterval(
-  evictStaleDebounceEntries,
-  DEBOUNCE_CLEANUP_INTERVAL_MS,
-);
-// Never keep the process alive just for housekeeping.
-debounceCleanupInterval.unref?.();
-
-/** Stop the debounce cleanup interval (called on server shutdown). */
-export function stopAuthDebounceCleanup(): void {
-  if (debounceCleanupInterval) {
-    clearInterval(debounceCleanupInterval);
-    debounceCleanupInterval = null;
-  }
-}
-
 // ── Token revocation cache ──────────────────────────────────────────────────
 const DURATION_UNIT_SECONDS: Record<string, number> = {
   s: 1,
