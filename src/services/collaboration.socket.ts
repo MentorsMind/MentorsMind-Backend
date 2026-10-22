@@ -56,7 +56,8 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
 
       try {
         const collaborationState = await CollaborationService.getCollaborationSession(payload.sessionId);
-        socket.emit('collaborationState', collaborationState);
+        // Defensive guard (#1300): old rows may still hold null; never emit null.
+        socket.emit('collaborationState', collaborationState ?? getDefaultCollaborationState());
       } catch (error) {
         socket.emit('error', error instanceof Error ? error.message : 'Collaboration state unavailable');
       }

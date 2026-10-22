@@ -101,7 +101,7 @@ export const SessionModel = {
       RETURNING *
     `;
 
-    const defaultState = null;
+    const defaultState = getDefaultCollaborationState();
     const { rows } = await db.query(query, [
       tenantId,
       payload.mentorId,
@@ -110,7 +110,7 @@ export const SessionModel = {
       payload.description || null,
       payload.scheduledAt,
       payload.durationMinutes,
-      defaultState,
+      JSON.stringify(defaultState),
     ]);
 
     return rows[0];
