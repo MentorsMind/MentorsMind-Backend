@@ -1,7 +1,7 @@
 ﻿import { Request, Response, NextFunction } from 'express';
 import { AuditLoggerService } from '../services/audit-logger.service';
 import { extractClientIp, AuditAction, LogLevel } from '../utils/log-formatter.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface AuditLogConfig {
     action: AuditAction | string;

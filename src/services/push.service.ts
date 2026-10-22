@@ -2,7 +2,7 @@
 import { PushTokensModel } from "../models/push-tokens.model";
 import { UsersService } from "./users.service";
 import { NotificationChannel } from "./notification.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { env } from "../config/env";
 import {
   pushTokenInvalidTotal,

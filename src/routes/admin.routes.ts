@@ -1759,7 +1759,7 @@ router.post(
     action: AuditAction.ADMIN_ACTION,
     getEntityDetails: (req) => ({ type: "USER", id: req.params.id as string }),
   }),
-  asyncHandler(AdminController.startImpersonation),
+  asyncHandler((AdminController as any).startImpersonation),
 );
 
 /**
@@ -1790,7 +1790,7 @@ router.delete(
     action: AuditAction.ADMIN_ACTION,
     getEntityDetails: (req) => ({ type: "IMPERSONATION_SESSION", id: req.params.sessionId as string }),
   }),
-  asyncHandler(AdminController.endImpersonation),
+  asyncHandler((AdminController as any).endImpersonation),
 );
 
 /**
@@ -1805,7 +1805,7 @@ router.delete(
  *       200:
  *         description: List of active impersonation sessions
  */
-router.get("/impersonation", asyncHandler(AdminController.listActiveImpersonations));
+router.get("/impersonation", asyncHandler((AdminController as any).listActiveImpersonations));
 
 /**
  * @swagger
@@ -1837,9 +1837,9 @@ router.post(
 // Inbound webhook idempotency admin (issue #979)
 router.get(
   "/webhooks/events",
-  asyncHandler(WebhookEventsController.list),
+  asyncHandler(WebhookEventsController.list as any),
 );
 router.post(
   "/webhooks/events/:id/replay",
-  asyncHandler(WebhookEventsController.replay),
+  asyncHandler(WebhookEventsController.replay as any),
 );

@@ -1,11 +1,12 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { ResponseUtil } from "../utils/response.utils";
 import { TenantEmailTemplatesModel } from "../models/tenant-email-templates.model";
 import { TenantEmailTemplateVersionsModel } from "../models/tenant-email-template-versions.model";
 import { TemplateEngineService } from "../services/template-engine.service";
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from "../utils/route-params.utils";
 
 function extractVariablesFromContent(content: string): string[] {
   const matches = content.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g) || [];
@@ -131,7 +132,7 @@ export const TenantEmailTemplatesController = {
   async preview(req: Request, res: Response) {
     const tenantId =
       (req.body.tenant_id as string) || (req.query.tenant_id as string);
-    const templateName = req.params.name;
+    const templateName = routeParam(req.params.name);
     const sampleData = req.body.sample_data || {};
 
     if (!tenantId) return ResponseUtil.error(res, "tenant_id is required", 400);

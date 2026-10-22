@@ -1,7 +1,7 @@
 ﻿import { trackAndLogQuery } from '../middleware/queryLogger';
 import { Pool, PoolClient } from "pg";
 import config from "./index";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { createSecurePoolConfig } from "../database/connection";
 
 export const poolConfig = createSecurePoolConfig(config.db);

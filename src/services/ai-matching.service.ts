@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AI-Powered Matching Service
  * Machine learning-based mentor-mentee matching algorithm
  * Issue #874
@@ -200,12 +200,15 @@ export class AIMatchingService {
 
     // Check completeness of profiles
     const fields = ['skills', 'interests', 'availability', 'goals', 'personalityTraits'];
-    
+
+    const mentorFields = mentor as any;
+    const menteeFields = mentee as any;
+
     for (const field of fields) {
       maxScore += 2; // 1 for mentor, 1 for mentee
       
-      if (mentor[field] && this.isFieldComplete(mentor[field])) score++;
-      if (mentee[field] && this.isFieldComplete(mentee[field])) score++;
+      if (mentorFields[field] && this.isFieldComplete(mentorFields[field])) score++;
+      if (menteeFields[field] && this.isFieldComplete(menteeFields[field])) score++;
     }
 
     return score / maxScore;

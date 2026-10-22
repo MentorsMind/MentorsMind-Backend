@@ -61,6 +61,7 @@ Quick reference guide for all database tables in the MentorsMind platform.
 - `type` (ENUM) - deposit, withdrawal, payment, refund, etc.
 - `status` (ENUM) - pending, processing, completed, failed
 - `amount` (DECIMAL) - Transaction amount
+- `payment_rail` (VARCHAR(32)) - Payment processor or network used (for example, Stripe or Stellar)
 - `stellar_tx_hash` (VARCHAR) - Blockchain transaction hash
 - `stellar_ledger_sequence` (INTEGER) - Ledger number
 - `platform_fee` (DECIMAL) - Platform fee

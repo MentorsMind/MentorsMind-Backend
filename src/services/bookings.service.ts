@@ -1,4 +1,5 @@
 import { BookingModel, BookingRecord } from "../models/booking.model";
+import { SessionModel } from "../models/session.model";
 import { CacheService } from "./cache.service";
 import { CacheKeys, CacheTTL } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
@@ -7,6 +8,8 @@ import { ErrorCode } from "../errors/error-codes";
 import {
   calculateEndTime,
   calculateRefundEligibility,
+  waitForAdvisoryLock,
+  withAdvisoryLock,
 } from "../utils/booking-conflicts.utils";
 import { SocketService } from "./socket.service";
 import { db } from "../config/database";
@@ -121,6 +124,15 @@ let bookingsServiceInitialized = false;
 
 export const BookingsService = {
   /**
+   * Marks the session linked to a no-show booking as `no_show`.
+   * No-op when the booking has no linked session.
+   */
+  async markLinkedSessionNoShow(sessionId?: string | null): Promise<void> {
+    if (!sessionId) return;
+    await SessionModel.updateStatus(sessionId, "no_show");
+  },
+
+  /**
    * Initialize bookings service (starts background monitoring only).
    * Table schema is managed by migrations, not runtime DDL.
    * Idempotent — safe to call multiple times.
@@ -146,24 +158,8 @@ export const BookingsService = {
         dateHour.setMinutes(0, 0, 0);
         const lockKey = `${data.mentorId}:${dateHour.toISOString()}`;
 
-        // Attempt to acquire advisory lock for up to 5 seconds
-        let acquired = false;
-        const startTime = Date.now();
-        while (Date.now() - startTime < 5000) {
-          const { rows } = await client.query(
-            "SELECT pg_try_advisory_xact_lock(hashtext($1)) as locked",
-            [lockKey],
-          );
-          if (rows[0].locked) {
-            acquired = true;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        if (!acquired) {
-          throw createError(ErrorCode.BOOKING_CONFLICT, 409);
-        }
+        // Attempt to acquire advisory lock for up to 5 seconds with exponential backoff
+        await withAdvisoryLock(client, lockKey, 5000);
 
         // Batch-validate both users in a single query (avoids N+1)
         const { rows: users } = await client.query( // use the locked client here instead of db
@@ -291,32 +287,57 @@ export const BookingsService = {
 
   async listBookings(
     userId: string,
-    filters?: { status?: string; cursor?: string; page?: number; limit?: number },
-  ): Promise<{ bookings: BookingRecord[]; total: number }> {
+    filters?: { status?: string; cursor?: string | null; page?: number; limit?: number },
+  ): Promise<{
+    bookings: BookingRecord[];
+    total: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
     return this.getUserBookings(userId, filters);
   },
 
   async getUserBookings(
     userId: string,
-    filters?: { status?: string; cursor?: string; page?: number; limit?: number },
-  ): Promise<{ bookings: BookingRecord[]; total: number }> {
+    filters?: { status?: string; cursor?: string | null; page?: number; limit?: number },
+  ): Promise<{
+    bookings: BookingRecord[];
+    total: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
+    const isPaginated = Boolean(
+      (filters?.cursor !== undefined && filters.cursor !== null) ||
+        filters?.status ||
+        filters?.page ||
+        filters?.limit,
+    );
+    if (isPaginated) {
+      return BookingModel.findByUserId(userId, filters);
+    }
+
     const cacheKey = CacheKeys.sessionList(userId);
+    const hasFilters = Object.values(filters ?? {}).some(
+      (value) => value !== undefined,
+    );
 
     // Try to get from cache first
     const cached = await CacheService.get<{
       bookings: BookingRecord[];
       total: number;
+      nextCursor: string | null;
+      hasMore: boolean;
     }>(cacheKey);
-    if (cached !== null) {
+    if (cached !== null && typeof cached.hasMore === "boolean") {
       logger.debug("bookings.getUserBookings cache hit", { userId });
       return cached;
     }
 
-    // Not in cache, fetch from database
     const result = await BookingModel.findByUserId(userId, filters);
 
-    // Cache the result for 30 seconds
-    await CacheService.set(cacheKey, result, CacheTTL.veryShort);
+    if (!hasFilters) {
+      await CacheService.set(cacheKey, result, CacheTTL.veryShort);
+    }
 
     return result;
   },
@@ -825,6 +846,18 @@ export const BookingsService = {
 
     if (!["pending", "confirmed"].includes(booking.status)) {
       throw createError(ErrorCode.BOOKING_RESCHEDULE_NOT_ALLOWED, 400);
+    }
+
+    // Issue #1299: new time must be at least 30 minutes in the future —
+    // mirrors `futureScheduledAt` in bookings.schemas.ts. Guard here so
+    // non-HTTP callers (queues, offline sync) get the same rule before any
+    // DB writes.
+    if (
+      !(newScheduledAt instanceof Date) ||
+      Number.isNaN(newScheduledAt.getTime()) ||
+      newScheduledAt.getTime() <= Date.now() + 30 * 60 * 1000
+    ) {
+      throw createError(ErrorCode.BOOKING_INVALID_TIME, 400);
     }
 
     // Check for conflicts at new time

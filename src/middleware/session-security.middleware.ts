@@ -81,7 +81,7 @@ export const sessionSecurityMiddleware = async (
 
     if (tokenHash) {
       // Cheap touch first
-      await SessionManagerService.touchSession(refreshToken);
+      await SessionManagerService.touchSession(refreshToken!);
 
       // Debounce the expensive fingerprint/geo re-check
       const debKey = `sesssec|${tokenHash.slice(0, 32)}`;
@@ -163,7 +163,7 @@ function AuditLogWrapper(req: Request, action: string, resourceId: string, metad
   import('../services/auditLog.service')
     .then(({ AuditLogService }) =>
       AuditLogService.log({
-        userId: (req as AuthenticatedRequest).user?.userId || undefined,
+        userId: (req as AuthenticatedRequest).user?.userId || null,
         action,
         resourceType: 'user_session',
         resourceId,

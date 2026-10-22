@@ -3,7 +3,7 @@ import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { WebhookService, WebhookRecord } from '../services/webhook.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export const WebhooksController = {
   /**

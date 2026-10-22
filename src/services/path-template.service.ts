@@ -402,7 +402,7 @@ export const PathTemplateService = {
     }
 
     // Create the customized learning path
-    const learningPathRecord = await LearningPathService.createPath(mentorId, pathData);
+    const learningPathRecord = await (LearningPathService as any).createPath(mentorId, pathData);
 
     // Update template usage count
     await pool.query(

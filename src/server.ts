@@ -62,6 +62,7 @@ import { initializeEmailTemplates } from "./services/template-initializer.servic
 import { logger } from "./utils/logger.utils";
 import { validateRequiredTables } from "./utils/table-validator.utils";
 import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
+import { stopAuthDebounceCleanup } from "./middleware/auth.middleware";
 import { stopAllSyncs as stopAllCalendarSyncs } from "./services/calendar-sync.service";
 import { JwksService } from "./services/jwks.service";
 import { registerBookingProjectionHandlers } from "./events/booking.projections";
@@ -210,6 +211,7 @@ async function shutdown(signal: string) {
   goalReminderJob.stop();
   keyRotationJob.stop();
   baselineRefreshJob.stop();
+  stopAuthDebounceCleanup();
   await Promise.all([
     emailWorker.close(),
     paymentWorker.close(),
@@ -228,6 +230,7 @@ async function shutdown(signal: string) {
     stopScheduler(),
     stopRetentionEnforcementWorker(),
     Promise.resolve(stopPoolMonitor()),
+    Promise.resolve(stopAuthDebounceCleanup()),
     Promise.resolve(stopAllCalendarSyncs()),
   ]);
   server.close(() => {

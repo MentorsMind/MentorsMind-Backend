@@ -5,7 +5,7 @@ import { transcriptionQueue } from '../queues/transcription.queue';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 import pool from '../config/database';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export const TranscriptionController = {
   /**

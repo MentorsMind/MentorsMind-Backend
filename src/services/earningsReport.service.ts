@@ -444,7 +444,7 @@ export const EarningsReportService = {
         period,
         startDate,
         endDate,
-      });
+      } as any);
 
       // Queue the job
       await exportQueue.add('process-earnings-export', {

@@ -9,7 +9,7 @@
   RewardLog,
   Reward,
 } from '../models/gamification.model';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { AchievementService } from './achievement.service';
 import { LeaderboardService } from './leaderboard.service';
 

@@ -75,10 +75,13 @@ export interface IUserMapper {
 }
 
 export class UserReader implements IUserReader {
-  constructor(private readonly db: typeof db, private readonly mapper: IUserMapper) {}
+  constructor(
+    private readonly dbClient: typeof db,
+    private readonly mapper: IUserMapper,
+  ) {}
 
   async findById(id: string): Promise<UserRecord | null> {
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PRIVATE_COLUMNS} FROM users WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -86,7 +89,7 @@ export class UserReader implements IUserReader {
   }
 
   async findPublicById(id: string): Promise<PublicUserRecord | null> {
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -95,7 +98,7 @@ export class UserReader implements IUserReader {
 
   async findPublicByIds(ids: string[]): Promise<PublicUserRecord[]> {
     if (ids.length === 0) return [];
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ANY($1) AND is_active = true`,
       [ids],
     );
@@ -117,7 +120,7 @@ export class UserReader implements IUserReader {
 
 export class UserWriter implements IUserWriter {
   constructor(
-    private readonly pool: any,
+    private readonly poolClient: typeof pool,
     private readonly encryption: typeof EncryptionUtil,
     private readonly mapper: IUserMapper,
     private readonly reader: IUserReader,
@@ -185,7 +188,7 @@ export class UserWriter implements IUserWriter {
     fields.push(`updated_at = NOW()`);
     values.push(id);
 
-    const { rows } = await this.pool.query<any>(
+    const { rows } = await this.poolClient.query<any>(
       `UPDATE users SET ${fields.join(", ")} WHERE id = $${idx} AND is_active = true
        RETURNING ${PRIVATE_COLUMNS}`,
       values,
@@ -197,7 +200,7 @@ export class UserWriter implements IUserWriter {
     id: string,
     avatarUrl: string,
   ): Promise<UserRecord | null> {
-    const { rows } = await this.pool.query<any>(
+    const { rows } = await this.poolClient.query<any>(
       `UPDATE users SET avatar_url = $1, updated_at = NOW()
        WHERE id = $2 AND is_active = true
        RETURNING ${PRIVATE_COLUMNS}`,
@@ -207,7 +210,7 @@ export class UserWriter implements IUserWriter {
   }
 
   async deactivate(id: string): Promise<boolean> {
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await this.poolClient.query(
       `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -245,93 +248,12 @@ const mapper = new UserMapper(EncryptionUtil);
 const reader = new UserReader(db, mapper);
 const writer = new UserWriter(pool, EncryptionUtil, mapper, reader);
 
-export interface UserStats {
-  totalSessions: number;
-  upcomingSessions: number;
-  averageRatingGiven: number | null;
-  totalSpent: number | null;
-  loyaltyTier: string;
-  streakDays: number | null;
-}
-
-async function computeStreakDays(userId: string): Promise<number | null> {
-  const { rows } = await db.query<{ day: string }>(
-    `SELECT DISTINCT scheduled_at::date AS day FROM sessions
-     WHERE (mentor_id = $1 OR mentee_id = $1) AND status = 'completed'
-     ORDER BY day DESC LIMIT 60`,
-    [userId],
-  );
-  if (rows.length === 0) return null;
-  const days = new Set(rows.map((r) => new Date(r.day).toISOString().slice(0, 10)));
-  const today = new Date();
-  let streak = 0;
-  const cursor = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
-  // Allow streak to start yesterday (today's session may not have happened yet).
-  if (!days.has(cursor.toISOString().slice(0, 10))) {
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  while (days.has(cursor.toISOString().slice(0, 10))) {
-    streak += 1;
-    cursor.setUTCDate(cursor.getUTCDate() - 1);
-  }
-  return streak;
-}
-
-async function computeUserStats(userId: string): Promise<UserStats> {
-  const [
-    totalSessionsRow,
-    upcomingSessionsRow,
-    averageRatingRow,
-    totalSpentRow,
-    loyalty,
-    streakDays,
-  ] = await Promise.all([
-    db.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM sessions WHERE (mentor_id = $1 OR mentee_id = $1) AND status = 'completed'`,
-      [userId],
-    ),
-    db.query<{ count: string }>(
-      `SELECT COUNT(*) AS count FROM sessions WHERE (mentor_id = $1 OR mentee_id = $1) AND status IN ('pending', 'confirmed') AND scheduled_at > NOW()`,
-      [userId],
-    ),
-    db.query<{ avg: string | null }>(
-      `SELECT AVG(rating)::text AS avg FROM reviews WHERE reviewer_id = $1`,
-      [userId],
-    ),
-    db.query<{ total: string | null; count: string }>(
-      `SELECT COALESCE(SUM(amount), 0)::text AS total, COUNT(*) AS count FROM transactions WHERE user_id = $1 AND status = 'completed'`,
-      [userId],
-    ),
-    LoyaltyService.getOrCreateAccount(userId).catch(() => null),
-    computeStreakDays(userId),
-  ]);
-
-  const totalSessions = parseInt(totalSessionsRow.rows[0]?.count ?? "0", 10);
-  const upcomingSessions = parseInt(upcomingSessionsRow.rows[0]?.count ?? "0", 10);
-  const averageRatingGiven =
-    averageRatingRow.rows[0]?.avg !== null && averageRatingRow.rows[0]?.avg !== undefined
-      ? parseFloat(averageRatingRow.rows[0].avg as string)
-      : null;
-  const hasPayments = parseInt(totalSpentRow.rows[0]?.count ?? "0", 10) > 0;
-  const totalSpent = hasPayments ? parseFloat(totalSpentRow.rows[0]?.total ?? "0") : null;
-
-  return {
-    totalSessions,
-    upcomingSessions,
-    averageRatingGiven,
-    totalSpent,
-    loyaltyTier: loyalty?.tier ?? "bronze",
-    streakDays,
-  };
-}
-
-export const UsersService = {
-  ...reader,
-  ...writer,
-  async getUserStats(userId: string): Promise<UserStats> {
-    // 5-minute per-user cache (CacheTTL.medium = 300s).
-    return CacheService.wrap(CacheKeys.userStats(userId), CacheTTL.medium, () =>
-      computeUserStats(userId),
-    );
-  },
+export const UsersService: IUserReader & IUserWriter = {
+  findById: (id) => reader.findById(id),
+  findPublicById: (id) => reader.findPublicById(id),
+  findPublicByIds: (ids) => reader.findPublicByIds(ids),
+  getNotificationPreferences: (id) => reader.getNotificationPreferences(id),
+  update: (id, payload) => writer.update(id, payload),
+  updateAvatar: (id, avatarUrl) => writer.updateAvatar(id, avatarUrl),
+  deactivate: (id) => writer.deactivate(id),
 };

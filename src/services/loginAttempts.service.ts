@@ -9,7 +9,7 @@
  *   20 attempts → permanent lockout (requires admin unlock)
  */
 
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { EmailService } from './email.service';
 
 // ─── Constants ────────────────────────────────────────────────────────────────

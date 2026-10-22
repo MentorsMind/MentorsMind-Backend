@@ -20,7 +20,7 @@
 
 import { env } from "../config/env";
 import { CDNService } from "./cdn.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Asset path constants — paths relative to the CDN / static root

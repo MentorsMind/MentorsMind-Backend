@@ -11,6 +11,7 @@ import {
   ErrorCatalogEntry,
 } from "../errors/error-codes";
 import i18next, { detectLanguage } from "../config/i18n.config";
+import { TenantContext } from "../utils/tenant-context.utils";
 
 export interface AppError extends Error {
   code?: ErrorCode;
@@ -191,6 +192,15 @@ export const errorHandler = (
         path: req.path,
         statusCode,
       });
+      try {
+        const tenantId = TenantContext.hasTenantContext()
+          ? TenantContext.getTenantId()
+          : null;
+        scope.setTag("tenant_id", tenantId ?? "none");
+        scope.setExtra("tenant_id", tenantId ?? "none");
+      } catch {
+        // Tenant enrichment must never break error handling.
+      }
       Sentry.captureException(err);
     });
   }

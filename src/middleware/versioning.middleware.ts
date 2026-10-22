@@ -58,6 +58,9 @@ export async function versioningMiddleware(
   // Always set the resolved API version on the response
   res.setHeader("X-API-Version", resolvedVersion);
 
+  // Expose supported versions on every response, including sunset responses.
+  res.setHeader("X-Supported-Versions", SUPPORTED_VERSIONS.join(", "));
+
   // Reject requests to unknown or inactive versions with an explicit 404
   if (!versionConfig || !versionConfig.active) {
     res.status(404).json({
@@ -115,9 +118,6 @@ export async function versioningMiddleware(
       `299 - "This API version will be sunset on ${versionConfig.sunsetAt}"`,
     );
   }
-
-  // Expose supported versions so clients can discover them
-  res.setHeader("X-Supported-Versions", SUPPORTED_VERSIONS.join(", "));
 
   next();
 }
@@ -179,7 +179,6 @@ async function handleSunset(
 
   if (exempt) {
     res.setHeader("X-Sunset-Exemption", "active");
-    res.setHeader("X-Supported-Versions", SUPPORTED_VERSIONS.join(", "));
     next();
     return;
   }

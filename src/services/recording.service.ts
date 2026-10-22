@@ -1,6 +1,6 @@
-﻿import pool from "../config/database";
+import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { StorageService } from "./storage.service";
 import { DateTime } from "luxon";
 
@@ -221,7 +221,7 @@ export const RecordingService = {
       throw new Error(`Recording not found: ${recordingId}`);
     }
 
-    const consentStatus = recording.consent_status as unknown as ConsentStatus;
+    const consentStatus = recording.consentStatus as unknown as ConsentStatus;
     const participantIndex = consentStatus.participants.findIndex(
       (p) => p.userId === userId,
     );

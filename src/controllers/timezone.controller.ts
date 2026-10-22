@@ -1,6 +1,7 @@
-﻿import { Request, Response } from 'express';
-import { getAllTimezones, getTimezoneOffset, isValidIANATimezone, getLocalNow } from '../utils/timezone.utils';
-import { successResponse } from '../utils/response.utils';
+import { Request, Response } from 'express';
+import { getAllTimezones, isValidIANATimezone, getLocalNow } from '../utils/timezone.utils';
+import { ResponseUtil } from '../utils/response.utils';
+import { routeParam } from '../utils/route-params.utils';
 
 /**
  * GET /api/v1/timezones
@@ -11,13 +12,11 @@ export const listTimezones = async (req: Request, res: Response): Promise<void> 
   
   const timezonesWithOffsets = timezones.map((tz) => ({
     identifier: tz,
-    offset: getTimezoneOffset(tz),
+    offset: getLocalNow(tz).offset,
     currentTime: getLocalNow(tz).toISO(),
   }));
 
-  res.json(
-    successResponse(timezonesWithOffsets, 'Timezones retrieved successfully')
-  );
+  ResponseUtil.success(res, timezonesWithOffsets, 'Timezones retrieved successfully');
 };
 
 /**
@@ -28,7 +27,7 @@ export const getTimezoneDetails = async (req: Request, res: Response): Promise<v
   const { identifier } = req.params;
   
   // Decode URL-encoded timezone (e.g., America%2FNew_York)
-  const timezone = decodeURIComponent(identifier);
+  const timezone = decodeURIComponent(routeParam(identifier));
 
   if (!isValidIANATimezone(timezone)) {
     res.status(400).json({
@@ -40,16 +39,15 @@ export const getTimezoneDetails = async (req: Request, res: Response): Promise<v
 
   const now = getLocalNow(timezone);
   
-  res.json(
-    successResponse(
-      {
-        identifier: timezone,
-        offset: getTimezoneOffset(timezone),
-        currentTime: now.toISO(),
-        currentTimeFormatted: now.toFormat('EEEE, MMMM d, yyyy \'at\' h:mm:ss a zzz'),
-        isDST: now.isInDST,
-      },
-      'Timezone details retrieved successfully'
-    )
+  ResponseUtil.success(
+    res,
+    {
+      identifier: timezone,
+      offset: getLocalNow(timezone).offset,
+      currentTime: now.toISO(),
+      currentTimeFormatted: now.toFormat('EEEE, MMMM d, yyyy \'at\' h:mm:ss a zzz'),
+      isDST: now.isInDST,
+    },
+    'Timezone details retrieved successfully'
   );
 };

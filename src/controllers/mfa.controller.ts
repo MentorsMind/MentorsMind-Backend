@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 import { MfaDeviceType } from '../models/mfa-device.model';
+import { routeParam } from '../utils/route-params.utils';
 
 export const MfaController = {
   // ─── Legacy TOTP Setup (backward compatible) ────────────────────────────
@@ -322,7 +323,7 @@ export const MfaController = {
   async renameDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const { name } = req.body;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
       if (!name || typeof name !== 'string' || name.length > 100) {
@@ -348,7 +349,7 @@ export const MfaController = {
   async setPrimaryDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
       const userIdStr = Array.isArray(userId) ? userId[0] : userId;
       const ok = await MfaService.setPrimaryDevice(userIdStr, id);
@@ -370,7 +371,7 @@ export const MfaController = {
   async removeDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const { verification } = req.body;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
       if (!verification?.token) {
@@ -528,7 +529,7 @@ export const MfaController = {
       const opts = await MfaService.webauthn.generateRegistrationOptions({
         userId,
         userName: user.email,
-        userDisplayName: user.full_name || user.email,
+        userDisplayName: (user as any).full_name || user.email,
         authenticatorAttachment,
         userVerification,
       });

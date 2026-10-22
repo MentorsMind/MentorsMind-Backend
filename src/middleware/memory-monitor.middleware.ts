@@ -16,7 +16,7 @@ export function memoryMonitorMiddleware(options: MemoryMonitorOptions = {}) {
         const path = includeRequestPath ? ` on ${req.method} ${req.path}` : "";
         process.emitWarning(`Large request heap delta${path}: ${end - start} bytes`, {
           name: "MemoryPressureWarning",
-        });
+        } as any);
       }
     });
     next();

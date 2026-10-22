@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Search Service
  *
  * Provides mentor search via Elasticsearch (primary) or PostgreSQL (fallback).
@@ -363,8 +363,7 @@ export class SearchService {
     // ----- Messages -----
     if (types.includes('message')) {
       try {
-        const messagingService = new MessagingService();
-        const messageResult = await messagingService.searchMessages(userId, query, page, limit);
+        const messageResult = await MessagingService.searchMessages(userId, query, page, limit);
         const messages = (messageResult.results as any[]).map((m: any) => ({
           ...m,
           type: 'message' as GlobalSearchResultType,

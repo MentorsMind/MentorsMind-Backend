@@ -4,11 +4,12 @@ import { BulkService } from "../services/bulk.service";
 import { bulkQueue } from "../queues/bulk.queue";
 import { createError } from "../middleware/errorHandler";
 import { BulkJobModel } from "../models/bulk-job.model";
+import { routeParam } from "../utils/route-params.utils";
 
 export const BulkProgressController = {
   async getStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobId } = req.params;
+      const jobId = routeParam(req.params.jobId);
       const requestedBy = req.user?.id || req.user?.userId;
 
       if (!requestedBy) {
@@ -58,7 +59,7 @@ export const BulkProgressController = {
 
   async deleteJob(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobId } = req.params;
+      const jobId = routeParam(req.params.jobId);
       const requestedBy = req.user?.id || req.user?.userId;
 
       if (!requestedBy) {

@@ -1,6 +1,8 @@
 # OWASP ZAP baseline scan rule thresholds (issue #785)
 #
-# Format: <rule id>	<threshold: IGNORE|INFO|WARN|FAIL>	<url regex (optional)>
+# Format: <rule id>	<threshold: IGNORE|INFO|WARN|FAIL>	<url regex>
+# All three columns are required (tab separated); use ".*" to apply a
+# threshold to every URL.
 # Reference: https://www.zaproxy.org/docs/docker/baseline-scan/
 #
 # Anything not listed here uses ZAP's default threshold (WARN). Entries here
@@ -15,14 +17,26 @@
 
 # Server header / X-Powered-By disclosure is already stripped by helmet in
 # production; the informational finding on the dev/CI server is expected.
-10036	WARN
+10036	WARN	.*
+
+# --- security.yml DAST job (isolated target at 127.0.0.1:5050) ---------------
+# That job scans a throwaway Express app that only implements /, /health and
+# /echo. ZAP's spider still requests /robots.txt and /sitemap.xml, which fall
+# through to Express' default 404 page. The three findings below describe that
+# error response (no Permissions-Policy / Cache-Control on a non-existent path,
+# CSP partially applied), not an application endpoint, so they are ignored for
+# this target only. Scoped by host:port so the production scan in deploy.yml
+# (localhost:5001) keeps flagging them.
+10049	IGNORE	^http://127\.0\.0\.1:5050/
+10055	IGNORE	^http://127\.0\.0\.1:5050/
+10063	IGNORE	^http://127\.0\.0\.1:5050/
 
 # Always fail the build on reflected/stored XSS and SQL injection findings,
 # regardless of the default threshold.
-40012	FAIL
-40014	FAIL
-40018	FAIL
-40019	FAIL
-40020	FAIL
-40021	FAIL
-40022	FAIL
+40012	FAIL	.*
+40014	FAIL	.*
+40018	FAIL	.*
+40019	FAIL	.*
+40020	FAIL	.*
+40021	FAIL	.*
+40022	FAIL	.*

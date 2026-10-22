@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Per-request query performance attribution (issue #859).
  *
  * `queryLogger` instruments the pool globally, which tells you a query was
@@ -8,7 +8,7 @@
  */
 
 import type { NextFunction, Request, Response } from "express";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import databaseTuning from "../config/database-tuning";
 import { poolHealth } from "../services/db-optimizer.service";
 
@@ -18,9 +18,11 @@ export interface RequestQueryStats {
   slowQueries: number;
 }
 
-declare module "express-serve-static-core" {
-  interface Request {
-    queryStats?: RequestQueryStats;
+declare global {
+  namespace Express {
+    interface Request {
+      queryStats?: RequestQueryStats;
+    }
   }
 }
 

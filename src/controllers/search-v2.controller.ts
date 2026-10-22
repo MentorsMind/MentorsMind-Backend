@@ -65,7 +65,8 @@ export const SearchV2Controller = {
   getRecommendations: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const userId = req.user?.id;
     if (!userId) {
-      return ResponseUtil.error(res, "Authentication required for recommendations", 401);
+      ResponseUtil.error(res, "Authentication required for recommendations", 401);
+      return;
     }
 
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
@@ -81,12 +82,14 @@ export const SearchV2Controller = {
   saveSearch: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const userId = req.user?.id;
     if (!userId) {
-      return ResponseUtil.error(res, "Authentication required", 401);
+      ResponseUtil.error(res, "Authentication required", 401);
+      return;
     }
 
     const { name, filters, notifyOnMatch = true } = req.body;
     if (!name || typeof name !== "string") {
-      return ResponseUtil.error(res, "Search preset name is required", 400);
+      ResponseUtil.error(res, "Search preset name is required", 400);
+      return;
     }
 
     const saved = await AdvancedSearchService.saveSearch(
@@ -106,7 +109,8 @@ export const SearchV2Controller = {
   getSavedSearches: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     const userId = req.user?.id;
     if (!userId) {
-      return ResponseUtil.error(res, "Authentication required", 401);
+      ResponseUtil.error(res, "Authentication required", 401);
+      return;
     }
 
     const savedSearches = await AdvancedSearchService.getSavedSearches(userId);
@@ -121,12 +125,14 @@ export const SearchV2Controller = {
     const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) {
-      return ResponseUtil.error(res, "Authentication required", 401);
+      ResponseUtil.error(res, "Authentication required", 401);
+      return;
     }
 
     const savedSearch = await AdvancedSearchService.getSavedSearchById(id, userId);
     if (!savedSearch) {
-      return ResponseUtil.error(res, "Saved search not found", 404);
+      ResponseUtil.error(res, "Saved search not found", 404);
+      return;
     }
 
     const results = await AdvancedSearchService.searchMentors(savedSearch.filters, userId);
@@ -141,12 +147,14 @@ export const SearchV2Controller = {
     const userId = req.user?.id;
     const { id } = req.params as Record<string, string>;
     if (!userId) {
-      return ResponseUtil.error(res, "Authentication required", 401);
+      ResponseUtil.error(res, "Authentication required", 401);
+      return;
     }
 
     const deleted = await AdvancedSearchService.deleteSavedSearch(id, userId);
     if (!deleted) {
-      return ResponseUtil.error(res, "Saved search not found", 404);
+      ResponseUtil.error(res, "Saved search not found", 404);
+      return;
     }
 
     ResponseUtil.success(res, null, "Saved search deleted");

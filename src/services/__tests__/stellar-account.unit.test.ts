@@ -2,6 +2,7 @@ import { StellarAccountService } from "../stellarAccount.service";
 import * as stellar from "../../config/stellar";
 import { ErrorCode } from "../../errors/error-codes";
 import type { AppError } from "../../middleware/errorHandler";
+import { Operation } from "@stellar/stellar-sdk";
 
 jest.mock("../../config/stellar", () => ({
   server: { loadAccount: jest.fn(), submitTransaction: jest.fn() },
@@ -19,6 +20,7 @@ jest.mock("../../utils/encryption.utils", () => ({
 
 jest.mock("../../utils/stellar.utils", () => ({
   withRetry: jest.fn().mockImplementation((fn: () => unknown) => fn()),
+  withTimeout: jest.fn().mockImplementation((promise: Promise<unknown>) => promise),
 }));
 
 jest.mock("../../utils/logger.utils", () => ({
@@ -26,11 +28,26 @@ jest.mock("../../utils/logger.utils", () => ({
 }));
 
 jest.mock("../../config/database", () => ({
+  __esModule: true,
   default: { query: jest.fn() },
 }));
 
 jest.mock("../../services/socket.service", () => ({
   SocketService: { emitToUser: jest.fn() },
+}));
+
+jest.mock("../../middleware/tracing.middleware", () => ({
+  traceStore: { getStore: jest.fn() },
+}));
+
+jest.mock("../../middleware/errorHandler", () => ({
+  createError: (code: string, statusCode: number, details?: object) =>
+    Object.assign(new Error(code), {
+      code,
+      statusCode,
+      isOperational: true,
+      details,
+    }),
 }));
 
 jest.mock("@stellar/stellar-sdk", () => {
@@ -50,6 +67,7 @@ jest.mock("../../config/env", () => ({
   env: {
     STELLAR_REQUEST_TIMEOUT_MS: "50",
     STELLAR_LOAD_ACCOUNT_TIMEOUT_MS: "50",
+    STELLAR_STARTING_BALANCE: "2.75",
   },
 }));
 
@@ -88,6 +106,50 @@ describe("StellarAccountService (issues #1190/#1191)", () => {
       expect.stringContaining("not configured"),
       expect.objectContaining({ userId: "user-123" }),
     );
+  });
+
+  it("fails before creating a wallet when the platform keypair is unavailable", async () => {
+    getPlatformKeypair.mockReturnValue(null);
+    const { WalletModel } = jest.requireMock("../../models/wallet.model") as {
+      WalletModel: { create: jest.Mock };
+    };
+    const { EncryptionUtil } = jest.requireMock("../../utils/encryption.utils") as {
+      EncryptionUtil: { encrypt: jest.Mock };
+    };
+    const pool = jest.requireMock("../../config/database").default;
+
+    let caught: unknown;
+    try {
+      await StellarAccountService.createAndFundWallet("user-early-failure");
+    } catch (err) {
+      caught = err;
+    }
+
+    expect((caught as AppError).code).toBe(ErrorCode.SERVICE_UNAVAILABLE);
+    expect((caught as AppError).statusCode).toBe(503);
+    expect((caught as Error).message).not.toContain("keypair");
+    expect(WalletModel.create).not.toHaveBeenCalled();
+    expect(EncryptionUtil.encrypt).not.toHaveBeenCalled();
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it("uses the configured starting balance when creating a wallet account", async () => {
+    getPlatformKeypair.mockReturnValue(mockPlatformKeypair);
+    loadAccountMock.mockResolvedValue({
+      balances: [{ asset_type: "native", balance: "10000.0000000" }],
+    });
+    (stellar.server.submitTransaction as jest.Mock).mockResolvedValue({
+      hash: "hash",
+      ledger: 1,
+    });
+    jest.requireMock("../../config/database").default.query.mockResolvedValue({});
+
+    await StellarAccountService.fundAccount("user-configured-balance", "GDEST");
+
+    expect(Operation.createAccount).toHaveBeenCalledWith({
+      destination: "GDEST",
+      startingBalance: "2.75",
+    });
   });
 
   it("warns when platform balance is below 10 XLM", async () => {

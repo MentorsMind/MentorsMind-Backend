@@ -361,10 +361,10 @@ export class DeFiWalletService {
     const data = await this.queryGraph(endpoint, AAVE_POSITIONS_QUERY, {
       user: walletAddress.toLowerCase(),
     });
-    const positions = Array.isArray(data?.userReserves) ? data.userReserves : [];
+    const positions: any[] = Array.isArray(data?.userReserves) ? data.userReserves : [];
 
     return positions
-      .map((position: any) => {
+      .map<DeFiPosition | null>((position: any) => {
         const amount = this.firstDefinedNumber(
           position.currentATokenBalance,
           position.scaledATokenBalance,
@@ -417,7 +417,7 @@ export class DeFiWalletService {
       [];
 
     return (Array.isArray(tokens) ? tokens : [])
-      .map((token: any) => {
+      .map<DeFiPosition | null>((token: any) => {
         const amount = this.firstDefinedNumber(
           token.supplyBalanceUnderlying,
           token.cTokenBalance,

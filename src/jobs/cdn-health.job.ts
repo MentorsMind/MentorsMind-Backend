@@ -1,9 +1,8 @@
-﻿import cron from 'node-cron';
 import { CDNHealthService } from '../services/cdn-health.service';
 import { CDNService } from '../services/cdn.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
-let healthCheckInterval: cron.ScheduledTask | null = null;
+let healthCheckInterval: { stop(): void } | null = null;
 
 /**
  * Start background CDN health checks every 60 seconds.

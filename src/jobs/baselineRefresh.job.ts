@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Baseline Refresh Job
  *
  * Nightly job that refreshes the Redis-backed rolling baselines consumed by
@@ -15,7 +15,7 @@
 
 import { AccessRiskModel } from "../models/access-risk.model";
 import { BaselineStore } from "../services/baseline-store.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 const BASELINE_WINDOW_DAYS = 30;
 
@@ -102,7 +102,7 @@ class BaselineRefreshJob {
         }
       });
 
-      this.job.start();
+      this.job!.start();
       logger.info("Baseline refresh job started (daily at 2 AM UTC)");
     } catch (error) {
       logger.warn("Failed to start baseline refresh job", {

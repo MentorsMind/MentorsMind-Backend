@@ -18,7 +18,7 @@ import { getServiceRegistry } from "../gateway/service-registry";
 import { selectInstance } from "../gateway/load-balancer";
 import gatewayConfig from "../gateway/gateway.config";
 import type { LoadBalancingStrategy, ServiceInstance } from "../gateway/types";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,6 +1,6 @@
 ﻿import Stripe from 'stripe';
 import config from '../config';
-import { Logger } from "../utils/logger.utils";
+import { logger } from "../utils/logger.utils";
 import pool from '../config/database';
 import { BookingModel } from '../models/booking.model';
 import { EscrowModel } from '../models/escrow.model';

@@ -8,7 +8,7 @@
 
 import { randomUUID } from "crypto";
 import pool from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { AdvancedAnalyticsService, Insight } from "./advanced-analytics.service";
 import { SocketService } from "./socket.service";
 import { insightGenerationQueue } from "../queues/insightGeneration.queue";

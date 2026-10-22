@@ -1,7 +1,7 @@
 ﻿import * as StellarSdk from "@stellar/stellar-sdk";
 import { env } from "./env";
 import config from "./index";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { traceStore } from '../middleware/tracing.middleware';
 
 /**
@@ -33,13 +33,33 @@ export const horizonUrls = {
 const tracingFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const context = traceStore.getStore();
   const headers = new Headers(init?.headers);
+  const configuredTimeout = Number.parseInt(env.STELLAR_REQUEST_TIMEOUT_MS ?? "10000", 10);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : 10000;
+  const controller = new AbortController();
+  const abortFromRequest = () => controller.abort(init?.signal?.reason);
+
+  if (init?.signal?.aborted) {
+    abortFromRequest();
+  } else {
+    init?.signal?.addEventListener("abort", abortFromRequest, { once: true });
+  }
+
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`Stellar Horizon request timed out after ${timeoutMs}ms`)),
+    timeoutMs,
+  );
   
   if (context) {
     headers.set('X-Request-ID', context.requestId);
     headers.set('X-Correlation-ID', context.correlationId);
   }
 
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers, signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", abortFromRequest);
+  });
 };
 
 export const server = new StellarSdk.Horizon.Server(horizonUrls.primary, { fetch: tracingFetch } as any);

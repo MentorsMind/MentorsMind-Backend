@@ -1,7 +1,8 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { SessionSummaryModel } from '../models/session-summary.model';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from '../utils/route-params.utils';
 
 export const SessionSummaryController = {
   async generateSummary(req: AuthenticatedRequest, res: Response) {
@@ -9,7 +10,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { bookingId } = req.params;
+      const bookingId = routeParam(req.params.bookingId);
       const { transcriptId, transcriptText, sessionNotes, sessionTitle } = req.body;
 
       const existing = await SessionSummaryModel.findByBookingId(bookingId);
@@ -41,7 +42,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { bookingId } = req.params;
+      const bookingId = routeParam(req.params.bookingId);
       const summary = await SessionSummaryModel.findByBookingId(bookingId);
       if (!summary) return res.status(404).json({ success: false, error: 'Summary not found' });
 
@@ -60,7 +61,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { sessionId } = req.params;
+      const sessionId = routeParam(req.params.sessionId);
       const summary = await SessionSummaryModel.findBySessionId(sessionId);
       if (!summary) return res.status(404).json({ success: false, error: 'Summary not found' });
 
@@ -79,7 +80,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const summary = await SessionSummaryModel.findById(id);
       if (!summary) return res.status(404).json({ success: false, error: 'Summary not found' });
 
@@ -114,7 +115,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const deleted = await SessionSummaryModel.delete(id);
       if (!deleted) return res.status(404).json({ success: false, error: 'Summary not found' });
 
@@ -133,7 +134,7 @@ export const SessionSummaryController = {
       const userId = req.user?.userId ?? req.user?.id;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const existing = await SessionSummaryModel.findById(id);
       if (!existing) return res.status(404).json({ success: false, error: 'Summary not found' });
 

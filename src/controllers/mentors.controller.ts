@@ -1,11 +1,13 @@
-﻿/**
+/**
  * Mentors Controller
  */
 
 import { Response } from 'express';
+import { createHash } from 'crypto';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { MentorsService } from '../services/mentors.service';
 import { ResponseUtil } from '../utils/response.utils';
+import { routeParam } from '../utils/route-params.utils';
 
 export const MentorsController = {
   /** POST /mentors */
@@ -25,7 +27,7 @@ export const MentorsController = {
 
   /** GET /mentors/:id */
   async getProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const mentor = await MentorsService.findById(req.params.id);
+    const mentor = await MentorsService.findById(routeParam(req.params.id));
     if (!mentor) {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
@@ -56,7 +58,7 @@ export const MentorsController = {
 
   /** PUT /mentors/:id */
   async updateProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const updated = await MentorsService.update(req.params.id, req.body);
+    const updated = await MentorsService.update(routeParam(req.params.id), req.body);
     if (!updated) {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
@@ -81,7 +83,7 @@ export const MentorsController = {
 
   /** POST /mentors/:id/availability */
   async setAvailability(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const updated = await MentorsService.setAvailability(req.params.id, req.body);
+    const updated = await MentorsService.setAvailability(routeParam(req.params.id), req.body);
     if (!updated) {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
@@ -95,7 +97,7 @@ export const MentorsController = {
 
   /** GET /mentors/:id/availability */
   async getAvailability(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const availability = await MentorsService.getAvailability(req.params.id);
+    const availability = await MentorsService.getAvailability(routeParam(req.params.id));
     if (!availability) {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
@@ -105,7 +107,7 @@ export const MentorsController = {
 
   /** PUT /mentors/:id/pricing */
   async updatePricing(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const updated = await MentorsService.updatePricing(req.params.id, req.body);
+    const updated = await MentorsService.updatePricing(routeParam(req.params.id), req.body);
     if (!updated) {
       ResponseUtil.notFound(res, 'Mentor not found');
       return;
@@ -122,7 +124,7 @@ export const MentorsController = {
     // This endpoint also needs to be migrated to cursor pagination if we want consistency.
     // However, the Service.getSessions hasn't been updated yet. 
     // I'll update the Service.getSessions first.
-    const result = await MentorsService.getSessions(req.params.id, req.query as any);
+    const result = await MentorsService.getSessions(routeParam(req.params.id), req.query as any);
     ResponseUtil.success(res, {
       data: result.sessions,
       next_cursor: result.next_cursor,
@@ -133,13 +135,13 @@ export const MentorsController = {
 
   /** GET /mentors/:id/earnings */
   async getEarnings(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const earnings = await MentorsService.getEarnings(req.params.id, req.query as any);
+    const earnings = await MentorsService.getEarnings(routeParam(req.params.id), req.query as any);
     ResponseUtil.success(res, earnings, 'Earnings retrieved successfully');
   },
 
   /** POST /mentors/:id/verify */
   async submitVerification(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const result = await MentorsService.submitVerification(req.params.id, req.body);
+    const result = await MentorsService.submitVerification(routeParam(req.params.id), req.body);
     ResponseUtil.success(res, result, result.message);
   },
 };

@@ -1,5 +1,5 @@
 ﻿import { db } from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface DomainEvent {
   id: string;

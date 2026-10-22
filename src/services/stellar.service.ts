@@ -1,4 +1,4 @@
-﻿import {
+import {
   Horizon,
   TransactionBuilder,
   StrKey,
@@ -18,6 +18,7 @@ import { logger } from "../utils/logger.utils";
 import { parseAccountInfo, withRetry, TtlCache } from "../utils/stellar.utils";
 import type {
   StellarAccountInfo,
+  StellarBalance,
   StellarTransactionResult,
   StellarPaymentRecord,
   PaymentHandler,
@@ -206,7 +207,7 @@ class StellarService {
     }
 
     const account = await this.getAccount(keypair.publicKey());
-    const txBuilder = new TransactionBuilder(account, {
+    const txBuilder = new TransactionBuilder(account as any, {
       fee: "100",
       networkPassphrase,
     });
@@ -418,7 +419,7 @@ class StellarService {
     assetCode: string,
     assetIssuer: string,
     limit?: string,
-  ): Operation.ChangeTrust {
+  ): ReturnType<typeof Operation.changeTrust> {
     if (!this.validatePublicKey(assetIssuer)) {
       throw new Error("Invalid asset issuer public key");
     }

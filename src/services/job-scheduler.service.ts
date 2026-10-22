@@ -44,11 +44,11 @@ export class JobSchedulerService {
 
   async schedule<T>(queueName: string, job: ScheduledJob<T>): Promise<Job<T>> {
     const { name, data, ...options } = job;
-    return this.getQueue<T>(queueName).add(name, data, this.toJobOptions(options));
+    return (this.getQueue<T>(queueName) as any).add(name, data, this.toJobOptions(options));
   }
 
   async scheduleBatch<T>(queueName: string, jobs: ScheduledBatch<T>[]): Promise<Job<T>[]> {
-    return this.getQueue<T>(queueName).addBulk(
+    return (this.getQueue<T>(queueName) as any).addBulk(
       jobs.map(({ name, data, opts }) => ({ name, data, opts: this.toJobOptions(opts) })),
     );
   }

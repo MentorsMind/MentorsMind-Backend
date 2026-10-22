@@ -12,6 +12,8 @@ import { UserRecord } from "./users.service";
 import { TokenService } from "./token.service";
 import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
+import { CacheService } from "./cache.service";
+import { logger } from "../utils/logger";
 
 const JWT_SECRET = env.JWT_SECRET;
 
@@ -183,6 +185,22 @@ export const AuthService = {
     // Log successful authentication
     await this.logAuthAttempt(user.id, email, true, 'Login successful', ipAddress, userAgent);
 
+    const currentRounds = Number(env.BCRYPT_ROUNDS);
+    if (bcrypt.getRounds(user.password_hash) !== currentRounds) {
+      // Transparently upgrade older password hashes after returning the login response.
+      setImmediate(async () => {
+        try {
+          const upgradedHash = await bcrypt.hash(password, currentRounds);
+          await pool.query(
+            `UPDATE users SET password_hash = $1 WHERE id = $2`,
+            [upgradedHash, user.id]
+          );
+        } catch (error) {
+          logger.warn('Failed to upgrade password hash after login', { userId: user.id, error });
+        }
+      });
+    }
+
     return { tokens, userId: user.id, role: user.role };
   },
 
@@ -196,9 +214,12 @@ export const AuthService = {
 
       const { SessionManagerService } = await import('./sessionManager.service');
       await SessionManagerService.revokeSessionByToken(refreshToken).catch(() => { });
+      await TokenService.invalidateRevocationCache(userId);
     } else {
+      // revokeAllUserSessions also invalidates the revocation cache
       await TokenService.revokeAllUserSessions(userId);
     }
+    await CacheService.invalidatePattern(`token:revoked:${userId}:*`);
   },
 
   async forgotPassword(email: string): Promise<string> {

@@ -171,7 +171,7 @@ export class AdvancedSearchService {
     };
     const sort = filters.sortBy && sortMap[filters.sortBy] ? [sortMap[filters.sortBy]] : ["_score"];
 
-    const response = await elasticsearchService.getClient().search({
+    const response = await (elasticsearchService as any).getClient().search({
       index: "mentors",
       body: {
         from: (page - 1) * limit,

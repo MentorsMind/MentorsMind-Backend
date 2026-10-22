@@ -4,8 +4,9 @@ import { PresenceService } from '../services/presence.service';
 import { redisClient } from '../config/redis';
 import { logger } from '../utils/logger.utils';
 import { BookingModel } from '../models/booking.model';
+import { routeParam } from '../utils/route-params.utils';
 
-const presenceService = new PresenceService(redisClient);
+const presenceService = new PresenceService(redisClient as any);
 
 /**
  * POST /api/v1/sessions/:id/join
@@ -20,7 +21,7 @@ const presenceService = new PresenceService(redisClient);
  */
 export async function joinSession(req: Request, res: Response): Promise<void> {
   try {
-    const { id: sessionId } = req.params;
+    const sessionId = routeParam(req.params.id);
     const userId = req.user!.id;
     const userRole = req.user!.role;
 
@@ -121,7 +122,7 @@ export async function getSessionPresence(
   res: Response
 ): Promise<void> {
   try {
-    const { id: sessionId } = req.params;
+    const sessionId = routeParam(req.params.id);
     const userId = req.user!.id;
     const userIdParam = req.query.userId;
     const userIdValue = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;

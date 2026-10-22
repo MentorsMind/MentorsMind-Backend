@@ -27,7 +27,7 @@
  */
 
 import elasticsearchService from './elasticsearch.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import type { SiemPushPayload } from './incident-response.service';
 
 // ─── Elastic event schema ─────────────────────────────────────────────────────

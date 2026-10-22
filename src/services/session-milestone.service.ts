@@ -291,7 +291,7 @@ export const SessionMilestoneService = {
         created_at: row.created_at,
         updated_at: row.updated_at
       }
-    }));
+    })) as unknown as Array<SessionMilestoneMapping & { booking: BookingRecord }>;
   },
 
   /**

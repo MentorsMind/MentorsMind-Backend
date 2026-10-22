@@ -1,5 +1,5 @@
 ﻿import pool, { db } from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import {
   AISummaryService,
   ActionItem,

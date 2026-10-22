@@ -2,7 +2,7 @@
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { DeepLinkService, DeepLinkType } from "../services/deepLink.service";
 import { extractClientIp } from "../utils/log-formatter.utils";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export const DeepLinkController = {
   /**

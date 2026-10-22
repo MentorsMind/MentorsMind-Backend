@@ -30,7 +30,7 @@ export class SessionTranscriptionController {
   }
 
   static async searchTranscripts(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const userId = req.user?.id;
+    const userId = req.user!.id;
     const { q } = req.query;
     const results = await SessionTranscriptionService.searchTranscripts(
       userId,

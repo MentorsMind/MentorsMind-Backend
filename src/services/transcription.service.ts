@@ -21,7 +21,7 @@ import { Readable } from 'stream';
 import pool from '../config/database';
 import { env } from '../config/env';
 import { StorageService } from './storage.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 const transcribeClient = new TranscribeClient({
   region: env.AWS_REGION,

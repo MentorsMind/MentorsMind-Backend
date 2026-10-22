@@ -3,6 +3,9 @@ import { JwtUtils, TokenPayload, DecodedToken } from '../utils/jwt.utils';
 import crypto from 'crypto';
 import { SocketService } from './socket.service';
 import { EmailService } from './email.service';
+import { CacheService } from './cache.service';
+import { revocationCacheKey, REVOCATION_CACHE_TTL } from '../middleware/auth.middleware';
+import jwt from 'jsonwebtoken';
 
 const emailService = new EmailService();
 
@@ -66,7 +69,7 @@ export const TokenService = {
     try {
       decoded = JwtUtils.verifyRefreshToken(oldRefreshToken);
     } catch (error) {
-      throw new Error('Invalid refresh token', { cause: error });
+      throw Object.assign(new Error('Invalid refresh token'), { cause: error });
     }
 
     const oldTokenHash = JwtUtils.hashToken(oldRefreshToken);
@@ -157,13 +160,17 @@ export const TokenService = {
   /**
    * Blacklist an access token (on logout)
    */
-  async blacklistToken(jti: string, expiresAt: number): Promise<void> {
+  async blacklistToken(jti: string, expiresAt: number, token?: string): Promise<void> {
     const expDate = new Date(expiresAt * 1000);
     await pool.query(
       `INSERT INTO token_blacklist (token_jti, expires_at) VALUES ($1, $2)
        ON CONFLICT (token_jti) DO NOTHING`,
       [jti, expDate],
     );
+    await CacheService.invalidatePattern(`token:revoked:*:${jti}`);
+    if (token) {
+      await CacheService.set(revocationCacheKey(token), 'revoked', REVOCATION_CACHE_TTL);
+    }
   },
 
   /**
@@ -186,16 +193,40 @@ export const TokenService = {
       `UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1`,
       [hash],
     );
+
+    const decoded = jwt.decode(token);
+    if (decoded && typeof decoded !== 'string') {
+      const payload = decoded as jwt.JwtPayload & { userId?: string };
+      if (payload.userId) {
+        await CacheService.invalidatePattern(
+          `token:revoked:${payload.userId}:*`,
+        );
+      } else if (payload.jti) {
+        await CacheService.invalidatePattern(`token:revoked:*:${payload.jti}`);
+      }
+    }
   },
 
   /**
    * Revoke all tokens in a family
    */
   async revokeTokenFamily(familyId: string): Promise<void> {
-    await pool.query(
-      `UPDATE refresh_tokens SET revoked_at = NOW() WHERE family_id = $1`,
+    const { rows } = await pool.query(
+      `UPDATE refresh_tokens SET revoked_at = NOW() WHERE family_id = $1
+       RETURNING user_id`,
       [familyId],
     );
+    for (const { user_id: userId } of rows) {
+      await CacheService.invalidatePattern(`token:revoked:${userId}:*`);
+    }
+  },
+
+  /**
+   * Drop every cached revocation verdict for a user
+   * (keys are `auth:revoked:{userId}:{tokenIat}`, see auth.middleware).
+   */
+  async invalidateRevocationCache(userId: string): Promise<void> {
+    await CacheService.invalidatePattern(`auth:revoked:${userId}:*`);
   },
 
   /**
@@ -206,6 +237,7 @@ export const TokenService = {
       `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1`,
       [userId],
     );
+    await CacheService.invalidatePattern(`token:revoked:${userId}:*`);
   },
 
   /**
@@ -236,6 +268,7 @@ export const TokenService = {
          WHERE id = ANY($1)`,
         [ids],
       );
+      await CacheService.invalidatePattern(`token:revoked:${userId}:*`);
 
       // Notify the user about the forced sign-out via WebSocket
       const deviceName = newLoginContext?.deviceName ?? 'a new device';

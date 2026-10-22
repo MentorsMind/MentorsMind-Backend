@@ -14,7 +14,7 @@ import { DomainEvent } from "../models/event.model";
 import { ProjectionService } from "../services/projection.service";
 import { QueueService } from "../services/queue.service";
 import { db } from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import {
   BOOKING_AGGREGATE_TYPE,
   BookingProjectionEventType,

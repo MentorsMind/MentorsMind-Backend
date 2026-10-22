@@ -132,7 +132,7 @@ class RegionHealthMonitor extends EventEmitter {
             config.healthCheck.unhealthyThreshold
           ) {
             status.healthy = false;
-            breaker.open();
+            (breaker as any).open();
             this.emit("region:unhealthy", config.id);
           }
         }
@@ -144,7 +144,7 @@ class RegionHealthMonitor extends EventEmitter {
           status.consecutiveFailures >= config.healthCheck.unhealthyThreshold
         ) {
           status.healthy = false;
-          breaker.open();
+          (breaker as any).open();
           this.emit("region:unhealthy", config.id);
         }
       }
@@ -475,4 +475,4 @@ export function getRegionRoutingService(): RegionRoutingService {
 }
 
 export { RegionRoutingService, RegionHealthMonitor, SessionAffinityManager };
-export type { RegionRoute, RoutingContext, RoutingDecision, RegionHealthStatus };
+export type { RegionHealthStatus };

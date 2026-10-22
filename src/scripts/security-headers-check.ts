@@ -13,6 +13,7 @@
  * the health check, and the metrics endpoint).
  */
 import axios from "axios";
+import { logger } from '../utils/logger.utils';
 
 const BASE_URL = process.env.SECURITY_CHECK_BASE_URL ?? "http://localhost:5001/api/v1";
 const ORIGIN = new URL(BASE_URL).origin;

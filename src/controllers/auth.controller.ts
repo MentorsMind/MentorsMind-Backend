@@ -16,6 +16,7 @@ import {
 import { LoginAttemptsService } from "../services/loginAttempts.service";
 import { WebAuthnService } from "../services/webauthn.service";
 import { MfaDeviceModel } from "../models/mfa-device.model";
+import { routeParam } from "../utils/route-params.utils";
 
 export const AuthController = {
   async register(req: Request, res: Response) {
@@ -323,8 +324,8 @@ export const AuthController = {
 
       const options = await WebAuthnService.generateRegistrationOptions({
         userId,
-        userName: user.email || userId,
-        userDisplayName: user.name || user.email || userId,
+        userName: (user as any).email || userId,
+        userDisplayName: (user as any).name || (user as any).email || userId,
         authenticatorAttachment,
         userVerification,
       });
@@ -435,9 +436,9 @@ export const AuthController = {
       const { TokenService } = await import("../services/token.service");
       const tokens = await TokenService.issueTokens(
         userId,
-        user.email,
+        (user as any).email,
         user.role || "user",
-        user.user_tier || "free",
+        (user as any).user_tier || "free",
         undefined,
         { ipAddress: extractIpAddress(req as any) },
         true, // mfaVerified — passkey counts as strong auth
@@ -496,7 +497,7 @@ export const AuthController = {
         return res.status(401).json({ success: false, error: "Unauthorized" });
       }
 
-      const removed = await MfaDeviceModel.remove(req.params.id, userId);
+      const removed = await MfaDeviceModel.remove(routeParam(req.params.id), userId);
       if (!removed) {
         return res.status(404).json({ success: false, error: "Device not found" });
       }
@@ -505,7 +506,7 @@ export const AuthController = {
         userId,
         action: "PASSKEY_DEVICE_REMOVED",
         resourceType: "auth",
-        resourceId: req.params.id,
+        resourceId: routeParam(req.params.id),
         ipAddress: extractIpAddress(req),
         userAgent: req.headers["user-agent"] || null,
       });

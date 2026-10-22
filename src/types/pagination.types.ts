@@ -17,4 +17,7 @@ export interface PaginatedResponse<T> {
 export interface CursorPayload {
   id: string;
   created_at: string;
+  sort_by?: string;
+  sort_order?: string;
+  sort_value?: string | number | null;
 }
