@@ -16,7 +16,7 @@ import { getServiceRegistry, ServiceRegistry } from "./service-registry";
 import { RequestRouter } from "./request-router";
 import { TokenBucketRateLimiter } from "./rate-limiter";
 import type { GatewayStats, LoadBalancingStrategy } from "./types";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export class ApiGateway {
   readonly registry: ServiceRegistry;

@@ -11,7 +11,6 @@ import { CodeCollaborationService } from './code-collaboration.service';
 import { OTOperation } from '../utils/operational-transform.utils';
 import { CacheService } from './cache.service';
 import { logger } from '../utils/logger.utils';
-import { getDefaultCollaborationState } from '../types/collaboration.types';
 
 interface JoinPayload {
   sessionId: string;

@@ -61,22 +61,15 @@ export const webhookPaymentSchema = z.object({
   }),
 });
 
-export const listPaymentsSchema = z.object({
-  query: cursorPaginationSchema.shape.query.extend({
-    status: z
-      .enum(['pending', 'processing', 'completed', 'failed', 'cancelled', 'refunded'])
-      .optional(),
-    type: z
-      .enum(['payment', 'refund', 'platform_fee', 'mentor_payout', 'escrow_hold', 'escrow_release'])
-      .optional(),
-    from: z.string().optional(),
-    to: z.string().optional(),
-  }),
-});
+/**
+ * @deprecated Import { listUserPaymentsSchema } from '../payments.validator'
+ * instead. Kept as an alias so the two definitions cannot drift.
+ */
+export { listUserPaymentsSchema as listPaymentsSchema } from '../payments.validator';
+export type { ListUserPaymentsQuery as ListPaymentsQuery } from '../payments.validator';
 
 export const getPaymentByIdSchema = idParamSchema;
 
 export type InitiatePaymentInput = z.infer<typeof initiatePaymentSchema>['body'];
 export type ConfirmPaymentInput = z.infer<typeof confirmPaymentSchema>['body'];
 export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
-export type ListPaymentsQuery = z.infer<typeof listPaymentsSchema>['query'];

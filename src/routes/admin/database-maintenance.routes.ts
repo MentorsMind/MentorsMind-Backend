@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Database Maintenance Admin Routes
  * 
  * Admin endpoints for managing database maintenance operations,
@@ -8,7 +8,6 @@
 import databaseMaintenanceManager from '../../utils/database-maintenance.utils';
 import { logger } from '../../utils/logger.utils';
 import databaseMaintenanceJob from '../../jobs/database-maintenance.job';
-import { logger } from '../../utils/logger.utils';
 
 type Router = any;
 type Request = any;

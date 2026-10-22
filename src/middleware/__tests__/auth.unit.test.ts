@@ -4,10 +4,41 @@ import jwt from "jsonwebtoken";
 import { ErrorCode } from "../../errors/error-codes";
 
 jest.mock("jsonwebtoken");
+jest.mock("../tracing.middleware", () => ({
+  traceStore: { getStore: jest.fn() },
+}));
+jest.mock("../errorHandler", () => ({
+  createError: (code: string, statusCode: number, details?: object) =>
+    Object.assign(new Error(code), {
+      code,
+      statusCode,
+      isOperational: true,
+      details,
+    }),
+}));
+jest.mock("../../utils/logger.utils", () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
+}));
 jest.mock("../../config/database", () => ({
   __esModule: true,
   default: {
-    query: jest.fn().mockResolvedValue({ rows: [] }),
+    query: jest.fn().mockResolvedValue({
+      rows: [
+        {
+          token_invalid_before: null,
+          deletion_completed_at: null,
+          token_blacklisted: false,
+        },
+      ],
+    }),
+  },
+}));
+jest.mock("../../services/cache.service", () => ({
+  CacheService: {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn(),
+    isDistributed: jest.fn().mockReturnValue(false),
+    invalidatePattern: jest.fn(),
   },
 }));
 

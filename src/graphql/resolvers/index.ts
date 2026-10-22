@@ -14,9 +14,11 @@ export class AuthenticationError extends GraphQLError {
 }
 import { BookingsService } from '../../services/bookings.service';
 import { MentorsService } from '../../services/mentors.service';
+import type { MentorRecord } from '../../services/mentors.service';
 import { PaymentsService } from '../../services/payments.service';
 import { UsersService } from '../../services/users.service';
 import { GraphQLLoaders } from '../dataloaders';
+import { PaginationUtil } from '../../utils/pagination.utils';
 
 interface GraphQLContext {
   req: Request;
@@ -25,6 +27,36 @@ interface GraphQLContext {
   loaders: GraphQLLoaders;
 }
 
+const toDatabaseBookingStatus = (status?: string) => status?.toLowerCase();
+
+type MentorSortBy = 'CREATED_AT' | 'HOURLY_RATE' | 'AVERAGE_RATING' | 'TOTAL_SESSIONS';
+type SortOrder = 'ASC' | 'DESC';
+type ServiceMentorSortBy = 'createdAt' | 'hourlyRate' | 'averageRating' | 'totalSessions';
+type ServiceSortOrder = 'asc' | 'desc';
+
+const mentorSortByMap: Record<MentorSortBy, ServiceMentorSortBy> = {
+  CREATED_AT: 'createdAt',
+  HOURLY_RATE: 'hourlyRate',
+  AVERAGE_RATING: 'averageRating',
+  TOTAL_SESSIONS: 'totalSessions',
+};
+
+const mentorSortOrderMap: Record<SortOrder, ServiceSortOrder> = {
+  ASC: 'asc',
+  DESC: 'desc',
+};
+
+const getMentorSortValue = (
+  mentor: MentorRecord,
+  sortBy: ServiceMentorSortBy,
+): number | null | undefined =>
+  sortBy === 'hourlyRate'
+    ? mentor.hourly_rate
+    : sortBy === 'averageRating'
+      ? mentor.average_rating
+      : sortBy === 'totalSessions'
+        ? mentor.total_sessions_completed
+        : undefined;
 
 const resolvers = {
   Query: {
@@ -35,7 +67,7 @@ const resolvers = {
       const user = await UsersService.findById(context.user.userId);
       return {
         ...user,
-        mfaEnabled: user.mfa_enabled ?? false,
+        mfaEnabled: (user as any).mfa_enabled ?? false,
       };
     },
 
@@ -64,25 +96,52 @@ const resolvers = {
           minRate?: number;
           maxRate?: number;
           isAvailable?: boolean;
+          sortBy?: MentorSortBy;
+          sortOrder?: SortOrder;
         };
         cursor?: string;
         limit?: number;
-        sortBy?: string;
-        sortOrder?: string;
+        sortBy?: MentorSortBy;
+        sortOrder?: SortOrder;
       },
     ) => {
-      const { filter = {}, cursor, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = args;
-      return MentorsService.list({
+      const { filter = {}, cursor, limit = 10 } = args;
+      const sortBy = filter.sortBy ?? args.sortBy ?? 'CREATED_AT';
+      const sortOrder = filter.sortOrder ?? args.sortOrder ?? 'DESC';
+      const serviceSortBy = mentorSortByMap[sortBy];
+      const serviceSortOrder = mentorSortOrderMap[sortOrder];
+      const result = await MentorsService.list({
         cursor,
         limit,
         search: filter.search,
-        expertise: filter.expertise,
+        expertise: filter.expertise ? [filter.expertise] : undefined,
         minRate: filter.minRate,
         maxRate: filter.maxRate,
         isAvailable: filter.isAvailable,
-        sortBy: sortBy as any,
-        sortOrder: sortOrder as any,
+        sortBy: serviceSortBy,
+        sortOrder: serviceSortOrder,
       });
+
+      return {
+        edges: result.mentors.map((mentor) => {
+          const sortValue = getMentorSortValue(mentor, serviceSortBy);
+          return {
+            node: mentor,
+            cursor: PaginationUtil.encodeCursor({
+              id: mentor.id,
+              created_at: mentor.created_at.toISOString(),
+              sort_by: serviceSortBy,
+              sort_order: serviceSortOrder,
+              ...(sortValue !== undefined ? { sort_value: sortValue } : {}),
+            }),
+          };
+        }),
+        pageInfo: {
+          hasNextPage: result.has_more,
+          endCursor: result.next_cursor,
+        },
+        total: result.total,
+      };
     },
 
     booking: async (_parent: unknown, args: { id: string }, context: GraphQLContext) => {
@@ -94,14 +153,25 @@ const resolvers = {
 
     bookings: async (
       _parent: unknown,
-      args: { status?: string; cursor?: string; limit?: number },
+      args: { status?: string; cursor?: string | null; limit?: number },
       context: GraphQLContext,
     ) => {
       if (!context.user) {
         throw new AuthenticationError('Authentication required');
       }
+      if (args.cursor !== undefined && args.cursor !== null) {
+        const cursor = PaginationUtil.decodeCursor(args.cursor);
+        if (
+          !cursor ||
+          typeof cursor.id !== 'string' ||
+          typeof cursor.created_at !== 'string' ||
+          !Number.isFinite(Date.parse(cursor.created_at))
+        ) {
+          throw new ApolloError('Invalid booking cursor', 'BAD_USER_INPUT');
+        }
+      }
       return BookingsService.getUserBookings(context.user.userId, {
-        status: args.status,
+        status: toDatabaseBookingStatus(args.status),
         cursor: args.cursor,
         limit: args.limit,
       });
@@ -149,7 +219,7 @@ const resolvers = {
       // only the unfiltered default view benefits from N+1 batching.
       if (args.status || args.cursor || args.limit) {
         return BookingsService.getUserBookings(parent.id, {
-          status: args.status,
+          status: toDatabaseBookingStatus(args.status),
           cursor: args.cursor,
           limit: args.limit,
         });
@@ -193,7 +263,7 @@ const resolvers = {
       }
       if (args.status || args.cursor || args.limit) {
         return BookingsService.getUserBookings(parent.id, {
-          status: args.status,
+          status: toDatabaseBookingStatus(args.status),
           cursor: args.cursor,
           limit: args.limit,
         });
@@ -215,6 +285,24 @@ const resolvers = {
     menteeId: (parent: any) => parent.mentee_id,
     mentorId: (parent: any) => parent.mentor_id,
     durationMinutes: (parent: any) => parent.duration_minutes,
+    /**
+     * Maps the lowercase DB status values (e.g. "no_show", "rescheduled")
+     * to the uppercase GraphQL BookingStatus enum values. Falls back to
+     * the raw value uppercased so any future DB statuses surface visibly
+     * rather than returning null.
+     */
+    status: (parent: any) => {
+      const STATUS_MAP: Record<string, string> = {
+        pending: 'PENDING',
+        confirmed: 'CONFIRMED',
+        completed: 'COMPLETED',
+        cancelled: 'CANCELLED',
+        rescheduled: 'RESCHEDULED',
+        no_show: 'NO_SHOW',
+      };
+      const raw: string = parent.status ?? '';
+      return STATUS_MAP[raw.toLowerCase()] ?? raw.toUpperCase();
+    },
     paymentStatus: (parent: any) => parent.payment_status,
     stellarTxHash: (parent: any) => parent.stellar_tx_hash,
     cancellationReason: (parent: any) => parent.cancellation_reason,

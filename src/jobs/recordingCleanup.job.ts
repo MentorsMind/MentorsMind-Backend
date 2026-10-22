@@ -150,9 +150,9 @@ async function listAllRecordingObjects(): Promise<OrphanCandidate[]> {
  * We load all keys in one query to avoid N+1 lookups.
  */
 async function loadActiveS3Keys(): Promise<Set<string>> {
-  const { rows } = await db.query<{ s3_key: string }>(
+  const { rows } = (await db.query(
     `SELECT s3_key FROM session_recordings WHERE status != 'deleted'`,
-  );
+  )) as { rows: Array<{ s3_key: string }> };
   return new Set(rows.map((r) => r.s3_key));
 }
 
@@ -161,9 +161,9 @@ async function loadActiveS3Keys(): Promise<Set<string>> {
  * so we don't double-log them on subsequent runs.
  */
 async function loadPendingDeletionKeys(): Promise<Set<string>> {
-  const { rows } = await db.query<{ s3_key: string }>(
+  const { rows } = (await db.query(
     `SELECT s3_key FROM recording_cleanup_log WHERE deletion_status = 'pending_deletion'`,
-  );
+  )) as { rows: Array<{ s3_key: string }> };
   return new Set(rows.map((r) => r.s3_key));
 }
 
@@ -204,16 +204,18 @@ async function hardDeleteExpiredObjects(
   jobRunId: string,
 ): Promise<{ count: number; bytes: number }> {
   // Fetch rows ready for hard deletion
-  const { rows } = await db.query<{
-    id: string;
-    s3_key: string;
-    file_size_bytes: string;
-  }>(
+  const { rows } = (await db.query(
     `SELECT id, s3_key, file_size_bytes
      FROM recording_cleanup_log
      WHERE deletion_status = 'pending_deletion'
        AND scheduled_deletion_at <= NOW()`,
-  );
+  )) as {
+    rows: Array<{
+      id: string;
+      s3_key: string;
+      file_size_bytes: string;
+    }>;
+  };
 
   if (rows.length === 0) return { count: 0, bytes: 0 };
 
@@ -223,12 +225,12 @@ async function hardDeleteExpiredObjects(
   for (const row of rows) {
     try {
       // Double-check: ensure no active DB record exists before deleting
-      const { rows: activeRows } = await db.query<{ id: string }>(
+      const { rows: activeRows } = (await db.query(
         `SELECT id FROM session_recordings
          WHERE s3_key = $1 AND status != 'deleted'
          LIMIT 1`,
         [row.s3_key],
-      );
+      )) as { rows: Array<{ id: string }> };
 
       if (activeRows.length > 0) {
         // A live recording has appeared — skip and mark recovered to stop retrying
@@ -500,13 +502,13 @@ export async function runRecordingCleanupJob(): Promise<CleanupReport> {
 
   // More accurate: query the cleanup log for total bytes of objects marked this run
   try {
-    const { rows } = await db.query<{ total: string }>(
+    const { rows } = (await db.query(
       `SELECT COALESCE(SUM(file_size_bytes), 0)::text AS total
        FROM recording_cleanup_log
        WHERE job_run_id = $1
          AND cleanup_reason = 'orphan'`,
       [jobRunId],
-    );
+    )) as { rows: Array<{ total: string }> };
     const orphanBytesThisRun = parseInt(rows[0]?.total ?? '0', 10);
     report.totalBytesReclaimed = report.hardDeletedBytes;
     const totalPendingBytes = orphanBytesThisRun;

@@ -4,7 +4,7 @@ import {
   NotificationDeliveryTrackingModel,
   DeliveryStatus,
 } from "../models/notification-delivery-tracking.model";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import * as https from "https";
 import {
   emailDeliveryFailuresTotal,

@@ -11,7 +11,7 @@
  */
 
 import pool from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import databaseTuning from "../config/database-tuning";
 
 export interface PlanNode {

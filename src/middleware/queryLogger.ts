@@ -19,7 +19,7 @@
 
 import * as crypto from "crypto";
 import pool from "../config/database";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { dbQueryDurationMs, dbQueryDurationHistogram } from "../config/metrics";
 import QueryMonitorService from "../services/query-monitor.service";
 

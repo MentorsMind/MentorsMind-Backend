@@ -4,50 +4,50 @@ import {
   networkPassphrase,
   getPlatformKeypair,
 } from "../config/stellar";
+import { env } from "../config/env";
 import { WalletModel } from "../models/wallet.model";
 import { EncryptionUtil } from "../utils/encryption.utils";
-import { withRetry } from "../utils/stellar.utils";
+import { withRetry, withTimeout } from "../utils/stellar.utils";
 import { logger } from "../utils/logger.utils";
 import pool from "../config/database";
 import { SocketService } from "./socket.service";
 import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
-import { env } from "../config/env";
 
-const STARTING_BALANCE = "1.5";
+const STARTING_BALANCE = env.STELLAR_STARTING_BALANCE ?? "1.5";
 
 /** Warn when the platform funding account drops below this (XLM). Issue #1190. */
 export const STELLAR_FUNDING_LOW_BALANCE_THRESHOLD_XLM = 10;
 
 function getLoadAccountTimeoutMs(): number {
-  const raw =
-    (env as Record<string, string | undefined>).STELLAR_LOAD_ACCOUNT_TIMEOUT_MS ??
-    env.STELLAR_REQUEST_TIMEOUT_MS ??
-    "10000";
-  const parsed = parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 10000;
+  return Number(env.STELLAR_REQUEST_TIMEOUT_MS);
 }
-
-const timeout = (ms: number): Promise<never> =>
-  new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("Stellar loadAccount timeout")), ms),
-  );
 
 /**
  * Wraps server.loadAccount() with a configurable timeout so a slow or
  * unreachable Horizon node fails fast instead of hanging indefinitely.
  * Throws a typed SERVICE_UNAVAILABLE AppError when the deadline is exceeded.
- * Timeout is configurable via STELLAR_LOAD_ACCOUNT_TIMEOUT_MS (default 10000).
+ * Timeout is configurable via STELLAR_REQUEST_TIMEOUT_MS (default 10000).
  */
-async function loadAccountWithTimeout(accountId: string): Promise<Awaited<ReturnType<typeof server.loadAccount>>> {
+async function loadAccountWithTimeout(
+  accountId: string,
+): Promise<Awaited<ReturnType<typeof server.loadAccount>>> {
   const timeoutMs = getLoadAccountTimeoutMs();
+  const timeoutError = new Error("Stellar loadAccount timeout");
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    return await Promise.race([server.loadAccount(accountId), timeout(timeoutMs)]);
+    return await Promise.race([
+      server.loadAccount(accountId),
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(timeoutError),
+          timeoutMs,
+        );
+      }),
+    ]);
   } catch (err) {
-    const isTimeout =
-      err instanceof Error && err.message === "Stellar loadAccount timeout";
-    if (!isTimeout) throw err;
+    if (err !== timeoutError) throw err;
     logger.error("Stellar loadAccount timed out", {
       accountId,
       timeoutMs,
@@ -57,11 +57,25 @@ async function loadAccountWithTimeout(accountId: string): Promise<Awaited<Return
       reason: `Stellar Horizon request timed out after ${timeoutMs}ms`,
       service: "stellar-horizon",
     });
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
   }
 }
 
 export const StellarAccountService = {
   async createAndFundWallet(userId: string) {
+    const platform = getPlatformKeypair();
+    if (!platform) {
+      logger.error("Stellar funding account not configured", {
+        userId,
+        service: "stellar-funding",
+      });
+      throw createError(ErrorCode.SERVICE_UNAVAILABLE, 503, {
+        service: "stellar-funding",
+        reason: "Stellar wallet funding is currently unavailable",
+      });
+    }
+
     // 🔹 Generate keypair
     const keypair = Keypair.random();
     const publicKey = keypair.publicKey();
@@ -80,7 +94,7 @@ export const StellarAccountService = {
     // 2. Fund account — roll back the wallet record if funding fails so we
     // never leave unfunded wallets behind.
     try {
-      await this.fundAccount(userId, publicKey);
+      await this.fundAccount(userId, publicKey, platform);
     } catch (err) {
       await pool
         .query(`DELETE FROM wallets WHERE user_id = $1`, [userId])
@@ -104,8 +118,12 @@ export const StellarAccountService = {
     return { publicKey };
   },
 
-  async fundAccount(userId: string, destination: string) {
-    const platform = getPlatformKeypair();
+  async fundAccount(
+    userId: string,
+    destination: string,
+    configuredPlatform?: Keypair,
+  ) {
+    const platform = configuredPlatform ?? getPlatformKeypair();
     if (!platform) {
       logger.error("Stellar funding account not configured", {
         userId,
@@ -113,7 +131,7 @@ export const StellarAccountService = {
       });
       throw createError(ErrorCode.SERVICE_UNAVAILABLE, 503, {
         service: "stellar-funding",
-        reason: "Stellar funding account not configured",
+        reason: "Stellar wallet funding is currently unavailable",
       });
     }
 
@@ -153,7 +171,10 @@ export const StellarAccountService = {
 
       tx.sign(platform);
 
-      const result = await server.submitTransaction(tx);
+      const result = await withTimeout(
+        server.submitTransaction(tx),
+        Number(env.STELLAR_API_TIMEOUT_MS),
+      );
 
       await pool.query(
         `INSERT INTO transactions (

@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Queue } from "bullmq";
 import { redisConnection } from "../queues/queue.config";
 import { WebhookCircuitBreaker, CircuitStatus } from "./webhook-circuit-breaker.service";
+import { buildTraceHeaders } from "../utils/trace-context.utils";
 
 export interface WebhookEvent {
   event: string;
@@ -270,6 +271,7 @@ export const WebhookService = {
           'X-Webhook-Event': 'test.ping',
           'X-Webhook-Timestamp': testPayload.timestamp,
           'User-Agent': 'MentorsMind-Webhooks/1.0',
+          ...buildTraceHeaders(),
         },
         timeout: 10000,
       });
@@ -368,6 +370,7 @@ export const WebhookService = {
           'X-Webhook-Event': (payload as any).event || 'unknown',
           'X-Webhook-Timestamp': (payload as any).timestamp || new Date().toISOString(),
           'User-Agent': 'MentorsMind-Webhooks/1.0',
+          ...buildTraceHeaders(),
         },
         timeout: 15000,
       });
@@ -761,6 +764,7 @@ export const WebhookService = {
             'X-Webhook-Event': payload.event,
             'X-Webhook-Timestamp': payload.timestamp,
             'User-Agent': 'MentorsMind-Webhooks/1.0',
+            ...buildTraceHeaders(),
           },
           timeout: 10000,
         });
@@ -884,3 +888,4 @@ export const WebhookService = {
     };
   },
 };
+

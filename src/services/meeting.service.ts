@@ -2,7 +2,7 @@
 import jwt from 'jsonwebtoken';
 import meetingConfig, { MeetingProvider } from '../config/meeting.config';
 import { calculateMeetingExpiry, generateJitsiRoomName } from '../utils/meeting.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface MeetingRoomOptions {
   sessionId: string;

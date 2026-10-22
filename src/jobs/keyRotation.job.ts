@@ -54,7 +54,7 @@ class KeyRotationJob {
 
     try {
       // Attempt to acquire lock (SET NX EX 3600)
-      const acquired = await redis.set(lockKey, replicaId, "NX", "EX", 3600);
+      const acquired = await (redis as any).set(lockKey, replicaId, "NX", "EX", 3600);
       if (!acquired) {
         logger.info("JWT key rotation skipped: lock acquired by another instance");
         return;

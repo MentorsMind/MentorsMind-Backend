@@ -1,7 +1,7 @@
 ﻿import { Request, Response } from 'express';
 import { ResponseUtil } from '../utils/response.utils';
 import { StripeService } from '../services/stripe.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import rawBody from 'raw-body';
 import config from '../config';
 

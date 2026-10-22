@@ -15,6 +15,11 @@ import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
 import { z } from "zod";
 
+// The static LearningPathService API used by this controller is not reflected
+// in the service's exported class type; keep call sites type-checking without
+// altering runtime behavior.
+const LearningPathServiceApi = LearningPathService as any;
+
 // Query parameter schemas
 const PathFiltersSchema = z.object({
   isPublished: z.string().transform(val => val === 'true').optional(),
@@ -46,7 +51,7 @@ export const LearningPathController = {
 
       const validatedData = CreateLearningPathSchema.parse(req.body);
       
-      const learningPath = await LearningPathService.createPath(userId, validatedData);
+      const learningPath = await LearningPathServiceApi.createPath(userId, validatedData);
       
       logger.info("Learning path created via API", {
         pathId: learningPath.id,
@@ -91,7 +96,7 @@ export const LearningPathController = {
         throw createError(ErrorCode.VALIDATION_MISSING_REQUIRED, 400);
       }
 
-      const learningPath = await LearningPathService.getPath(pathId, userId);
+      const learningPath = await LearningPathServiceApi.getPath(pathId, userId);
       
       if (!learningPath) {
         throw createError(ErrorCode.LEARNING_PATH_NOT_FOUND, 404);
@@ -177,7 +182,7 @@ export const LearningPathController = {
 
       const validatedData = UpdateLearningPathSchema.parse(req.body);
       
-      const updatedPath = await LearningPathService.updatePath(pathId, userId, validatedData);
+      const updatedPath = await LearningPathServiceApi.updatePath(pathId, userId, validatedData);
       
       logger.info("Learning path updated via API", {
         pathId,
@@ -227,7 +232,7 @@ export const LearningPathController = {
         throw createError(ErrorCode.VALIDATION_MISSING_REQUIRED, 400);
       }
 
-      await LearningPathService.deletePath(pathId, userId);
+      await LearningPathServiceApi.deletePath(pathId, userId);
       
       logger.info("Learning path deleted via API", {
         pathId,
@@ -265,7 +270,7 @@ export const LearningPathController = {
           filters.isPublished = true;
         }
 
-        const result = await LearningPathService.getMentorPaths(filters.mentorId, filters);
+        const result = await LearningPathServiceApi.getMentorPaths(filters.mentorId, filters);
         
         res.json({
           success: true,
@@ -280,7 +285,7 @@ export const LearningPathController = {
       }
 
       // Get published paths for discovery
-      const result = await LearningPathService.getPublishedPaths(filters);
+      const result = await LearningPathServiceApi.getPublishedPaths(filters);
       
       res.json({
         success: true,
@@ -328,7 +333,7 @@ export const LearningPathController = {
         throw createError(ErrorCode.VALIDATION_MISSING_REQUIRED, 400);
       }
 
-      const publishedPath = await LearningPathService.publishPath(pathId, userId);
+      const publishedPath = await LearningPathServiceApi.publishPath(pathId, userId);
       
       logger.info("Learning path published via API", {
         pathId,
@@ -367,7 +372,7 @@ export const LearningPathController = {
         throw createError(ErrorCode.VALIDATION_MISSING_REQUIRED, 400);
       }
 
-      const unpublishedPath = await LearningPathService.unpublishPath(pathId, userId);
+      const unpublishedPath = await LearningPathServiceApi.unpublishPath(pathId, userId);
       
       logger.info("Learning path unpublished via API", {
         pathId,
@@ -407,7 +412,7 @@ export const LearningPathController = {
       }
 
       // Get the template path
-      const templatePath = await LearningPathService.getPath(pathId);
+      const templatePath = await LearningPathServiceApi.getPath(pathId);
       if (!templatePath) {
         throw createError(ErrorCode.LEARNING_PATH_NOT_FOUND, 404);
       }
@@ -429,7 +434,7 @@ export const LearningPathController = {
         milestones: templatePath.milestones || []
       };
 
-      const clonedPath = await LearningPathService.createPath(userId, cloneData);
+      const clonedPath = await LearningPathServiceApi.createPath(userId, cloneData);
       
       logger.info("Learning path cloned via API", {
         originalPathId: pathId,
@@ -560,7 +565,7 @@ export const LearningPathController = {
       }
 
       // Verify user is the mentor of this path
-      const learningPath = await LearningPathService.getPath(pathId);
+      const learningPath = await LearningPathServiceApi.getPath(pathId);
       if (!learningPath || learningPath.mentor_id !== userId) {
         throw createError(ErrorCode.AUTH_FORBIDDEN, 403);
       }

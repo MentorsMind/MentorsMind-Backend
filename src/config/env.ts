@@ -18,7 +18,7 @@ dotenv.config({
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
-const envSchema = z.object({
+export const envSchema = z.object({
   // Server
 
   // Multi-Region Overrides
@@ -87,7 +87,7 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("7d"), // Reduced from 30d
   /** Previous JWT secret — accepted during rotation window, then removed. */
   JWT_SECRET_PREVIOUS: z.string().optional(),
-  PII_ENCRYPTION_KEYS: z.string().min(1, "PII_ENCRYPTION_KEYS is required for production").optional(),
+  PII_ENCRYPTION_KEYS: z.string().min(1, "PII_ENCRYPTION_KEYS is required in production").optional(),
   PII_ENCRYPTION_CURRENT_KEY_VERSION: z.string().default("1"),
 
   // File Signing — separate secret for file access tokens (prevents conflation with JWT_SECRET)
@@ -102,6 +102,10 @@ const envSchema = z.object({
 
   // Stellar
   STELLAR_NETWORK: z.enum(["testnet", "mainnet"]).default("testnet"),
+  STELLAR_API_TIMEOUT_MS: z
+    .string()
+    .regex(/^\d+$/, "STELLAR_API_TIMEOUT_MS must be a non-negative integer")
+    .default("10000"),
   STELLAR_HORIZON_URL: z
     .string()
     .url("STELLAR_HORIZON_URL must be a valid URL"),
@@ -113,12 +117,14 @@ const envSchema = z.object({
   STELLAR_REQUEST_TIMEOUT_MS: z
     .string()
     .regex(/^\d+$/, "STELLAR_REQUEST_TIMEOUT_MS must be a non-negative integer")
+    .refine((value) => Number(value) > 0, "STELLAR_REQUEST_TIMEOUT_MS must be positive")
     .default("10000"),
-  /** Timeout in ms for server.loadAccount() calls (issue #1191, default 10000) */
-  STELLAR_LOAD_ACCOUNT_TIMEOUT_MS: z
+  /** Initial XLM balance for newly created Stellar wallets; >= 1 XLM base reserve. */
+  STELLAR_STARTING_BALANCE: z
     .string()
-    .regex(/^\d+$/, "STELLAR_LOAD_ACCOUNT_TIMEOUT_MS must be a non-negative integer")
-    .default("10000"),
+    .regex(/^\d+(\.\d{1,7})?$/, "STELLAR_STARTING_BALANCE must be a positive decimal string")
+    .refine((value) => Number(value) >= 1, "STELLAR_STARTING_BALANCE must be at least 1 XLM")
+    .default("1.5"),
 
   // CORS
   CORS_ORIGIN: z
@@ -137,13 +143,15 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z
     .string()
     .regex(/^\d+$/, "RATE_LIMIT_WINDOW_MS must be a positive integer")
-    .refine(n => parseInt(n, 10) >= 1000, "RATE_LIMIT_WINDOW_MS must be at least 1000ms (1 second)")
-    .default("900000"),
+    .transform(Number)
+    .refine(v => v >= 1000, "Must be at least 1000ms")
+    .default(900000),
   RATE_LIMIT_MAX_REQUESTS: z
     .string()
     .regex(/^\d+$/, "RATE_LIMIT_MAX_REQUESTS must be a positive integer")
-    .refine(n => parseInt(n, 10) >= 1, "RATE_LIMIT_MAX_REQUESTS must be at least 1")
-    .default("100"),
+    .transform(Number)
+    .refine(v => v >= 1 && v <= 10000, "Must be between 1 and 10000")
+    .default(100),
 
   // Email (SMTP)
   SMTP_HOST: z.string().optional(),
@@ -379,11 +387,30 @@ const envSchema = z.object({
   // When CDN_BASE_URL is set, EmailCDNService uses it; otherwise this provides
   // the fallback absolute URL prefix so email clients always get absolute URLs.
   EMAIL_ASSETS_BASE_URL: z.string().url().optional(),
+
+  // Multi-region replication & failover (consumed by config/region.config.ts)
+  REPLICATION_ENABLED: z.enum(["true", "false"]).optional(),
+  REPLICATION_MAX_LAG_MS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_MAX_ATTEMPTS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_BACKOFF_MS: z.string().regex(/^\d+$/).optional(),
+  REPLICATION_RETRY_MAX_BACKOFF_MS: z.string().regex(/^\d+$/).optional(),
+  AUTOMATIC_FAILOVER: z.enum(["true", "false"]).optional(),
+  HEALTH_CHECK_INTERVAL_MS: z.string().regex(/^\d+$/).optional(),
+  CIRCUIT_BREAKER_ENABLED: z.enum(["true", "false"]).optional(),
+  CIRCUIT_BREAKER_FAILURE_THRESHOLD: z.string().regex(/^\d+$/).optional(),
+  CIRCUIT_BREAKER_RESET_TIMEOUT_MS: z.string().regex(/^\d+$/).optional(),
+
+  // Stale data cleanup (consumed by jobs/stale-data-cleanup.job.ts)
+  PUSH_TOKEN_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  NOTIFICATION_DELIVERY_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  WEBHOOK_DELIVERY_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  CHATBOT_MESSAGE_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
+  STALE_CLEANUP_DRY_RUN: z.enum(["true", "false"]).optional(),
 }).superRefine((data, ctx) => {
-  if (data.NODE_ENV === 'production' && !data.PII_ENCRYPTION_KEYS) {
+  if (['production', 'staging'].includes(data.NODE_ENV) && !data.PII_ENCRYPTION_KEYS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'PII_ENCRYPTION_KEYS is required when NODE_ENV=production',
+      message: 'PII_ENCRYPTION_KEYS is required in production',
       path: ['PII_ENCRYPTION_KEYS'],
     });
   }

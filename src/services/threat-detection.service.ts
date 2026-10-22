@@ -26,7 +26,7 @@
 import { AccessRiskModel } from "../models/access-risk.model";
 import { LoginAttemptsService } from "./loginAttempts.service";
 import { MlSecurityService } from "./ml-security.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export type ThreatSeverity = "low" | "medium" | "high" | "critical";
 

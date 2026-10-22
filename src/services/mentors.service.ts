@@ -286,6 +286,19 @@ export const MentorsService = {
 
     return CacheService.wrap(cacheKey, CacheTTL.short, async () => {
       const { cursor, limit } = query;
+      const sortBy = query.sortBy ?? "createdAt";
+      const sortOrder = query.sortOrder ?? "desc";
+      const sortColumns: Record<
+        NonNullable<ListMentorsQuery["sortBy"]>,
+        string
+      > = {
+        hourlyRate: "hourly_rate",
+        averageRating: "average_rating",
+        totalSessions: "total_sessions_completed",
+        createdAt: "created_at",
+      };
+      const sortColumn = sortColumns[sortBy];
+      const sortDirection = sortOrder.toUpperCase();
 
       // Build base filters (without cursor)
       const baseFilters = this.buildMentorFilters(query);
@@ -297,18 +310,48 @@ export const MentorsService = {
 
       if (cursor) {
         const decoded = PaginationUtil.decodeCursor(cursor);
-        if (decoded) {
-          dataConditions.push(`(created_at, id) < ($${idx}, $${idx + 1})`);
+        const cursorMatchesSort =
+          decoded &&
+          (decoded.sort_by === undefined ||
+            (decoded.sort_by === sortBy && decoded.sort_order === sortOrder));
+
+        if (decoded && cursorMatchesSort && sortBy === "createdAt") {
+          const comparison = sortOrder === "asc" ? ">" : "<";
+          dataConditions.push(
+            `(created_at, id) ${comparison} ($${idx}, $${idx + 1})`,
+          );
           dataValues.push(decoded.created_at, decoded.id);
           idx += 2;
+        } else if (
+          decoded &&
+          cursorMatchesSort &&
+          decoded.sort_by === sortBy &&
+          Object.prototype.hasOwnProperty.call(decoded, "sort_value")
+        ) {
+          const comparison = sortOrder === "asc" ? ">" : "<";
+          if (decoded.sort_value === null) {
+            dataConditions.push(
+              `(${sortColumn} IS NULL AND id ${comparison} $${idx})`,
+            );
+            dataValues.push(decoded.id);
+            idx++;
+          } else {
+            dataConditions.push(
+              `(${sortColumn} ${comparison} $${idx} OR ${sortColumn} IS NULL OR (${sortColumn} = $${idx} AND id ${comparison} $${idx + 1}))`,
+            );
+            dataValues.push(decoded.sort_value, decoded.id);
+            idx += 2;
+          }
         }
       }
 
       const dataWhereClause = `WHERE ${dataConditions.join(" AND ")}`;
       const countWhereClause = `WHERE ${baseFilters.conditions.join(" AND ")}`;
 
-      // Use a fixed sort order for cursor-based pagination consistency
-      const orderClause = `ORDER BY created_at DESC, id DESC`;
+      const orderClause =
+        sortBy === "createdAt"
+          ? `ORDER BY ${sortColumn} ${sortDirection}, id ${sortDirection}`
+          : `ORDER BY ${sortColumn} ${sortDirection} NULLS LAST, id ${sortDirection}`;
 
       const [dataResult, countResult] = await Promise.all([
         pool.query<MentorRecord>(
@@ -326,11 +369,23 @@ export const MentorsService = {
       const data = has_more ? rows.slice(0, limit) : rows;
 
       const lastItem = data[data.length - 1];
+      const sortValue =
+        sortBy === "hourlyRate"
+          ? lastItem?.hourly_rate
+          : sortBy === "averageRating"
+            ? lastItem?.average_rating
+            : sortBy === "totalSessions"
+              ? lastItem?.total_sessions_completed
+              : undefined;
       const next_cursor =
         has_more && lastItem
-          ? PaginationUtil.encodeCursor(
-              PaginationUtil.getCursorFromItem(lastItem)!,
-            )
+          ? PaginationUtil.encodeCursor({
+              id: lastItem.id,
+              created_at: lastItem.created_at.toISOString(),
+              sort_by: sortBy,
+              sort_order: sortOrder,
+              ...(sortValue !== undefined ? { sort_value: sortValue } : {}),
+            })
           : null;
 
       const total = parseInt(countResult.rows[0].count, 10);
@@ -377,10 +432,12 @@ export const MentorsService = {
     if (rows[0]) {
       const updatedSchedule = payload.schedule ?? rows[0].availability_schedule;
       const updatedIsAvailable =
-        payload.isAvailable !== undefined ? payload.isAvailable : rows[0].is_available;
+        payload.isAvailable !== undefined
+          ? payload.isAvailable
+          : rows[0].is_available;
 
       await CacheService.del(CacheKeys.mentorProfile(id));
-      SocketService.emitMentorAvailabilityChanged(id, {
+      (SocketService as any).emitMentorAvailabilityChanged(id, {
         mentorId: id,
         isAvailable: updatedIsAvailable,
         availability: {

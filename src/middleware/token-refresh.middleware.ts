@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { TokenService } from '../services/token.service';
 import { JwtUtils } from '../utils/jwt.utils';
 import { ResponseUtil } from '../utils/response.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import config from '../config';
 import { env } from '../config/env';
 

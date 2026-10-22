@@ -26,6 +26,7 @@
  *   Queue / BullMQ
  *     queue_job_duration_seconds       histogram queue_name, job_name, status
  *     queue_jobs_total                 counter   queue_name, job_name, status
+ *     worker_jobs_failed_total         counter   queue
  *
  *   Stellar
  *     stellar_api_call_duration_seconds histogram  operation, network
@@ -185,6 +186,13 @@ export const queueJobsTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
+export const workerJobsFailedTotal = new Counter<string>({
+  name: "worker_jobs_failed_total",
+  help: "Total BullMQ jobs that failed (including exhausted retries), partitioned by queue",
+  labelNames: ["queue"],
+  registers: [metricsRegistry],
+});
+
 // ─── Stellar ──────────────────────────────────────────────────────────[...]
 
 export const stellarApiCallDurationSeconds = new Histogram<string>({
@@ -320,5 +328,29 @@ export const auditLogQueueRejectionsTotal = new Counter<string>({
   name: "audit_log_queue_rejections_total",
   help: "Total audit log queue rejections when enqueueing entries fails, partitioned by reason (queue_full, redis_unavailable, unknown)",
   labelNames: ["reason"],
+  registers: [metricsRegistry],
+});
+
+// ─── Backups (issue #1303) ────────────────────────────────────────────────
+
+export const backupDurationSeconds = new Histogram<string>({
+  name: "backup_duration_seconds",
+  help: "Backup operation duration in seconds, partitioned by backup type",
+  labelNames: ["type"],
+  buckets: [0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300],
+  registers: [metricsRegistry],
+});
+
+export const backupOperationsTotal = new Counter<string>({
+  name: "backup_operations_total",
+  help: "Total backup operations, partitioned by type and status (success, failure)",
+  labelNames: ["type", "status"],
+  registers: [metricsRegistry],
+});
+
+export const backupSizeBytes = new Gauge<string>({
+  name: "backup_size_bytes",
+  help: "Last completed backup file size in bytes, partitioned by backup type",
+  labelNames: ["type"],
   registers: [metricsRegistry],
 });

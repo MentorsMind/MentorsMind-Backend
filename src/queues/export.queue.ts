@@ -7,7 +7,7 @@ import { EarningsReportService } from "../services/earningsReport.service";
 import { ExportJobModel } from "../models/export-job.model";
 import { AuditLoggerService } from "../services/audit-logger.service";
 import { LogLevel } from "../utils/log-formatter.utils";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface ExportJobData {
   userId: string;

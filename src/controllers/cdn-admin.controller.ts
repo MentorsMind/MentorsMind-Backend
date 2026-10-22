@@ -1,9 +1,10 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { CDNHealthService } from '../services/cdn-health.service';
 import { CDNService } from '../services/cdn.service';
 import { ResponseUtil } from '../utils/response.utils';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from '../utils/route-params.utils';
 
 /**
  * Admin controllers for CDN health monitoring and management.
@@ -45,7 +46,7 @@ export const CDNAdminController = {
    */
   async checkDomainHealth(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const { domain } = req.params;
+      const domain = routeParam(req.params.domain);
       if (!domain) {
         ResponseUtil.error(res, 'Domain is required', 400);
         return;
@@ -69,7 +70,7 @@ export const CDNAdminController = {
    */
   async clearDomainHealth(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const { domain } = req.params;
+      const domain = routeParam(req.params.domain);
       if (!domain) {
         ResponseUtil.error(res, 'Domain is required', 400);
         return;

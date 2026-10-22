@@ -5,6 +5,7 @@ import {
   withCurrentTenantFilter,
   ADMIN_BYPASS_TENANT_ID,
 } from "../utils/tenant-context.utils";
+import { PaginationUtil } from "../utils/pagination.utils";
 
 export interface BookingRecord {
   id: string;
@@ -89,10 +90,16 @@ export const BookingModel = {
     userId: string,
     filters?: {
       status?: string;
+      cursor?: string | null;
       page?: number;
       limit?: number;
     },
-  ): Promise<{ bookings: BookingRecord[]; total: number }> {
+  ): Promise<{
+    bookings: BookingRecord[];
+    total: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
     return this.findByUser(userId, filters);
   },
 
@@ -100,59 +107,83 @@ export const BookingModel = {
     userId: string,
     filters?: {
       status?: string;
+      cursor?: string | null;
       page?: number;
       limit?: number;
     },
-  ): Promise<{ bookings: BookingRecord[]; total: number }> {
+  ): Promise<{
+    bookings: BookingRecord[];
+    total: number;
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> {
     const page = filters?.page || 1;
     const limit = filters?.limit || 10;
     const offset = (page - 1) * limit;
+    const cursorToken = filters?.cursor;
+    const hasCursor = cursorToken !== undefined && cursorToken !== null;
 
     let whereClause = "(mentee_id = $1 OR mentor_id = $1)";
     const baseParams: unknown[] = [userId];
-    let paramIndex = 2;
 
     if (filters?.status) {
-      whereClause += ` AND status = $${paramIndex}`;
+      whereClause += ` AND status = $${baseParams.length + 1}`;
       baseParams.push(filters.status);
-      paramIndex++;
     }
 
-    // Apply tenant filter on top of the existing WHERE clause with COUNT(*) OVER()
-    const { query: baseQuery, params: filteredParams } = withCurrentTenantFilter(
-      `SELECT *, COUNT(*) OVER() AS total_count FROM bookings WHERE ${whereClause}`,
+    const { query: countQuery, params: countParams } = withCurrentTenantFilter(
+      `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
       baseParams,
     );
-    // finalParamIndex is computed after the tenant filter adds its parameter,
-    // so LIMIT $${finalParamIndex} OFFSET $${finalParamIndex + 1} correctly
-    // references the limit and offset parameters appended at the end.
-    const finalParamIndex = filteredParams.length + 1;
 
-    const dataResult = await db.query(
-      `${baseQuery} ORDER BY scheduled_at DESC LIMIT $${finalParamIndex} OFFSET $${finalParamIndex + 1}`,
-      [...filteredParams, limit, offset],
-    );
-
-    let total = 0;
-    if (dataResult.rows.length > 0) {
-      total = Number(dataResult.rows[0].total_count) || 0;
-    } else if (offset > 0) {
-      const { query: countQuery, params: countParams } = withCurrentTenantFilter(
-        `SELECT COUNT(*) FROM bookings WHERE ${whereClause}`,
-        baseParams,
-      );
-      const countResult = await db.query(countQuery, countParams);
-      total = Number(countResult.rows[0]?.count) || 0;
+    const whereParams = [...baseParams];
+    let cursorClause = "";
+    if (hasCursor) {
+      const cursor = PaginationUtil.decodeCursor(cursorToken);
+      if (
+        !cursor ||
+        typeof cursor.id !== "string" ||
+        typeof cursor.created_at !== "string" ||
+        !Number.isFinite(Date.parse(cursor.created_at))
+      ) {
+        throw new Error("Invalid booking cursor");
+      }
+      cursorClause = ` AND (scheduled_at, id) < ($${whereParams.length + 1}, $${whereParams.length + 2})`;
+      whereParams.push(cursor.created_at, cursor.id);
     }
 
-    const bookings: BookingRecord[] = dataResult.rows.map((row: any) => {
-      const { total_count, ...record } = row;
-      return record as BookingRecord;
-    });
+    const { query: dataQuery, params: dataParams } = withCurrentTenantFilter(
+      `SELECT * FROM bookings WHERE ${whereClause}${cursorClause}`,
+      whereParams,
+    );
+    const limitParam = dataParams.length + 1;
+    const offsetClause = hasCursor ? "" : ` OFFSET $${limitParam + 1}`;
+    const dataValues = hasCursor
+      ? [...dataParams, limit + 1]
+      : [...dataParams, limit + 1, offset];
+    const [dataResult, countResult] = await Promise.all([
+      db.query(
+        `${dataQuery} ORDER BY scheduled_at DESC, id DESC LIMIT $${limitParam}${offsetClause}`,
+        dataValues,
+      ),
+      db.query(countQuery, countParams),
+    ]);
+
+    const hasMore = dataResult.rows.length > limit;
+    const bookings = dataResult.rows.slice(0, limit) as BookingRecord[];
+    const lastBooking = bookings[bookings.length - 1];
 
     return {
       bookings,
-      total,
+      nextCursor:
+        hasMore && lastBooking
+          ? PaginationUtil.encodeCursor({
+              id: lastBooking.id,
+              created_at: lastBooking.scheduled_at.toISOString(),
+            })
+          : null,
+      hasMore,
+      total: Number(countResult.rows[0]?.count) || 0,
     };
   },
 

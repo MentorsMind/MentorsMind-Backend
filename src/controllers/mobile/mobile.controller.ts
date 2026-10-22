@@ -16,7 +16,7 @@ const syncRequestSchema = z.object({
         id: z.string(),
         entity: z.string(),
         action: z.enum(["create", "update", "delete"]),
-        payload: z.record(z.any()).default({}),
+        payload: z.record(z.string(), z.any()).default({}),
         clientVersion: z.number().optional(),
         timestamp: z.string().optional(),
       }),
@@ -38,7 +38,7 @@ export const MobileController = {
         return;
       }
 
-      const payload = OfflineSyncService.createSyncPayload(
+      const payload = (OfflineSyncService as any).createSyncPayload(
         userId,
         "mobile-device",
         {
@@ -79,7 +79,7 @@ export const MobileController = {
     }
 
     const { deviceId, lastSyncedAt, pendingChanges } = parsed.data;
-    const payload = OfflineSyncService.createSyncPayload(userId, deviceId, {
+    const payload = (OfflineSyncService as any).createSyncPayload(userId, deviceId, {
       lastSyncedAt,
       pendingChanges,
     });
@@ -91,7 +91,7 @@ export const MobileController = {
       },
     };
 
-    const conflictResult = OfflineSyncService.resolveConflict(
+    const conflictResult = (OfflineSyncService as any).resolveConflict(
       pendingChanges[0]?.payload as Record<string, unknown> | null,
       serverSnapshot.reminders as Record<string, unknown>,
     );

@@ -2,7 +2,7 @@
 import config from '../config';
 import { NotificationDeliveryTrackingModel, DeliveryStatus } from '../models/notification-delivery-tracking.model';
 import { WebhookIdempotencyService } from './webhook-idempotency.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface SendGridEvent {
   event: string;

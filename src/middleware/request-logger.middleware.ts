@@ -1,6 +1,6 @@
-﻿import pinoHttp from "pino-http";
+import pinoHttp from "pino-http";
 import type { Response } from "express";
-import { Logger } from "../utils/logger.utils";
+import { logger } from "../utils/logger.utils";
 import { maskPII } from "../utils/pii-mask";
 
 /**
@@ -15,7 +15,7 @@ import { maskPII } from "../utils/pii-mask";
  *   2xx/3xx → info
  */
 export const requestLoggerMiddleware = pinoHttp({
-  logger,
+  logger: logger as any,
   // Attach requestId and userId to every log line. Try res.locals then fall back to req.
   genReqId: (req, res) =>
     (res as unknown as Response).locals?.requestId || (req as any).requestId,

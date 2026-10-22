@@ -1,13 +1,35 @@
-﻿import pool, { db } from "../config/database";
-import { CollaborationState, getDefaultCollaborationState } from "../types/collaboration.types";
+import pool, { db } from "../config/database";
+import { CollaborationState } from "../types/collaboration.types";
 import { PaginationUtil } from "../utils/pagination.utils";
-import { Logger } from "../utils/logger.utils";
+import { logger } from "../utils/logger.utils";
 import {
   TenantContext,
   withTenantFilter,
   withCurrentTenantFilter,
 } from "../utils/tenant-context.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
+
+/**
+ * Valid session status values.
+ * Exported so TypeScript can derive the status type via `typeof SESSION_STATUSES[number]`.
+ * Combines statuses from SessionRecord (pending, confirmed) and SessionModel (scheduled, active, paused, completed, cancelled, no_show).
+ */
+export const SESSION_STATUSES = [
+  'pending',
+  'confirmed',
+  'scheduled',
+  'active',
+  'paused',
+  'completed',
+  'cancelled',
+  'no_show',
+] as const;
+
+/**
+ * Type derived from SESSION_STATUSES for compile-time status validation.
+ */
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export interface Session {
   id: string;
@@ -28,7 +50,7 @@ export interface SessionRecord {
   description: string | null;
   scheduled_at: Date;
   duration_minutes: number;
-  status: "pending" | "confirmed" | "cancelled" | "completed";
+  status: SessionStatus;
   meeting_link: string | null;
   meeting_url: string | null;
   meeting_provider: string | null;
@@ -215,8 +237,17 @@ export const SessionModel = {
    */
   async updateStatus(
     id: string,
-    status: string,
+    status: SessionStatus,
   ): Promise<SessionRecord | null> {
+    const valid = SESSION_STATUSES as readonly string[];
+    if (!valid.includes(status)) {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'Invalid session status: ' + status + '. Allowed: ' + valid.join(', '),
+        field: 'status',
+        value: status,
+      });
+    }
+
     const { query, params } = withCurrentTenantFilter(
       `UPDATE sessions SET status = $1, updated_at = NOW() WHERE id = $2`,
       [status, id],

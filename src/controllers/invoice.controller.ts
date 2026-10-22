@@ -1,11 +1,12 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { InvoiceService } from "../services/invoice.service";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from "../utils/route-params.utils";
 
 export class InvoiceController {
   static async createInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const userId = req.user?.id;
+    const userId = req.user!.id;
     const { type, lineItems, currency, dueDate } = req.body;
     const invoice = await InvoiceService.createInvoice(
       userId,
@@ -29,7 +30,7 @@ export class InvoiceController {
   }
 
   static async listInvoices(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const userId = req.user?.id;
+    const userId = req.user!.id;
     const status = req.query.status as any;
     const invoices = await InvoiceService.listInvoices(userId, status);
     res.json({ success: true, data: invoices });
@@ -44,7 +45,7 @@ export class InvoiceController {
   }
 
   static async bulkExport(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const userId = req.user?.id;
+    const userId = req.user!.id;
     const fromParam = req.query.from;
     const toParam = req.query.to;
     const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
@@ -64,7 +65,7 @@ export class InvoiceController {
    * Triggers PDF generation on-demand if the invoice has no PDF yet.
    */
   static async downloadInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { invoiceId } = req.params;
+    const invoiceId = routeParam(req.params.invoiceId);
     const requestingUserId = req.user?.id;
     const userRole = req.user?.role;
 
@@ -110,7 +111,7 @@ export class InvoiceController {
    * and updates the invoice status to "sent".
    */
   static async sendInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const { invoiceId } = req.params;
+    const invoiceId = routeParam(req.params.invoiceId);
     const requestingUserId = req.user?.id;
     const userRole = req.user?.role;
 

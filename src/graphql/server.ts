@@ -145,6 +145,8 @@ export async function initializeGraphQL(app: Application): Promise<void> {
           res,
           tenantId,
           user: payload ? { userId: payload.sub, role: payload.role } : undefined,
+          // Keep loaders request-scoped so their caches cannot cross request or tenant boundaries.
+          // Their batch functions use shared, module-level database and Redis clients.
           loaders: createLoaders(),
         }));
       },

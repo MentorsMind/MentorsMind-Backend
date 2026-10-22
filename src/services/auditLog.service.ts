@@ -18,6 +18,7 @@ import { Request } from "express";
 import { anonymizeIp } from "../utils/sanitization.utils";
 import { logger } from "../utils/logger.utils";
 import { TenantContext } from "../utils/tenant-context.utils";
+import { auditLogQueueRejectionsTotal } from "../config/metrics";
 
 // ── Hash configuration ──────────────────────────────────────────────────────
 
@@ -154,7 +155,7 @@ export const AuditLogService = {
    * Enqueue audit log entry to BullMQ for async processing
    * Tracks queue rejections (capacity, Redis unavailable, etc.)
    */
-  private static async enqueueToQueue(entry: AuditLogEntry): Promise<void> {
+  async enqueueToQueue(entry: AuditLogEntry): Promise<void> {
     // This assumes there's a BullMQ queue configured for audit logs
     // In practice, you would import the queue and call .add()
     try {

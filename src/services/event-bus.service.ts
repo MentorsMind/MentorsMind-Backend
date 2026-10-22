@@ -1,5 +1,5 @@
 ﻿import { redis } from "../config/redis";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { DomainEvent } from "../events";
 
 export interface EventHandler<T = any> {

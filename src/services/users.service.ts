@@ -72,10 +72,13 @@ export interface IUserMapper {
 }
 
 export class UserReader implements IUserReader {
-  constructor(private readonly db: typeof db, private readonly mapper: IUserMapper) {}
+  constructor(
+    private readonly dbClient: typeof db,
+    private readonly mapper: IUserMapper,
+  ) {}
 
   async findById(id: string): Promise<UserRecord | null> {
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PRIVATE_COLUMNS} FROM users WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -83,7 +86,7 @@ export class UserReader implements IUserReader {
   }
 
   async findPublicById(id: string): Promise<PublicUserRecord | null> {
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -92,7 +95,7 @@ export class UserReader implements IUserReader {
 
   async findPublicByIds(ids: string[]): Promise<PublicUserRecord[]> {
     if (ids.length === 0) return [];
-    const { rows } = await this.db.query(
+    const { rows } = await this.dbClient.query(
       `SELECT ${PUBLIC_COLUMNS} FROM users WHERE id = ANY($1) AND is_active = true`,
       [ids],
     );
@@ -114,7 +117,7 @@ export class UserReader implements IUserReader {
 
 export class UserWriter implements IUserWriter {
   constructor(
-    private readonly pool: any,
+    private readonly poolClient: typeof pool,
     private readonly encryption: typeof EncryptionUtil,
     private readonly mapper: IUserMapper,
     private readonly reader: IUserReader,
@@ -182,7 +185,7 @@ export class UserWriter implements IUserWriter {
     fields.push(`updated_at = NOW()`);
     values.push(id);
 
-    const { rows } = await this.pool.query<any>(
+    const { rows } = await this.poolClient.query<any>(
       `UPDATE users SET ${fields.join(", ")} WHERE id = $${idx} AND is_active = true
        RETURNING ${PRIVATE_COLUMNS}`,
       values,
@@ -194,7 +197,7 @@ export class UserWriter implements IUserWriter {
     id: string,
     avatarUrl: string,
   ): Promise<UserRecord | null> {
-    const { rows } = await this.pool.query<any>(
+    const { rows } = await this.poolClient.query<any>(
       `UPDATE users SET avatar_url = $1, updated_at = NOW()
        WHERE id = $2 AND is_active = true
        RETURNING ${PRIVATE_COLUMNS}`,
@@ -204,7 +207,7 @@ export class UserWriter implements IUserWriter {
   }
 
   async deactivate(id: string): Promise<boolean> {
-    const { rowCount } = await this.pool.query(
+    const { rowCount } = await this.poolClient.query(
       `UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1 AND is_active = true`,
       [id],
     );
@@ -242,7 +245,12 @@ const mapper = new UserMapper(EncryptionUtil);
 const reader = new UserReader(db, mapper);
 const writer = new UserWriter(pool, EncryptionUtil, mapper, reader);
 
-export const UsersService = {
-  ...reader,
-  ...writer,
+export const UsersService: IUserReader & IUserWriter = {
+  findById: (id) => reader.findById(id),
+  findPublicById: (id) => reader.findPublicById(id),
+  findPublicByIds: (ids) => reader.findPublicByIds(ids),
+  getNotificationPreferences: (id) => reader.getNotificationPreferences(id),
+  update: (id, payload) => writer.update(id, payload),
+  updateAvatar: (id, avatarUrl) => writer.updateAvatar(id, avatarUrl),
+  deactivate: (id) => writer.deactivate(id),
 };

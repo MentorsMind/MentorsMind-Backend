@@ -33,7 +33,7 @@ export async function requestAccountDeletion(req: AuthenticatedRequest, res: Res
 export async function getDeletionStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const { requestId } = req.params;
-    const row = await accountDeletionService.getDeletionRequestById(requestId);
+    const row = await (accountDeletionService as any).getDeletionRequestById(requestId);
     if (!row) {
       return res.status(404).json({ error: 'Deletion request not found' });
     }

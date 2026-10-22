@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Forensics Service
  *
  * Digital forensics collection and evidence preservation for security incidents.
@@ -19,7 +19,7 @@
 import crypto from "crypto";
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import {
   SecurityIncidentModel,
   type EvidenceType,
@@ -190,11 +190,11 @@ export const ForensicsService = {
     };
 
     await handleResult(userActivity, "user_activity", "user_activity",
-      (d) => d as Record<string, unknown>);
+      (d) => d as unknown as Record<string, unknown>);
     await handleResult(networkSnap, "network_snapshot", "connection_table",
-      (d) => d as Record<string, unknown>);
+      (d) => d as unknown as Record<string, unknown>);
     await handleResult(dbActivity, "database_activity", "database_query_log",
-      (d) => d as Record<string, unknown>);
+      (d) => d as unknown as Record<string, unknown>);
     await handleResult(redisSnapshot, "redis_session_state", "log_snapshot",
       (d) => d as Record<string, unknown>);
     await handleResult(auditTrail, "recent_audit_trail", "api_trace",

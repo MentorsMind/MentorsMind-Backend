@@ -32,12 +32,12 @@ export interface RateLimitConfig {
   webhook: RateLimitProfile;
 }
 
-import env from "./env";
+import { env } from "./env";
 
 const rateLimitsConfig: RateLimitConfig = {
   general: {
-    windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS, 10),
-    max: parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10),
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    max: env.RATE_LIMIT_MAX_REQUESTS,
     message: 'Too many requests from this IP, please try again later.',
     scope: 'general',
   },

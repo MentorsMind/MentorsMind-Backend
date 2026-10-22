@@ -2,7 +2,7 @@
 import { SessionRecordingService } from '../services/session-recording.service';
 import recordingTranscriptionService from '../services/recording-transcription.service';
 import recordingBookmarkService from '../services/recording-bookmark.service';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { AuditLogService } from '../services/auditLog.service';
 import RecordingConsentService from '../services/recording-consent.service';

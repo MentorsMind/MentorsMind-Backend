@@ -18,7 +18,7 @@
 
 import * as StellarSdk from "@stellar/stellar-sdk";
 import { env } from "../config/env";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { hsmService, type HsmKeyMetadata } from "./hsm.service";
 import hsmConfig from "../config/hsm.config";
 

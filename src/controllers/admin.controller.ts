@@ -14,6 +14,7 @@ import { AuditLogArchivalJob } from "../jobs/auditLog.job";
 import { accountDeletionService } from "../services/accountDeletion.service";
 import { WebhookService } from "../services/webhook.service";
 import { PaymentReconciliationService } from "../services/payment-reconciliation.service";
+import { routeParam } from "../utils/route-params.utils";
 
 export const AdminController = {
   /** GET /admin/stats */
@@ -294,7 +295,7 @@ export const AdminController = {
   async reviewPaymentReconciliation(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { status, notes } = req.body ?? {};
     const updated = await PaymentReconciliationService.reviewDiscrepancy(
-      req.params.id,
+      routeParam(req.params.id),
       req.user!.id,
       status,
       notes,
@@ -379,7 +380,7 @@ export const AdminController = {
     _req: AuthenticatedRequest,
     res: Response,
   ): Promise<void> {
-    const result = await keyRotationJob.run();
+    const result = await (keyRotationJob as any).run();
     ResponseUtil.success(res, result, "Encryption key rotation job completed");
   },
 

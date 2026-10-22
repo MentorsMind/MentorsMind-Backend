@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { VestingService } from '../services/vesting.service';
 import { logger } from '../utils/logger.utils';
+import { routeParam } from '../utils/route-params.utils';
 import {
   CreateVestingScheduleRequest,
   VestingType,
@@ -142,7 +143,7 @@ export async function getVestingScheduleById(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const scheduleId = parseInt(req.params.id);
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -186,7 +187,7 @@ export async function revokeVestingSchedule(
 
     const userIdStr = Array.isArray(userId) ? userId[0] : userId;
 
-    const scheduleId = parseInt(req.params.id);
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -241,7 +242,7 @@ export async function getMyVestingSchedules(
     const schedules = await VestingService.getSchedulesByUserId(userId);
 
     // Also get schedules by wallet address if available
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
     let walletSchedules: any[] = [];
 
     if (walletAddress) {
@@ -283,7 +284,7 @@ export async function claimVesting(
 ): Promise<void> {
   try {
     const userId = req.user?.id;
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
 
     if (!userId || !walletAddress) {
       res.status(401).json({
@@ -294,7 +295,7 @@ export async function claimVesting(
 
     const walletAddressStr = Array.isArray(walletAddress) ? walletAddress[0] : walletAddress;
 
-    const scheduleId = parseInt(req.params.id);
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -358,7 +359,7 @@ export async function getVestingClaimHistory(
 
     const userIdStr = Array.isArray(userId) ? userId[0] : userId;
 
-    const scheduleId = parseInt(req.params.id);
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -374,7 +375,7 @@ export async function getVestingClaimHistory(
     }
 
     // Check if user is the beneficiary or has admin access
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
     if (

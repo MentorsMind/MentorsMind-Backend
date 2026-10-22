@@ -1,8 +1,8 @@
-﻿import { EventStoreService } from './event-store.service';
+import { EventStoreService } from './event-store.service';
 import { ProjectionService } from './projection.service';
 import { cache } from '../config/cache';
 import { db } from '../config/database';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { DomainEvent } from '../models';
 
 export interface ReplayProgress {
@@ -183,7 +183,7 @@ export class EventReplayService {
         startedAt,
       };
 
-      await cache.set(progressKey, JSON.stringify(progress), 24 * 3600);
+      await (cache as any).set(progressKey, JSON.stringify(progress), 24 * 3600);
 
       // Get all unique aggregate IDs for this type
       const aggregateIdsResult = await db.query(
@@ -224,7 +224,7 @@ export class EventReplayService {
             estimatedTotalSeconds - elapsedSeconds,
           );
 
-          await cache.set(progressKey, JSON.stringify(progress), 24 * 3600);
+          await (cache as any).set(progressKey, JSON.stringify(progress), 24 * 3600);
 
           logger.info('Replay progress update', {
             aggregateType,
@@ -239,7 +239,7 @@ export class EventReplayService {
 
       // Mark as completed
       progress.completedAt = new Date().toISOString();
-      await cache.set(progressKey, JSON.stringify(progress), 24 * 3600);
+      await (cache as any).set(progressKey, JSON.stringify(progress), 24 * 3600);
 
       logger.info('Replay for aggregate type completed', {
         aggregateType,
@@ -265,7 +265,7 @@ export class EventReplayService {
   static async getReplayProgress(aggregateType: string): Promise<ReplayProgress | null> {
     try {
       const progressKey = `replay:${aggregateType}:progress`;
-      const cached = await cache.get(progressKey);
+      const cached = await (cache as any).get(progressKey);
       if (cached) {
         return JSON.parse(cached as string) as ReplayProgress;
       }
@@ -296,7 +296,7 @@ export class EventReplayService {
    */
   static async clearReplayProgress(aggregateType: string): Promise<void> {
     const progressKey = `replay:${aggregateType}:progress`;
-    await cache.delete(progressKey);
+    await (cache as any).delete(progressKey);
     logger.info('Cleared replay progress', { aggregateType });
   }
 }

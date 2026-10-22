@@ -161,7 +161,7 @@ export class CodeCollaborationService {
     if (redoStack.length === 0) return null;
 
     const opToRedo = redoStack.pop()!;
-    let newOp = { ...opToRedo, userId, id: undefined, baseVersion: opToRedo.baseVersion }; // Clone
+    let newOp: OTOperation = { ...opToRedo, userId, id: undefined, baseVersion: opToRedo.baseVersion }; // Clone
 
     const doc = await this.getDocument(sessionId);
     const revs = await this.getRevisions(sessionId);

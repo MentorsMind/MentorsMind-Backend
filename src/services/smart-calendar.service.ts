@@ -1,5 +1,5 @@
 ﻿import { google } from "googleapis";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface CalendarProvider {
   type: "google" | "outlook" | "apple";
