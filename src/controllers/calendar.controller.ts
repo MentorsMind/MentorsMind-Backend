@@ -3,7 +3,7 @@ import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { CalendarService } from "../services/calendar.service";
 import { env } from "../config/env";
 import { createError } from "../middleware/errorHandler";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 export const CalendarController = {
   // ---- iCal ----------------------------------------------------------------

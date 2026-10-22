@@ -6,7 +6,7 @@ import { TokenService } from '../services/token.service';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 import { OAuthService } from '../services/oauth.service';
 import oauthConfig from '../config/oauth.config';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import pool from '../config/database';
 
 export const OAuthController = {

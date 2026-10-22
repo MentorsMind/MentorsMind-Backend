@@ -81,7 +81,7 @@ export const ImpersonationService = {
     );
 
     if (userRows.length === 0) {
-      throw new Object.assign(new Error('Target user not found'), { status: 404 });
+      throw Object.assign(new Error('Target user not found'), { status: 404 });
     }
 
     const target = userRows[0];

@@ -9,7 +9,7 @@
 
 import crypto from "crypto";
 import type { Pool } from "pg";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import shardingConfig, { type ShardDefinition } from "../config/sharding.config";
 
 export interface ShardHealth {

@@ -1,7 +1,7 @@
 ﻿import { Request, Response, NextFunction } from 'express';
 import pool from '../config/database';
 import config from '../config';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 /**
  * Middleware to monitor database pool utilization and apply a circuit breaker

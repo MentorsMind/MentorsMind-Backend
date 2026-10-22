@@ -10,7 +10,7 @@
  * subgraph author fixes the whole set in one pass.
  */
 
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import {
   extractEntityKeys,
   extractExtendedTypes,

@@ -10,6 +10,7 @@ import {
 import { CodeCollaborationService } from './code-collaboration.service';
 import { OTOperation } from '../utils/operational-transform.utils';
 import { CacheService } from './cache.service';
+import { logger } from '../utils/logger.utils';
 
 interface JoinPayload {
   sessionId: string;
@@ -55,7 +56,8 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
 
       try {
         const collaborationState = await CollaborationService.getCollaborationSession(payload.sessionId);
-        socket.emit('collaborationState', collaborationState);
+        // Defensive guard (#1300): old rows may still hold null; never emit null.
+        socket.emit('collaborationState', collaborationState ?? getDefaultCollaborationState());
       } catch (error) {
         socket.emit('error', error instanceof Error ? error.message : 'Collaboration state unavailable');
       }

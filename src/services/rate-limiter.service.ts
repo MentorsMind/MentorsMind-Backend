@@ -87,8 +87,9 @@ async function slidingWindowRedis(
 
   const results = await pipeline.exec();
   const current: number = results![2][1] as number;
-  const oldestScore: number = results![3][1]?.[1]
-    ? parseInt(results![3][1][1], 10)
+  const oldestReply = results![3][1] as any;
+  const oldestScore: number = oldestReply?.[1]
+    ? parseInt(oldestReply[1], 10)
     : now;
 
   const allowed = current <= max;

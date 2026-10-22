@@ -1,6 +1,6 @@
 ﻿import { Client } from '@elastic/elasticsearch';
 import config from '../config';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 interface SearchQuery {
   query: string;

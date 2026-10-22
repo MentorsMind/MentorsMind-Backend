@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Shard routing for inbound requests (issue #865).
  *
  * Resolves the shard once per request from the authenticated principal, so
@@ -7,7 +7,7 @@
  */
 
 import type { NextFunction, Request, Response } from "express";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import shardingConfig from "../config/sharding.config";
 import ShardManagerService from "../services/shard-manager.service";
 
@@ -16,9 +16,11 @@ export interface ShardContext {
   shardId: string;
 }
 
-declare module "express-serve-static-core" {
-  interface Request {
-    shard?: ShardContext;
+declare global {
+  namespace Express {
+    interface Request {
+      shard?: ShardContext;
+    }
   }
 }
 

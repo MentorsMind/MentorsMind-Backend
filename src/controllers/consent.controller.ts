@@ -26,28 +26,40 @@ import { anonymizeIp } from "../utils/sanitization.utils";
 
 const consentFieldsSchema = z.object({
   analytics_consent: z.boolean({
-    required_error: "analytics_consent is required",
-    invalid_type_error: "analytics_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "analytics_consent is required"
+        : "analytics_consent must be a boolean",
   }),
   marketing_consent: z.boolean({
-    required_error: "marketing_consent is required",
-    invalid_type_error: "marketing_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "marketing_consent is required"
+        : "marketing_consent must be a boolean",
   }),
   functional_consent: z.boolean({
-    required_error: "functional_consent is required",
-    invalid_type_error: "functional_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "functional_consent is required"
+        : "functional_consent must be a boolean",
   }),
   session_recording_consent: z.boolean({
-    required_error: "session_recording_consent is required",
-    invalid_type_error: "session_recording_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "session_recording_consent is required"
+        : "session_recording_consent must be a boolean",
   }),
   ai_analysis_consent: z.boolean({
-    required_error: "ai_analysis_consent is required",
-    invalid_type_error: "ai_analysis_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "ai_analysis_consent is required"
+        : "ai_analysis_consent must be a boolean",
   }),
   data_sharing_consent: z.boolean({
-    required_error: "data_sharing_consent is required",
-    invalid_type_error: "data_sharing_consent must be a boolean",
+    error: (issue) =>
+      issue.input === undefined
+        ? "data_sharing_consent is required"
+        : "data_sharing_consent must be a boolean",
   }),
   consent_version: z
     .string()
@@ -127,7 +139,7 @@ export const ConsentController = {
         res,
         "Validation failed",
         400,
-        parsed.error.errors.map((e) => e.message).join("; "),
+        parsed.error.issues.map((e) => e.message).join("; "),
       );
       return;
     }
@@ -253,7 +265,7 @@ export const ConsentController = {
         res,
         "Validation failed",
         400,
-        parsed.error.errors.map((e) => e.message).join("; "),
+        parsed.error.issues.map((e) => e.message).join("; "),
       );
       return;
     }

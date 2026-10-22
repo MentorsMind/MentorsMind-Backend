@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { GamificationService } from '../services/gamification.service';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
+import { routeParam } from '../utils/route-params.utils';
 
 export class GamificationController {
   /**
@@ -26,7 +27,7 @@ export class GamificationController {
    */
   static async getUserProgress(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { userId } = req.params;
+      const userId = routeParam(req.params.userId);
       const progress = await GamificationService.getUserProgress(userId);
       res.json({ status: 'success', data: progress });
     } catch (err) {
@@ -108,7 +109,7 @@ export class GamificationController {
   static async claimChallengeReward(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user?.id || req.user?.userId;
-      const challengeId = req.params.id;
+      const challengeId = routeParam(req.params.id);
 
       if (!userId) {
         res.status(401).json({ status: 'error', message: 'Unauthorized' });

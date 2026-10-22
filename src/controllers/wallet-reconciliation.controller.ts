@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { WalletReconciliationService } from "../services/wallet-reconciliation.service";
+import { routeParam } from "../utils/route-params.utils";
 
 export class WalletReconciliationController {
   /**
@@ -9,7 +10,7 @@ export class WalletReconciliationController {
    * plus a handful of DB operations).
    */
   static async syncWallet(req: Request, res: Response): Promise<void> {
-    const { id } = req.params;
+    const id = routeParam(req.params.id);
     if (!id) {
       res.status(400).json({ success: false, message: "Wallet id is required" });
       return;

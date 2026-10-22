@@ -53,8 +53,8 @@ const config = {
   },
 
   rateLimit: {
-    windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS, 10),
-    maxRequests: parseInt(env.RATE_LIMIT_MAX_REQUESTS, 10),
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.RATE_LIMIT_MAX_REQUESTS,
   },
 
   email: {

@@ -1,6 +1,6 @@
 ﻿import { NotificationTemplatesModel, NotificationTemplateRecord } from '../models/notification-templates.model';
 import { createHash } from 'crypto';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { EmailCDNService } from './email-cdn.service';
 
 export interface RenderedEmail {

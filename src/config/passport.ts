@@ -4,7 +4,7 @@ import { Strategy as GitHubStrategy, Profile as GitHubProfile } from 'passport-g
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
 import pool from './database';
 import oauthConfig from './oauth.config';
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 import { EncryptionUtil } from '../utils/encryption.utils';
 const fetch = require('node-fetch');
 

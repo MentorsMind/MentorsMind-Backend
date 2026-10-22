@@ -179,7 +179,7 @@ export const DisputeResolutionService = {
       ? dispute.respondent_id
       : dispute.filed_by_id;
 
-    SocketService.emitToUser(notifyUserId, "dispute:evidence_added", {
+    SocketService.emitToUser(notifyUserId!, "dispute:evidence_added", {
       disputeId: params.disputeId,
       evidenceId: evidence.id,
     });
@@ -313,7 +313,9 @@ export const DisputeResolutionService = {
       [partyIds],
     );
 
-    const userMap = new Map(users.map((u: any) => [u.id, `${u.first_name} ${u.last_name}`]));
+    const userMap = new Map<string, string>(
+      users.map((u: any): [string, string] => [u.id, `${u.first_name} ${u.last_name}`]),
+    );
 
     return {
       ...dispute,

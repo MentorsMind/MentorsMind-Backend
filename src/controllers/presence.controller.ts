@@ -1,9 +1,10 @@
-﻿import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { PresenceService } from "../services/presence.service";
 import { redis } from "../config/redis"; // your existing ioredis instance
+import { routeParam } from "../utils/route-params.utils";
 
-const presenceService = new PresenceService(redis);
+const presenceService = new PresenceService(redis as any);
 
 // ─── Validation schemas ───────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export async function getUserOnlineStatus(
 ): Promise<void> {
   try {
     const requesterId = req.user!.userId; // set by JWT auth middleware
-    const targetId = req.params.id;
+    const targetId = routeParam(req.params.id);
 
     const allowed = await presenceService.canViewStatus(requesterId, targetId);
     if (!allowed) {

@@ -1,5 +1,5 @@
-﻿import { Pool } from "pg";
-import { Logger } from "../utils/logger.utils";
+import { Pool } from "pg";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface Assessment {
   id: string;
@@ -64,7 +64,7 @@ export class SkillAssessmentService {
             question.question,
             question.type,
             question.difficulty,
-            JSON.stringify(question.options || []),
+            JSON.stringify((question as any).options || []),
           ],
         );
       }

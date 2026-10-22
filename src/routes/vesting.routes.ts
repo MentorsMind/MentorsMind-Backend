@@ -9,8 +9,8 @@ import {
   getVestingClaimHistory,
   getVestingSchedulesByAddress,
 } from '../controllers/vesting.controller';
-import { authenticateJWT } from '../middleware/auth.middleware';
-import { requireAdmin } from '../middleware/role.middleware';
+import { authenticate } from '../middleware/auth.middleware';
+import { requireAdmin } from '../middleware/admin-auth.middleware';
 
 const router = Router();
 
@@ -84,7 +84,7 @@ const router = Router();
  */
 router.post(
   '/admin/vesting/schedules',
-  authenticateJWT,
+  authenticate,
   requireAdmin,
   createVestingSchedule,
 );
@@ -129,7 +129,7 @@ router.post(
  */
 router.get(
   '/admin/vesting/schedules',
-  authenticateJWT,
+  authenticate,
   requireAdmin,
   getAllVestingSchedules,
 );
@@ -159,7 +159,7 @@ router.get(
  */
 router.get(
   '/admin/vesting/schedules/:id',
-  authenticateJWT,
+  authenticate,
   requireAdmin,
   getVestingScheduleById,
 );
@@ -198,7 +198,7 @@ router.get(
  */
 router.delete(
   '/admin/vesting/schedules/:id',
-  authenticateJWT,
+  authenticate,
   requireAdmin,
   revokeVestingSchedule,
 );
@@ -219,7 +219,7 @@ router.delete(
  */
 router.get(
   '/vesting/my-schedules',
-  authenticateJWT,
+  authenticate,
   getMyVestingSchedules,
 );
 
@@ -252,7 +252,7 @@ router.get(
  */
 router.post(
   '/vesting/schedules/:id/claim',
-  authenticateJWT,
+  authenticate,
   claimVesting,
 );
 
@@ -283,7 +283,7 @@ router.post(
  */
 router.get(
   '/vesting/schedules/:id/claims',
-  authenticateJWT,
+  authenticate,
   getVestingClaimHistory,
 );
 

@@ -9,6 +9,7 @@ import { StellarAccountService } from "../../../src/services/stellarAccount.serv
 import { WalletModel } from "../../../src/models/wallet.model";
 import { EncryptionUtil } from "../../../src/utils/encryption.utils";
 import pool from "../../../src/config/database";
+import { getPlatformKeypair } from "../../../src/config/stellar";
 
 jest.mock("../../../src/config/stellar", () => ({
   server: { loadAccount: jest.fn(), submitTransaction: jest.fn() },
@@ -41,14 +42,33 @@ jest.mock("../../../src/services/socket.service", () => ({
   SocketService: { emitToUser: jest.fn() },
 }));
 
+jest.mock("../../../src/middleware/tracing.middleware", () => ({
+  traceStore: { getStore: jest.fn() },
+}));
+
+jest.mock("../../../src/middleware/errorHandler", () => ({
+  createError: (code: string, statusCode: number, details?: object) =>
+    Object.assign(new Error(code), {
+      code,
+      statusCode,
+      isOperational: true,
+      details,
+    }),
+}));
+
 const poolMock = (pool as unknown as { query: jest.Mock }).query as jest.Mock;
 const walletCreateMock = WalletModel.create as jest.Mock;
 const encryptMock = EncryptionUtil.encrypt as jest.Mock;
+const platformKeypairMock = getPlatformKeypair as jest.Mock;
 
 describe("StellarAccountService.createAndFundWallet", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     poolMock.mockResolvedValue({ rows: [] });
+    platformKeypairMock.mockReturnValue({
+      publicKey: () => "GPLATFORM",
+      sign: jest.fn(),
+    });
     encryptMock.mockResolvedValue("enc_secret_xyz");
     walletCreateMock.mockResolvedValue({
       user_id: "user-1",

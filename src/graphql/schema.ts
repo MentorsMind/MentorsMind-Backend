@@ -7,6 +7,7 @@ const typeDefs = gql`
     COMPLETED
     CANCELLED
     RESCHEDULED
+    NO_SHOW
   }
 
   enum PaymentStatus {
@@ -42,6 +43,8 @@ const typeDefs = gql`
     minRate: Float
     maxRate: Float
     isAvailable: Boolean
+    sortBy: MentorSortBy
+    sortOrder: SortOrder
   }
 
   input PaginationInput {
@@ -64,9 +67,10 @@ const typeDefs = gql`
     booking(id: ID!): Booking
     bookings(
       status: BookingStatus
+      """Opaque cursor returned by the previous bookings page."""
       cursor: String
       limit: Int = 10
-    ): BookingListResult
+    ): BookingConnection!
 
     payment(id: ID!): Payment
     payments(
@@ -155,6 +159,13 @@ const typeDefs = gql`
     total: Int!
     nextCursor: String
     hasMore: Boolean!
+  }
+
+  type BookingConnection {
+    bookings: [Booking!]!
+    nextCursor: String
+    hasMore: Boolean!
+    total: Int!
   }
 
   type Payment {

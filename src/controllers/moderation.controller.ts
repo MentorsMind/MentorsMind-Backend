@@ -1,4 +1,4 @@
-﻿import { Response } from "express";
+import { Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ModerationService } from "../services/moderation.service";
 import {
@@ -7,6 +7,7 @@ import {
 } from "../services/ai-moderation.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { AuditLoggerService } from "../services/audit-logger.service";
+import { routeParam } from "../utils/route-params.utils";
 import { LogLevel, AuditAction } from "../utils/log-formatter.utils";
 
 export const ModerationController = {
@@ -15,7 +16,7 @@ export const ModerationController = {
    * Flag a review for moderation
    */
   async flagReview(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const reviewId = req.params.id;
+    const reviewId = routeParam(req.params.id);
     const { reason } = req.body;
     const userId = req.user?.id;
 
@@ -73,7 +74,7 @@ export const ModerationController = {
     req: AuthenticatedRequest,
     res: Response,
   ): Promise<void> {
-    const flagId = req.params.id;
+    const flagId = routeParam(req.params.id);
     const { notes } = req.body;
     const reviewerId = req.user?.id;
 
@@ -110,7 +111,7 @@ export const ModerationController = {
    * Reject flagged content
    */
   async rejectContent(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const flagId = req.params.id;
+    const flagId = routeParam(req.params.id);
     const { notes, suspendHours } = req.body;
     const reviewerId = req.user?.id;
 
@@ -148,7 +149,7 @@ export const ModerationController = {
    * Escalate flag to senior admin
    */
   async escalateFlag(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const flagId = req.params.id;
+    const flagId = routeParam(req.params.id);
     const { notes } = req.body;
     const reviewerId = req.user?.id;
 
@@ -185,7 +186,7 @@ export const ModerationController = {
    * Delete a flag (usually after resolution)
    */
   async deleteFlag(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const flagId = req.params.id;
+    const flagId = routeParam(req.params.id);
     const reviewerId = req.user?.id;
 
     if (!reviewerId) {
@@ -301,7 +302,7 @@ export const ModerationController = {
    * Submit an appeal for a rejected flag
    */
   async submitAppeal(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const flagId = req.params.id;
+    const flagId = routeParam(req.params.id);
     const { reason } = req.body;
     const userId = req.user?.id;
 
@@ -367,7 +368,7 @@ export const ModerationController = {
    * Resolve an appeal
    */
   async resolveAppeal(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const appealId = req.params.id;
+    const appealId = routeParam(req.params.id);
     const { status, notes } = req.body;
     const adminId = req.user?.id;
 

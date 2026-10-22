@@ -5,10 +5,10 @@
  */
 
 import { Queue } from 'bullmq';
-import { redisConfig } from '../config/redis.config';
+import { redisConnection } from './queue.config';
 
 export const searchCacheWarmQueue = new Queue('searchCacheWarm', {
-  connection: redisConfig.connection,
+  connection: redisConnection,
   defaultJobOptions: {
     removeOnComplete: 10,
     removeOnFail: 5,

@@ -34,6 +34,11 @@ const mockDbQuery = jest.fn().mockResolvedValue({ rows: [], rowCount: 0 });
 const mockPoolQuery = jest.fn().mockResolvedValue({ rows: [], rowCount: 0 });
 
 jest.mock('../../config/database', () => ({
+  // `__esModule` makes the mock behave like the real module: `config/database`
+  // has a `default` export, so `import pool from` is emitted as
+  // `__importDefault(require(...)).default`. Without the flag the interop helper
+  // wraps the whole mock object and `pool.query` is undefined.
+  __esModule: true,
   db: { query: (...args: any[]) => mockDbQuery(...args) },
   pool: { query: (...args: any[]) => mockPoolQuery(...args) },
   default: { query: (...args: any[]) => mockPoolQuery(...args) },
@@ -520,6 +525,11 @@ describe('TransactionModel — tenant isolation', () => {
   });
 
   it('count is tenant-scoped', async () => {
+    // `count()` parses rows[0].count, so this query needs a result row.
+    mockPoolQuery.mockResolvedValueOnce({
+      rows: [{ count: '0' }],
+      rowCount: 1,
+    });
     await TenantContext.run(TENANT_A, () => TransactionModel.count());
     expect(lastSql()).toContain('tenant_id');
   });

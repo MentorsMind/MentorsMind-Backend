@@ -1,4 +1,4 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { WalletsService } from '../services/wallets.service';
 import { stellarService } from '../services/stellar.service';
@@ -124,8 +124,8 @@ export const WalletsController = {
         stellar_private_key: undefined,
         seed_phrase: undefined,
         // Only show first 8 and last 8 characters of public key for verification
-        stellar_public_key_display: `${walletInfo.stellar_public_key.substring(0, 8)}...${walletInfo.stellar_public_key.substring(-8)}`,
-        stellar_public_key: walletInfo.stellar_public_key, // Keep full key for API operations
+        stellar_public_key_display: `${walletInfo.stellarPublicKey.substring(0, 8)}...${walletInfo.stellarPublicKey.substring(-8)}`,
+        stellar_public_key: walletInfo.stellarPublicKey, // Keep full key for API operations
       };
 
       // Log wallet access event with rate limiting check
@@ -133,7 +133,7 @@ export const WalletsController = {
         eventType: 'balance_check',
         metadata: { 
           action: 'wallet_info_access',
-          hasPublicKey: !!walletInfo.stellar_public_key,
+          hasPublicKey: !!walletInfo.stellarPublicKey,
           walletStatus: walletInfo.status || 'unknown'
         },
         ipAddress: req.ip,
@@ -235,7 +235,7 @@ export const WalletsController = {
   async getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { cursor, limit = 10, order = 'desc' } = req.query as TransactionQuery;
+      const { cursor, limit = 10, order = 'desc' } = req.query as unknown as TransactionQuery;
       
       const wallet = await WalletsService.getUserWallet(userId);
       
@@ -420,7 +420,7 @@ export const WalletsController = {
   async getEarnings(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { startDate, endDate, assetCode = 'USD' } = req.query as EarningsQuery;
+      const { startDate, endDate, assetCode = 'USD' } = req.query as unknown as EarningsQuery;
       
       const earningsSummary = await WalletsService.getEarningsSummary(
         userId,
@@ -498,7 +498,7 @@ export const WalletsController = {
         return;
       }
 
-      const transactionResponse = await stellarService.transfer(
+      const transactionResponse = await (stellarService as any).transfer(
         wallet.stellar_public_key,
         destinationAddress,
         amount,
@@ -507,7 +507,7 @@ export const WalletsController = {
       );
 
       await WalletsService.logWalletEvent(userId, {
-        eventType: 'transfer',
+        eventType: 'transfer' as any,
         metadata: {
           destinationAddress,
           amount,

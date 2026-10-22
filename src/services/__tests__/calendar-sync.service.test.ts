@@ -16,6 +16,12 @@ import {
   stopAllSyncs,
 } from '../../services/calendar-sync.service';
 
+jest.mock("../../config/database", () => ({
+  db: {
+    query: jest.fn().mockResolvedValue({ rows: [{ provider: "google" }] }),
+  },
+}));
+
 // Use fake timers so setInterval/clearInterval are fully under our control.
 beforeAll(() => {
   jest.useFakeTimers();

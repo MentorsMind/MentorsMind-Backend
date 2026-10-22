@@ -2,6 +2,7 @@ import { StellarAccountService } from "../stellarAccount.service";
 import * as stellar from "../../config/stellar";
 import { ErrorCode } from "../../errors/error-codes";
 import type { AppError } from "../../middleware/errorHandler";
+import { Keypair } from "@stellar/stellar-sdk";
 
 // ── module mocks ──────────────────────────────────────────────────────────────
 
@@ -29,11 +30,39 @@ jest.mock("../../utils/logger.utils", () => ({
 }));
 
 jest.mock("../../config/database", () => ({
+  __esModule: true,
   default: { query: jest.fn() },
 }));
 
 jest.mock("../../services/socket.service", () => ({
   SocketService: { emitToUser: jest.fn() },
+}));
+
+jest.mock("@stellar/stellar-sdk", () => {
+  const actual = jest.requireActual("@stellar/stellar-sdk");
+  return {
+    ...actual,
+    TransactionBuilder: jest.fn().mockImplementation(() => ({
+      addOperation: jest.fn().mockReturnThis(),
+      setTimeout: jest.fn().mockReturnThis(),
+      build: jest.fn().mockReturnValue({ sign: jest.fn() }),
+    })),
+    Operation: { createAccount: jest.fn() },
+  };
+});
+
+jest.mock("../../middleware/tracing.middleware", () => ({
+  traceStore: { getStore: jest.fn() },
+}));
+
+jest.mock("../../middleware/errorHandler", () => ({
+  createError: (code: string, statusCode: number, details?: object) =>
+    Object.assign(new Error(code), {
+      code,
+      statusCode,
+      isOperational: true,
+      details,
+    }),
 }));
 
 // Expose a controllable timeout value so we can exercise the fast-path
@@ -42,6 +71,7 @@ jest.mock("../../config/env", () => ({
   env: {
     STELLAR_REQUEST_TIMEOUT_MS: "50", // 50 ms for tests
     STELLAR_LOAD_ACCOUNT_TIMEOUT_MS: "50",
+    STELLAR_STARTING_BALANCE: "1.5",
   },
 }));
 
@@ -49,6 +79,7 @@ jest.mock("../../config/env", () => ({
 
 const getPlatformKeypair = stellar.getPlatformKeypair as jest.Mock;
 const loadAccountMock = stellar.server.loadAccount as jest.Mock;
+const withRetryMock = jest.requireMock("../../utils/stellar.utils").withRetry as jest.Mock;
 
 /** A mock Keypair-like object with a publicKey() method */
 const mockPlatformKeypair = {
@@ -90,7 +121,7 @@ describe("StellarAccountService.fundAccount", () => {
     assertAppError(caught, ErrorCode.SERVICE_UNAVAILABLE, 503);
     expect((caught as AppError).details).toMatchObject({
       service: "stellar-funding",
-      reason: "Stellar funding account not configured",
+      reason: "Stellar wallet funding is currently unavailable",
     });
   });
 
@@ -153,7 +184,36 @@ describe("StellarAccountService.fundAccount", () => {
 
     // Should not throw — we just verify it doesn't reject with a timeout error
     await expect(
-      StellarAccountService.fundAccount("user-ok", "GDESTINATION"),
+      StellarAccountService.fundAccount(
+        "user-ok",
+        Keypair.random().publicKey(),
+      ),
     ).resolves.toBeDefined();
   });
+
+  it("retries loadAccount after the request times out", async () => {
+    getPlatformKeypair.mockReturnValue(mockPlatformKeypair);
+    const actualWithRetry = jest.requireActual("../../utils/stellar.utils").withRetry;
+    withRetryMock.mockImplementation((fn: () => Promise<unknown>, label: string) =>
+      actualWithRetry(fn, label, 3, 0),
+    );
+
+    loadAccountMock
+      .mockReturnValueOnce(new Promise(() => {}))
+      .mockResolvedValueOnce({
+        balances: [{ asset_type: "native", balance: "10000.0000000" }],
+        accountId: () => "GPUBLICKEY",
+      });
+    (stellar.server.submitTransaction as jest.Mock).mockResolvedValue({
+      hash: "retry-hash",
+      ledger: 2,
+    });
+    require("../../config/database").default.query.mockResolvedValue({});
+
+    await expect(
+      StellarAccountService.fundAccount("user-retry", "GDESTINATION"),
+    ).resolves.toBeDefined();
+
+    expect(loadAccountMock).toHaveBeenCalledTimes(2);
+  }, 2000);
 });

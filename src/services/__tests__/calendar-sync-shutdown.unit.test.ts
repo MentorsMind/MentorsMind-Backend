@@ -10,6 +10,12 @@
 
 import { CalendarSyncService } from '../calendar-sync.service';
 
+jest.mock("../../config/database", () => ({
+  db: {
+    query: jest.fn().mockResolvedValue({ rows: [{ provider: "google" }] }),
+  },
+}));
+
 // Fake timers so setInterval/clearInterval are fully controllable
 beforeAll(() => jest.useFakeTimers());
 afterAll(() => jest.useRealTimers());

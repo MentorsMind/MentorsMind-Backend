@@ -361,7 +361,7 @@ export const KeyRotationService = {
 
     for (const reg of registrations) {
       const dueLockKey = `key_rotation:lock:${reg.service}`;
-      const lockAcquired = await redis.set(
+      const lockAcquired = await (redis as any).set(
         dueLockKey,
         '1',
         'NX',

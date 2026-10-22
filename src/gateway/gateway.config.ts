@@ -10,7 +10,7 @@
  */
 
 import type { LoadBalancingStrategy, ServiceDefinition } from "./types";
-import { Logger } from "../utils/logger.utils";
+import { Logger, logger } from "../utils/logger.utils";
 
 function num(value: string | undefined, fallback: number): number {
   const parsed = Number(value);

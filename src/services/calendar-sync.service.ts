@@ -1,4 +1,7 @@
-﻿import { logger } from "../utils/logger.utils";
+import { db } from "../config/database";
+import { ErrorCode } from "../errors/error-codes";
+import type { AppError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger.utils";
 import { CalendarEvent } from "./smart-calendar.service";
 
 export interface SyncStatus {
@@ -15,6 +18,16 @@ export class CalendarSyncService {
   private syncIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   async startSync(userId: string, intervalMinutes: number = 15): Promise<void> {
+    if (!(await this.hasConnectedProvider(userId))) {
+      const error: AppError = new Error(
+        "No connected calendar provider found. Connect Google Calendar or Outlook before starting sync.",
+      );
+      error.code = ErrorCode.BAD_REQUEST;
+      error.statusCode = 400;
+      error.isOperational = true;
+      throw error;
+    }
+
     logger.info({ userId, intervalMinutes }, "Starting calendar sync");
 
     const interval = setInterval(
@@ -26,6 +39,16 @@ export class CalendarSyncService {
 
     this.syncIntervals.set(userId, interval);
     await this.performSync(userId);
+  }
+
+  private async hasConnectedProvider(userId: string): Promise<boolean> {
+    const { rows } = await db.query(
+      `SELECT 1 FROM oauth_accounts
+       WHERE user_id = $1 AND provider IN ('google', 'microsoft')
+       LIMIT 1`,
+      [userId],
+    );
+    return rows.length > 0;
   }
 
   async stopSync(userId: string): Promise<void> {

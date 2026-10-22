@@ -1,10 +1,10 @@
-﻿import crypto from "crypto";
+import crypto from "crypto";
 import { pool } from "../config/database";
 import { JwksService } from "./jwks.service";
 import { server, networkPassphrase, getPlatformKeypair } from "../config/stellar";
 import { signStellarTransaction } from "./hsmStellarSigner.service";
-import { Logger } from "../utils/logger.utils";
-import { TransactionBuilder, Memo } from "@stellar/stellar-sdk";
+import { Logger, logger } from "../utils/logger.utils";
+import { TransactionBuilder, Memo, Account } from "@stellar/stellar-sdk";
 
 const PLATFORM_DID = process.env.PLATFORM_DID || "did:web:api.mentorminds.com";
 const PLATFORM_HOST = process.env.PLATFORM_HOST || "api.mentorminds.com";
@@ -437,7 +437,7 @@ class DIDService {
       if (!publicKey) {
         throw new Error("Platform Stellar key not configured");
       }
-      const account = await server.accounts().accountId(publicKey).call();
+      const account = (await server.accounts().accountId(publicKey).call()) as unknown as Account;
       const txBuilder = new TransactionBuilder(account, {
         fee: "100",
         networkPassphrase,
@@ -457,7 +457,7 @@ class DIDService {
       return { txHash: result.hash, ledger: result.ledger };
     }
 
-    const account = await server.accounts().accountId(keypair.publicKey()).call();
+    const account = (await server.accounts().accountId(keypair.publicKey()).call()) as unknown as Account;
     const txBuilder = new TransactionBuilder(account, {
       fee: "100",
       networkPassphrase,
