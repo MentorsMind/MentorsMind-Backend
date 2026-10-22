@@ -269,15 +269,23 @@ export const SessionModel = {
   ): Promise<SessionRecord | null> {
     const { meetingUrl } = payload;
 
-    // Validate meeting URL - must be valid URL or null/empty to clear it
-    if (meetingUrl !== null && meetingUrl !== '') {
-      try {
-        new URL(meetingUrl);
-      } catch {
-        throw createError(ErrorCode.VALIDATION_ERROR, 400, {
-          message: 'meetingUrl must be a valid URL',
-        });
+    // Validate meeting URL (#1305): must be a valid https:// URL so stored
+    // links rendered in emails cannot be phishing/XSS vectors. Empty string
+    // is rejected (use null to clear); javascript:/data:/http: rejected.
+    if (typeof meetingUrl !== 'string' || meetingUrl.trim() === '') {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'meetingUrl must be a non-empty https:// URL',
+      });
+    }
+    try {
+      const parsed = new URL(meetingUrl);
+      if (parsed.protocol !== 'https:') {
+        throw new Error(`unsupported protocol ${parsed.protocol}`);
       }
+    } catch {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'meetingUrl must be a valid https:// URL',
+      });
     }
 
     const { query, params } = withCurrentTenantFilter(
