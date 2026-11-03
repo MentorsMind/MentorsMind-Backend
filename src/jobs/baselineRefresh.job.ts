@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 /**
  * Baseline Refresh Job
  *
@@ -90,9 +91,7 @@ class BaselineRefreshJob {
       return;
     }
 
-    try {
-      const { CronJob } = require("cron");
-      this.job = new CronJob("0 2 * * *", async () => {
+    try {      this.job = new CronJob("0 2 * * *", async () => {
         try {
           await runBaselineRefresh();
         } catch (error) {

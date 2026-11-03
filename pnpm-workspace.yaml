@@ -13,8 +13,10 @@ overrides:
 allowBuilds:
   '@apollo/protobufjs': true
   '@firebase/util': true
+  '@parcel/watcher': set this to true or false
   '@scarf/scarf': true
   '@sentry-internal/node-cpu-profiler': true
+  '@sentry/node-cpu-profiler': set this to true or false
   cpu-features: true
   'msgpackr-extract': true
   'protobufjs': true

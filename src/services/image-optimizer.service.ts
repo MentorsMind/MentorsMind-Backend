@@ -20,6 +20,7 @@ import {
   type ImageNegotiationConfig,
 } from "../config/cdn.config";
 import type { ProcessedImage } from "../utils/image.utils";
+import { processImage, createLQIP } from "../utils/image.utils";
 
 const logger = new Logger("ImageOptimizer");
 
@@ -124,11 +125,9 @@ export interface ImageProcessor {
 /** Default processor, backed by sharp via the existing image utilities. */
 const sharpProcessor: ImageProcessor = {
   async process(buffer, options, format, quality) {
-    const { processImage } = require("../utils/image.utils");
     return processImage(buffer, options, format, quality);
   },
   async lqip(buffer) {
-    const { createLQIP } = require("../utils/image.utils");
     return createLQIP(buffer);
   },
   async metadata(buffer) {

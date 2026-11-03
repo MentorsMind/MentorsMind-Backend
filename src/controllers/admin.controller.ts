@@ -1,4 +1,6 @@
 import { Response } from "express";
+import { Queue } from "bullmq";
+import { QUEUE_NAMES, redisConnection } from "../queues/queue.config";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdminService } from "../services/admin.service";
 import { ResponseUtil } from "../utils/response.utils";
@@ -715,8 +717,6 @@ export const AdminController = {
     res: Response,
   ): Promise<void> {
     try {
-      const { Queue } = require("bullmq");
-      const { QUEUE_NAMES, redisConnection } = require("../queues/queue.config");
       const stellarQueue = new Queue(QUEUE_NAMES.STELLAR_TX, { connection: redisConnection });
       
       const failedJobs = await stellarQueue.getFailed();

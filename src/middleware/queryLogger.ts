@@ -286,7 +286,9 @@ export async function trackAndLogQuery(
         try {
           const planJson = await captureExplainPlan(sql, params);
           await persistSlowQuery(normalised, qHash, durationMs, planJson);
-        } catch (_) {}
+        } catch (err) {
+          logger.warn('Failed to persist slow query plan', { error: err instanceof Error ? err.message : err });
+        }
       });
     }
 

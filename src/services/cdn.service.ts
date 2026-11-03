@@ -7,7 +7,7 @@ import {
   ImageFormat,
 } from "../utils/image.utils";
 import { CDNHealthService } from "./cdn-health.service";
-import crypto = require("crypto");
+import crypto from "crypto";
 
 export type CDNProvider = "cloudfront" | "cloudflare" | "fastly";
 

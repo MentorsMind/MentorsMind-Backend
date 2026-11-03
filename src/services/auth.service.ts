@@ -13,7 +13,7 @@ import { TokenService } from "./token.service";
 import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 
 const JWT_SECRET = env.JWT_SECRET;
 

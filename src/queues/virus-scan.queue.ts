@@ -1,4 +1,9 @@
-﻿import { Queue, Worker, Job } from 'bullmq';
+﻿import { exec } from 'child_process';
+import { promisify } from 'util';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { Queue, Worker, Job } from 'bullmq';
 import config from '../config';
 import { logger } from '../utils/logger.utils';
 import pool from '../config/database';
@@ -127,14 +132,8 @@ virusScanWorker.on('failed', (job, err) => {
  * Scan a file buffer using ClamAV via clamdscan or clamscan
  */
 async function scanWithClamAV(fileBuffer: Buffer): Promise<'clean' | 'infected' | 'error'> {
-  const { exec } = require('child_process');
-  const { promisify } = require('util');
-  const execAsync = promisify(exec);
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-  
-  try {
+      const execAsync = promisify(exec);
+        try {
     // Create a temporary file for scanning
     const tempDir = os.tmpdir();
     const tempFilePath = path.join(tempDir, `scan_${Date.now()}_${Math.random().toString(36).substring(7)}`);

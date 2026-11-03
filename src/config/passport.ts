@@ -6,7 +6,9 @@ import pool from './database';
 import oauthConfig from './oauth.config';
 import { Logger, logger } from "../utils/logger.utils";
 import { EncryptionUtil } from '../utils/encryption.utils';
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
+import bcryptjs from 'bcryptjs';
+import crypto from 'crypto';
 
 // Custom error type for OAuth email required
 export class EmailRequiredError extends Error {
@@ -206,9 +208,8 @@ async function findOrCreateUser(profile: OAuthProfile): Promise<{ userId: string
     `;
 
         // Generate a random password hash (user won't use this)
-        const bcrypt = require('bcryptjs');
-        const randomPassword = require('crypto').randomBytes(32).toString('hex');
-        const passwordHash = await bcrypt.hash(randomPassword, 10);
+        const randomPassword = crypto.randomBytes(32).toString('hex');
+        const passwordHash = await bcryptjs.hash(randomPassword, 10);
 
         // Split name into first and last name
         const nameParts = (profile.name || '').split(' ');

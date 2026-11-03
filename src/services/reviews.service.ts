@@ -1,8 +1,9 @@
-import { PoolClient } from "pg";
+﻿import { PoolClient } from "pg";
 import pool from "../config/database";
 import { createError } from "../middleware/errorHandler";
 import { env } from "../config/env";
 import { UsersService } from "./users.service";
+import { PaginationUtil } from "../utils/pagination.utils";
 import { InAppNotificationService } from "./inAppNotification.service";
 import { emailService } from "./email.service";
 import { ModerationService } from "./moderation.service";
@@ -395,7 +396,7 @@ export const ReviewsService = {
     // Cursor-based (seek) pagination
     if (params.cursor) {
       const decoded =
-        require("../utils/pagination.utils").PaginationUtil.decodeCursor(
+        PaginationUtil.decodeCursor(
           params.cursor,
         );
       // decoded: { id, created_at }
@@ -431,7 +432,7 @@ export const ReviewsService = {
       const lastItem = data[data.length - 1];
       const next_cursor =
         has_more && lastItem
-          ? require("../utils/pagination.utils").PaginationUtil.encodeCursor({
+          ? PaginationUtil.encodeCursor({
               id: lastItem.id,
               created_at: lastItem.created_at.toISOString(),
             })

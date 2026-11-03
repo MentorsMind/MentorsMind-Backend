@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 /**
  * Stale Data Cleanup Job
  *
@@ -73,9 +74,7 @@ class StaleDataCleanupJob {
   }
 
   private startWeeklyCleanupJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      this.job = new CronJob("30 3 * * 0", () => {
+    try {      this.job = new CronJob("30 3 * * 0", () => {
         void this.run().catch((error) => {
           logError(error as Error, "high", {
             operation: "weekly_stale_data_cleanup",

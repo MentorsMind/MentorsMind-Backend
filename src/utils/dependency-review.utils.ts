@@ -1,3 +1,4 @@
+﻿import { execSync } from 'child_process';
 /**
  * Dependency Review Utility
  * 
@@ -8,8 +9,6 @@
 import { logInfo, logWarning, logError } from './error.utils';
 
 // Declare require for dynamic imports
-declare const require: any;
-const { execSync } = require('child_process');
 
 export interface Vulnerability {
   id: string;

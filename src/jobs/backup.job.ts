@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 /**
  * Backup Job
  *
@@ -83,9 +84,7 @@ class BackupJob {
 
   /** Daily full backup — every day at 2 AM UTC */
   private startDailyFullBackup(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 2 * * *", async () => {
+    try {      const job = new CronJob("0 2 * * *", async () => {
         logInfo("Running scheduled daily full backup");
         const start = Date.now();
         const result = await BackupService.runFullBackup();
@@ -151,9 +150,7 @@ class BackupJob {
 
   /** Hourly WAL archiving */
   private startHourlyWALBackup(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 * * * *", async () => {
+    try {      const job = new CronJob("0 * * * *", async () => {
         logInfo("Running scheduled WAL backup");
         const start = Date.now();
         const result = await BackupService.runWALBackup();
@@ -203,9 +200,7 @@ class BackupJob {
 
   /** Daily retention cleanup — every day at 3 AM UTC */
   private startDailyRetentionCleanup(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 3 * * *", async () => {
+    try {      const job = new CronJob("0 3 * * *", async () => {
         logInfo("Running backup retention cleanup");
         const start = Date.now();
         try {

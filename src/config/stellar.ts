@@ -3,6 +3,7 @@ import { env } from "./env";
 import config from "./index";
 import { Logger, logger } from "../utils/logger.utils";
 import { traceStore } from '../middleware/tracing.middleware';
+import hsmConfig from "./hsm.config";
 
 /**
  * Stellar Network Configuration
@@ -87,7 +88,6 @@ export const getPlatformKeypair = (): StellarSdk.Keypair | null => {
   // use `HsmStellarSigner.signStellarTransaction` instead, which delegates
   // the actual Ed25519 signature to the HSM token.
   try {
-    const hsmConfig = require("./hsm.config").default;
     if (hsmConfig.enabled) {
       logger.info(
         { provider: hsmConfig.provider },

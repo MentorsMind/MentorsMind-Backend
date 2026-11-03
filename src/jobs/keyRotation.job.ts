@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 import pool from "../config/database";
 import { redis } from "../config/redis";
 import { EncryptionUtil } from "../utils/encryption.utils";
@@ -85,9 +86,7 @@ class KeyRotationJob {
 
   /** PII/encryption key rotation — runs weekly at 1 AM UTC */
   private startPiiRotation(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 1 * * 0", async () => {
+    try {      const job = new CronJob("0 1 * * 0", async () => {
         logger.info("Running scheduled PII encryption key rotation");
         try {
           await this.runPiiRotation();
@@ -286,9 +285,7 @@ class KeyRotationJob {
 
   /** HSM key rotation — runs daily at 2 AM UTC (complements PII rotation) */
   private startHsmRotation(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 2 * * *", async () => {
+    try {      const job = new CronJob("0 2 * * *", async () => {
         logger.info("Running scheduled HSM key rotation sweep");
         try {
           const summaries = await keyManagementService.runScheduledRotation();

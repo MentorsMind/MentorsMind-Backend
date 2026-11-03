@@ -18,6 +18,7 @@
  */
 
 import { Logger } from "../utils/logger.utils";
+import { CacheService } from "./cache.service";
 
 const logger = new Logger("CacheOrchestrator");
 
@@ -255,7 +256,7 @@ const lazyRedisL2: L2Store = {
 };
 
 function resolveCacheService(): L2Store {
-  return require("./cache.service").CacheService as L2Store;
+  return CacheService as unknown as L2Store;
 }
 
 export interface OrchestratorOptions {

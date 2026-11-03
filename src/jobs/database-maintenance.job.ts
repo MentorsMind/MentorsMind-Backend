@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 /**
  * Database Maintenance Job
  *
@@ -88,9 +89,7 @@ class DatabaseMaintenanceJob {
   }
 
   private startWeeklyMaintenanceJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 1 * * 0", () => {
+    try {      const job = new CronJob("0 1 * * 0", () => {
         void this.run().catch((error) => {
           logError(error as Error, "high", {
             operation: "weekly_database_maintenance",
