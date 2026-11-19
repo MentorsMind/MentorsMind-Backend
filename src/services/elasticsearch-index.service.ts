@@ -1,6 +1,6 @@
-import elasticsearchService from './elasticsearch.service';
+﻿import elasticsearchService from './elasticsearch.service';
 import pool from '../config/database';
-import { logger } from '../utils/logger';
+import { Logger, logger } from "../utils/logger.utils";
 import config from '../config';
 
 interface MentorMapping {

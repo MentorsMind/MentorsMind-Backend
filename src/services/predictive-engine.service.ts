@@ -1,6 +1,6 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface RevenueForecast {
   date: string;

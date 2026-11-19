@@ -37,3 +37,31 @@ export interface CollaborationState {
 export interface CollaborationSession extends CollaborationState {
   sessionId: string;
 }
+
+/**
+ * Default collaboration state for new sessions (#1300).
+ * Shared by SessionModel.create, CollaborationService and the socket layer
+ * so all three agree on the initial bytes (no null crashes on first join).
+ */
+export const getDefaultCollaborationState = (): CollaborationState => ({
+  whiteboardData: {
+    strokes: [],
+    shapes: [],
+    backgroundColor: '#ffffff',
+    metadata: {},
+  },
+  sharedCode: {
+    language: 'javascript',
+    content: '',
+    cursorPositions: {},
+    annotations: [],
+  },
+  participants: [],
+  screenShare: {
+    active: false,
+    ownerId: null,
+    lastUpdatedAt: null,
+  },
+  lastUpdatedAt: null,
+  lastUpdatedBy: null,
+});

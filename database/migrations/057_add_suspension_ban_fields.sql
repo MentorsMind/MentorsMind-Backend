@@ -16,9 +16,8 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS banned_at             TIMESTAMP WITH TIME ZONE,
   ADD COLUMN IF NOT EXISTS banned_by             UUID REFERENCES users(id) ON DELETE SET NULL;
 
--- Index for quickly finding suspended/banned users
+-- Index for quickly finding suspended users
 CREATE INDEX IF NOT EXISTS idx_users_status_suspended ON users(status) WHERE status = 'suspended';
-CREATE INDEX IF NOT EXISTS idx_users_status_banned    ON users(status) WHERE status = 'banned';
 
 COMMENT ON COLUMN users.suspension_reason     IS 'Admin-provided reason for the suspension';
 COMMENT ON COLUMN users.suspension_expires_at IS 'When the suspension ends (NULL = indefinite)';

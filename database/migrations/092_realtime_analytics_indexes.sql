@@ -9,14 +9,12 @@
 -- ── transactions ─────────────────────────────────────────────────────────────
 -- Supports: SELECT amount, status, currency FROM transactions WHERE created_at > $1
 CREATE INDEX IF NOT EXISTS idx_transactions_created_status
-  ON transactions (created_at DESC, status)
-  WHERE deleted_at IS NULL;
+  ON transactions (created_at DESC, status);
 
 -- ── bookings ─────────────────────────────────────────────────────────────────
 -- Supports: SELECT status, mentor_id, mentee_id FROM bookings WHERE created_at > $1
 CREATE INDEX IF NOT EXISTS idx_bookings_created_status
-  ON bookings (created_at DESC, status)
-  WHERE deleted_at IS NULL;
+  ON bookings (created_at DESC, status);
 
 -- ── users ────────────────────────────────────────────────────────────────────
 -- Supports: SELECT role, COUNT(*) FROM users WHERE created_at > $1 GROUP BY role

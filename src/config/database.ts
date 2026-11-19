@@ -1,23 +1,10 @@
-import { trackAndLogQuery } from '../middleware/queryLogger';
-import { Pool, PoolClient, PoolConfig } from "pg";
+﻿import { trackAndLogQuery } from '../middleware/queryLogger';
+import { Pool, PoolClient } from "pg";
 import config from "./index";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
+import { createSecurePoolConfig } from "../database/connection";
 
-export const poolConfig: PoolConfig = {
-  connectionString: config.db.url,
-  host: config.db.host,
-  port: config.db.port,
-  database: config.db.name,
-  user: config.db.user,
-  password: config.db.password,
-  max: config.db.poolMax,
-  min: config.db.poolMin,
-  idleTimeoutMillis: config.db.idleTimeoutMs,
-  connectionTimeoutMillis: config.db.connectionTimeoutMs,
-  statement_timeout: config.db.statementTimeoutMs,
-  query_timeout: config.db.statementTimeoutMs,
-  allowExitOnIdle: false,
-};
+export const poolConfig = createSecurePoolConfig(config.db);
 
 export const pool = new Pool(poolConfig);
 
@@ -39,11 +26,18 @@ export const createOptimizedPool = (): Pool => {
 };
 
 export const testConnection = async (): Promise<boolean> => {
+  const start = Date.now();
   try {
     const client = await pool.connect();
-    logger.info("Database connected successfully");
-    client.release();
-    return true;
+    try {
+      // Basic health check query to ensure database is responsive
+      await client.query('SELECT 1');
+      const latency = Date.now() - start;
+      logger.info({ latencyMs: latency }, "Database connected successfully and is responsive");
+      return true;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : error },
@@ -52,6 +46,34 @@ export const testConnection = async (): Promise<boolean> => {
     return false;
   }
 };
+
+// ─── Pool Utilization Monitoring ──────────────────────────────────────────────
+// Periodically logs the connection pool metrics if the pool is under load or
+// just to provide telemetry for dynamic scaling decisions.
+
+let monitorInterval: NodeJS.Timeout | null = null;
+
+export const startPoolMonitoring = (intervalMs = 60000): (() => void) => {
+  if (monitorInterval) return stopPoolMonitoring;
+  monitorInterval = setInterval(() => {
+    const { totalCount, idleCount, waitingCount } = pool;
+    logger.info(
+      { totalCount, idleCount, waitingCount, max: config.db.poolMax },
+      'Database pool utilization telemetry'
+    );
+  }, intervalMs);
+  return stopPoolMonitoring;
+};
+
+export const stopPoolMonitoring = () => {
+  if (monitorInterval) {
+    clearInterval(monitorInterval);
+    monitorInterval = null;
+  }
+};
+
+// Start monitoring automatically
+startPoolMonitoring();
 
 pool.on("error", (err) => {
   logger.error({ error: err.message }, "Unexpected database pool error");
@@ -68,6 +90,9 @@ export const db = {
   query: async (text: string, params?: any[]) => {
     return await trackAndLogQuery(pool, text, params || []);
   },
+  connect: async () => {
+    return await pool.connect();
+  },
 };
 
 // ─── Tenant-aware pool checkout ───────────────────────────────────────────────
@@ -78,20 +103,46 @@ export const db = {
 // tenant isolation at the database layer, providing a defense-in-depth
 // guarantee even if the application-level tenant filter is bypassed.
 //
-// Usage:
-//   const client = await TenantPoolManager.connect(tenantId);
-//   await client.query('SELECT * FROM bookings');
-//   client.release();
+// Usage (see the JSDoc on connect() / withClient() below for full examples):
+//   await TenantPoolManager.withClient(tenantId, async (client) => {
+//     await client.query('SELECT * FROM bookings');
+//   });
+//
+// Queries sent through the plain `pool` / `db` exports never set
+// `app.tenant_id`, so RLS treats them as unfiltered. Use TenantPoolManager
+// for any tenant-scoped data.
 //
 // The variable is reset to '' on release so the next borrower of that
 // connection gets a clean slate.
 
 export const TenantPoolManager = {
   /**
-   * Acquire a pool client with `app.tenant_id` set to `tenantId`.
+   * Acquire a pool client with `app.tenant_id` set to `tenantId`, so RLS
+   * policies restrict every query on it to that tenant's rows.
    *
-   * @param tenantId  UUID of the tenant to scope queries to, an empty string
-   *                  for no filtering, or the '__ADMIN_BYPASS__' sentinel.
+   * You MUST call `client.release()` in a `finally` block — a leaked client
+   * exhausts the pool and keeps its tenant setting. Prefer `withClient()`,
+   * which does this for you; use `connect()` only when you need to hold the
+   * client across several steps (e.g. an explicit transaction).
+   *
+   * `tenantId` handling:
+   *  - UUID               → rows restricted to that tenant
+   *  - '__ADMIN_BYPASS__' → all rows (admin routes only)
+   *  - null / ''          → no RLS filtering
+   *  - anything else      → logged and treated as '' (NO filtering)
+   *
+   * @example
+   * const client = await TenantPoolManager.connect(TenantContext.requireTenantId());
+   * try {
+   *   await client.query('BEGIN');
+   *   await client.query('UPDATE bookings SET status = $1 WHERE id = $2', ['cancelled', id]);
+   *   await client.query('COMMIT');
+   * } catch (err) {
+   *   await client.query('ROLLBACK');
+   *   throw err;
+   * } finally {
+   *   client.release();
+   * }
    */
   async connect(tenantId: string | null): Promise<PoolClient> {
     const client = await pool.connect();
@@ -101,9 +152,9 @@ export const TenantPoolManager = {
     const safeId = sanitizeTenantId(tenantId);
 
     try {
-      // Use set_config with is_local=TRUE so the value is scoped to the
-      // current transaction (reverted on ROLLBACK / COMMIT). When outside a
-      // transaction, the value persists until the connection is released.
+      // Use set_config with is_local=FALSE so the value applies to the whole
+      // session (surviving COMMIT / ROLLBACK) until the wrapped release()
+      // below resets it.
       await client.query(`SELECT set_config('app.tenant_id', $1, FALSE)`, [safeId]);
     } catch (err) {
       client.release();
@@ -127,12 +178,22 @@ export const TenantPoolManager = {
 
   /**
    * Execute a callback with a tenant-scoped client, automatically releasing
-   * the connection when done (or on error).
+   * the connection when done (or on error). This is the default way to run
+   * tenant-scoped queries.
+   *
+   * Take the tenant ID from `TenantContext`, never from request input. Pair
+   * it with `withTenantFilter` so isolation holds even where RLS is not
+   * enabled on the table. Do not keep a reference to `client` after the
+   * callback returns — it has already been released.
    *
    * @example
-   * const result = await TenantPoolManager.withClient(tenantId, (client) =>
-   *   client.query('SELECT * FROM bookings WHERE id = $1', [id])
-   * );
+   * const tenantId = TenantContext.requireTenantId();
+   * const bookings = await TenantPoolManager.withClient(tenantId, async (client) => {
+   *   const { query, params } = withTenantFilter(
+   *     'SELECT * FROM bookings WHERE mentor_id = $1', [mentorId], tenantId);
+   *   const { rows } = await client.query(query, params);
+   *   return rows;
+   * });
    */
   async withClient<T>(
     tenantId: string | null,

@@ -83,4 +83,38 @@ export const AccessRiskModel = {
     );
     return parseInt(rows[0]?.count ?? "0", 10);
   },
+
+  /**
+   * Per-day distinct-IP counts for a user over the last `days` days, used to
+   * seed/refresh the Redis-backed baseline (see baseline-store.service.ts).
+   * Returns one row per UTC day that has at least one log entry — days with
+   * no activity are simply absent (callers treat them as 0).
+   */
+  async getDailyDistinctIpCounts(
+    userId: string,
+    days: number,
+  ): Promise<Array<{ day: string; count: number }>> {
+    const { rows } = await pool.query<{ day: string; count: string }>(
+      `SELECT created_at::date::text AS day, COUNT(DISTINCT ip_address) AS count
+       FROM access_risk_log
+       WHERE user_id = $1
+         AND created_at >= NOW() - ($2 || ' days')::interval
+         AND ip_address IS NOT NULL
+       GROUP BY created_at::date
+       ORDER BY created_at::date`,
+      [userId, days],
+    );
+    return rows.map((r) => ({ day: r.day, count: parseInt(r.count, 10) }));
+  },
+
+  /** Distinct user_ids with any access-risk-log activity in the last `days` days. */
+  async getUserIdsWithRecentActivity(days: number): Promise<string[]> {
+    const { rows } = await pool.query<{ user_id: string }>(
+      `SELECT DISTINCT user_id
+       FROM access_risk_log
+       WHERE created_at >= NOW() - ($1 || ' days')::interval`,
+      [days],
+    );
+    return rows.map((r) => r.user_id);
+  },
 };

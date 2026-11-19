@@ -24,11 +24,11 @@ END $$;
 
 -- Indexes to speed up the scheduler query
 CREATE INDEX IF NOT EXISTS idx_bookings_reminder_1h_mentee
-    ON bookings (scheduled_at)
+    ON bookings (scheduled_start)
     WHERE status = 'confirmed' AND reminder_1h_sent_mentee = FALSE;
 
 CREATE INDEX IF NOT EXISTS idx_bookings_reminder_1h_mentor
-    ON bookings (scheduled_at)
+    ON bookings (scheduled_start)
     WHERE status = 'confirmed' AND reminder_1h_sent_mentor = FALSE;
 
 COMMENT ON COLUMN bookings.reminder_1h_sent_mentee IS '1-hour pre-session reminder sent to mentee';

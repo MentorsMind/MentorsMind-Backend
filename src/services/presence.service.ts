@@ -314,4 +314,9 @@ export class PresenceService {
     const status = await this.getStatus(mentorId);
     return status.online;
   }
+
+  async isUserActive(userId: string): Promise<boolean> {
+    const status = await this.getStatus(userId);
+    return status.online;
+  }
 }

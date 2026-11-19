@@ -6,7 +6,9 @@
 --              EXPLAIN ANALYZE plans captured asynchronously.
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS slow_query_log (
+DROP TABLE IF EXISTS slow_query_log CASCADE;
+
+CREATE TABLE slow_query_log (
   id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   query_hash        TEXT        NOT NULL,
   normalized_query  TEXT        NOT NULL,

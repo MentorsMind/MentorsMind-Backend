@@ -8,6 +8,7 @@ import { CacheService } from "./cache.service";
 import { CacheKeys, CacheTTL } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import pool from "../config/database";
 import {
   StudentProgress,
@@ -88,12 +89,12 @@ export const ProgressTrackingService = {
       // Validate enrollment exists
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       if (enrollment.status !== "active") {
         throw createError(
-          "Cannot update progress for inactive enrollment",
+          ErrorCode.ENROLLMENT_INACTIVE,
           400,
         );
       }
@@ -104,7 +105,7 @@ export const ProgressTrackingService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Update milestone progress
@@ -163,7 +164,7 @@ export const ProgressTrackingService = {
       // Validate enrollment and milestone
       const enrollment = await EnrollmentModel.findById(enrollmentId);
       if (!enrollment) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       const milestone = await MilestoneModel.findById(milestoneId);
@@ -171,7 +172,7 @@ export const ProgressTrackingService = {
         !milestone ||
         milestone.learning_path_id !== enrollment.learning_path_id
       ) {
-        throw createError("Milestone not found in learning path", 404);
+        throw createError(ErrorCode.MILESTONE_NOT_FOUND, 404);
       }
 
       // Check prerequisites are met
@@ -180,7 +181,9 @@ export const ProgressTrackingService = {
         milestoneId,
       );
       if (!canProceed.isValid) {
-        throw createError(`Prerequisites not met: ${canProceed.message}`, 400);
+        throw createError(ErrorCode.MILESTONE_PREREQUISITES_NOT_MET, 400, {
+          message: canProceed.message,
+        });
       }
 
       // Complete the milestone
@@ -191,7 +194,7 @@ export const ProgressTrackingService = {
       );
 
       if (!completedProgress) {
-        throw createError("Failed to complete milestone", 500);
+        throw createError(ErrorCode.MILESTONE_COMPLETION_FAILED, 500);
       }
 
       // Recalculate overall progress
@@ -250,11 +253,18 @@ export const ProgressTrackingService = {
         CacheService.del(CacheKeys.pathAnalytics(enrollment.learning_path_id)),
       ]);
 
+      // Generate certificate
+      const certificate = await this.generateCertificate(
+        enrollment.student_id,
+        milestoneId,
+        enrollment.learning_path_id,
+      );
+
       const result: MilestoneCompletion = {
         milestoneId,
         enrollmentId,
         completedAt: completedProgress.completed_at!.toISOString(),
-        certificateGenerated: false, // TODO: Implement certificate generation
+        certificateGenerated: certificate ? true : false,
         nextMilestone: nextMilestone
           ? MilestoneModel.transformToMilestone(nextMilestone)
           : undefined,
@@ -296,7 +306,7 @@ export const ProgressTrackingService = {
       // Get enrollment
       const enrollmentRecord = await EnrollmentModel.findById(enrollmentId);
       if (!enrollmentRecord) {
-        throw createError("Enrollment not found", 404);
+        throw createError(ErrorCode.ENROLLMENT_NOT_FOUND, 404);
       }
 
       // Get milestone progress
@@ -398,7 +408,7 @@ export const ProgressTrackingService = {
 
         logger.info("Batch progress update completed", {
           updateCount: updates.length,
-          enrollmentIds: [...new Set(updates.map((u) => u.enrollmentId))],
+          enrollmentIds: Array.from(new Set(updates.map((u) => u.enrollmentId))),
         });
       } catch (error) {
         await client.query("ROLLBACK");
@@ -624,7 +634,7 @@ export const ProgressTrackingService = {
       // Get basic path stats
       const learningPath = await LearningPathModel.findById(pathId);
       if (!learningPath) {
-        throw createError("Learning path not found", 404);
+        throw createError(ErrorCode.LEARNING_PATH_NOT_FOUND, 404);
       }
 
       // Get enrollment analytics
@@ -882,8 +892,36 @@ export const ProgressTrackingService = {
           }
         }
 
-        // TODO: Implement skill and assessment prerequisite validation
-      }
+        // Handle skill prerequisites
+        if (prereq.prerequisite_type === "skill" && prereq.prerequisite_id) {
+          const skillProgress = await MilestoneProgressModel.findByEnrollmentAndMilestone(
+            enrollment.id,
+            prereq.prerequisite_id,
+          );
+
+          if (!skillProgress || skillProgress.status !== "completed") {
+            return {
+              isValid: false,
+              message: `Skill prerequisite must be completed first`,
+            };
+          }
+        }
+
+        // Handle assessment prerequisites
+        if (prereq.prerequisite_type === "assessment" && prereq.prerequisite_id) {
+          const assessmentResult = await MilestoneProgressModel.findAssessmentResult(
+            enrollment.id,
+            prereq.prerequisite_id,
+          );
+
+          if (!assessmentResult || assessmentResult.score < prereq.minimum_score) {
+            return {
+              isValid: false,
+              message: `Assessment prerequisite not met. Minimum score: ${prereq.minimum_score}`,
+            };
+          }
+        }
+      }      }
 
       return { isValid: true, message: "All prerequisites met" };
     } catch (error) {
@@ -905,9 +943,20 @@ export const ProgressTrackingService = {
     metadata: Record<string, any>,
   ): Promise<void> {
     try {
-      // TODO: Implement achievement system
-      // This would create achievement records and potentially trigger notifications
+      // Implement achievement system
+      // Create achievement record and potentially trigger notifications
+      const achievement = {
+        id: `achievement-${Date.now()}-${studentId}`,
+        studentId,
+        type,
+        metadata,
+        createdAt: new Date(),
+      };
 
+      // Store achievement in database
+      await MilestoneProgressModel.storeAchievement(studentId, achievement);
+
+      // TODO: Trigger notifications based on achievement type
       logger.info("Achievement generated", {
         studentId,
         type,
@@ -923,6 +972,55 @@ export const ProgressTrackingService = {
   },
 
   /**
+   * Generate certificate for milestone completion
+   */
+  async generateCertificate(
+    studentId: string,
+    milestoneId: string,
+    pathId: string,
+  ): Promise<boolean> {
+    try {
+      // Check if certificate already generated
+      const existingCertificate = await MilestoneProgressModel.findCertificateByMilestone(
+        studentId,
+        milestoneId,
+      );
+      if (existingCertificate) {
+        return true;
+      }
+
+      // Generate certificate data
+      const certificateData = {
+        studentId,
+        milestoneId,
+        pathId,
+        issuedAt: new Date(),
+        completionDate: new Date(),
+        validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year valid
+      };
+
+      // Store certificate in database
+      await MilestoneProgressModel.storeCertificate(studentId, milestoneId, certificateData);
+
+      logger.info("Certificate generated", {
+        studentId,
+        milestoneId,
+        pathId,
+      });
+
+      return true;
+    } catch (error) {
+      logger.error("Failed to generate certificate", {
+        studentId,
+        milestoneId,
+        pathId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return false;
+    }
+  },
+
+  /**
    * Get student achievements for a learning path
    */
   async getStudentAchievements(
@@ -930,17 +1028,14 @@ export const ProgressTrackingService = {
     pathId: string,
   ): Promise<Achievement[]> {
     try {
-      // TODO: Implement achievement retrieval
+      // Implement achievement retrieval
       // This would fetch achievement records from database
-
-      return [];
-    } catch (error) {
-      logger.error("Failed to get student achievements", {
+      const achievements = await MilestoneProgressModel.findAchievementsByStudentAndPath(
         studentId,
         pathId,
-        error: error instanceof Error ? error.message : error,
-      });
-      return [];
+      );
+
+      return achievements || [];
     }
   },
 

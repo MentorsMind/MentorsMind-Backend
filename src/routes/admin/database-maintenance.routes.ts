@@ -6,6 +6,7 @@
  */
 
 import databaseMaintenanceManager from '../../utils/database-maintenance.utils';
+import { logger } from '../../utils/logger.utils';
 import databaseMaintenanceJob from '../../jobs/database-maintenance.job';
 
 type Router = any;
@@ -92,7 +93,7 @@ router.post('/maintenance/vacuum', async (req: Request, res: Response) => {
 
     // Run in background
     databaseMaintenanceManager.runVacuum(full).catch((error) => {
-      console.error('VACUUM operation failed:', error);
+      logger.error('VACUUM operation failed:', error);
     });
   } catch (error) {
     res.status(400).json({
@@ -115,7 +116,7 @@ router.post('/maintenance/analyze', async (req: Request, res: Response) => {
 
     // Run in background
     databaseMaintenanceManager.runAnalyze().catch((error) => {
-      console.error('ANALYZE operation failed:', error);
+      logger.error('ANALYZE operation failed:', error);
     });
   } catch (error) {
     res.status(400).json({
@@ -141,7 +142,7 @@ router.post('/maintenance/index-rebuild', async (req: Request, res: Response) =>
 
     // Run in background
     databaseMaintenanceManager.rebuildFragmentedIndexes(threshold).catch((error) => {
-      console.error('Index rebuild operation failed:', error);
+      logger.error('Index rebuild operation failed:', error);
     });
   } catch (error) {
     res.status(400).json({
@@ -164,7 +165,7 @@ router.post('/maintenance/bloat-check', async (req: Request, res: Response) => {
 
     // Run in background
     databaseMaintenanceManager.checkTableBloat().catch((error) => {
-      console.error('Bloat check operation failed:', error);
+      logger.error('Bloat check operation failed:', error);
     });
   } catch (error) {
     res.status(400).json({
@@ -188,7 +189,7 @@ router.post('/maintenance/full-cycle', async (req: Request, res: Response) => {
 
     // Run in background
     databaseMaintenanceManager.runFullMaintenanceCycle().catch((error) => {
-      console.error('Full maintenance cycle failed:', error);
+      logger.error('Full maintenance cycle failed:', error);
     });
   } catch (error) {
     res.status(400).json({

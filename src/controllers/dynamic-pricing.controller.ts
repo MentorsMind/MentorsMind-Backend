@@ -48,6 +48,14 @@ export const DynamicPricingController = {
     return ResponseUtil.success(res, { experiments: data });
   }),
 
+  getExperimentById: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { id } = req.params as Record<string, string>;
+    const experiment = await DynamicPricingService.getExperimentById(id, userId);
+    if (!experiment) return ResponseUtil.notFound(res, 'Experiment not found');
+    return ResponseUtil.success(res, { experiment });
+  }),
+
   createExperiment: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.user!.userId;
     const { name, description, control_price, variant_prices, start_at, end_at } = req.body;
@@ -60,6 +68,14 @@ export const DynamicPricingController = {
       userId, name, description, control_price, variant_prices, start_at, end_at,
     );
     return ResponseUtil.created(res, { experiment }, 'Pricing experiment created');
+  }),
+
+  evaluateExperiment: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user!.userId;
+    const { id } = req.params as Record<string, string>;
+    const experiment = await DynamicPricingService.evaluateExperiment(id, userId);
+    if (!experiment) return ResponseUtil.notFound(res, 'Experiment not found');
+    return ResponseUtil.success(res, { experiment }, 'Experiment evaluated with statistical significance metrics');
   }),
 
   updateExperimentStatus: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

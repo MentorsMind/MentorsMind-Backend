@@ -1,21 +1,10 @@
-import { Response, Request } from 'express';
+import { Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { SessionManagerService } from '../services/sessionManager.service';
 
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    userId: string;
-    role: string;
-  }
-}
-
 export const SessionsController = {
-  /**
-   * GET /api/v1/auth/sessions
-   * List all active sessions for the current user.
-   */
   async listSessions(req: AuthenticatedRequest, res: Response) {
-    const userId = req.user?.userId || (req as any).user?.id;
+    const userId = req.user?.userId ?? req.user?.id;
     if (!userId) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }

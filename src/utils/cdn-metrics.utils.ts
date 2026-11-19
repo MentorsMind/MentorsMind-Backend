@@ -1,4 +1,5 @@
-import { Gauge, Counter } from 'prom-client';
+﻿import { Gauge, Counter } from 'prom-client';
+import { logger } from './logger.utils';
 
 /**
  * Prometheus metrics for CDN health monitoring and invalidation tracking.
@@ -59,7 +60,7 @@ export function updateCDNHealthMetrics(domain: string, latencyMs: number, health
     cdnCircuitBreakerStateGauge.set({ domain }, circuitOpen ? 1 : 0);
   } catch (error) {
     // Silently fail to avoid breaking metrics collection
-    console.warn('Failed to update CDN health metrics', { domain, error });
+    logger.warn('Failed to update CDN health metrics', { domain, error });
   }
 }
 
@@ -73,7 +74,7 @@ export function recordInvalidationFailure(provider: string, reason: string = 'un
       reason,
     });
   } catch (error) {
-    console.warn('Failed to record invalidation failure', { provider, error });
+    logger.warn('Failed to record invalidation failure', { provider, error });
   }
 }
 
@@ -86,7 +87,7 @@ export function recordInvalidationSuccess(provider: string): void {
       provider,
     });
   } catch (error) {
-    console.warn('Failed to record invalidation success', { provider, error });
+    logger.warn('Failed to record invalidation success', { provider, error });
   }
 }
 
@@ -99,7 +100,7 @@ export function recordInvalidationRetry(provider: string): void {
       provider,
     });
   } catch (error) {
-    console.warn('Failed to record invalidation retry', { provider, error });
+    logger.warn('Failed to record invalidation retry', { provider, error });
   }
 }
 
@@ -110,7 +111,7 @@ export function updateInvalidationQueueSize(status: 'pending' | 'completed' | 'f
   try {
     cdnInvalidationQueueSizeGauge.set({ status }, count);
   } catch (error) {
-    console.warn('Failed to update invalidation queue size', { status, error });
+    logger.warn('Failed to update invalidation queue size', { status, error });
   }
 }
 

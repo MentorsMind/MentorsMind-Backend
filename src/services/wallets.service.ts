@@ -3,6 +3,7 @@ import { PayoutRequestModel, type PayoutRequest } from '../models/payout-request
 import { WalletEventModel, type WalletEvent } from '../models/wallet-event.model';
 import { PaymentModel } from '../models/payment.model';
 import { stellarService } from './stellar.service';
+import { WalletReconciliationService } from './wallet-reconciliation.service';
 import { logger } from '../utils/logger.utils';
 
 export interface WalletInfo {
@@ -135,6 +136,19 @@ export const WalletsService = {
       // Check if user has sufficient balance (if we can access their wallet)
       const wallet = await this.getUserWallet(userId);
       if (wallet) {
+        // Triggered reconciliation: verify the pre-payout balance against the
+        // Stellar network so payouts are computed from authoritative state.
+        try {
+          await WalletReconciliationService.syncWallet(wallet.id);
+        } catch (reconErr) {
+          // Reconciliation is best-effort — never block a payout request on it.
+          logger.warn('wallet.createPayoutRequest pre-payout reconciliation failed', {
+            userId,
+            walletId: wallet.id,
+            error: reconErr instanceof Error ? reconErr.message : reconErr,
+          });
+        }
+
         try {
           const balance = await stellarService.getAssetBalance(
             wallet.stellar_public_key,

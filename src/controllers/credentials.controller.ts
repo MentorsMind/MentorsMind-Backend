@@ -81,6 +81,28 @@ export const CredentialsController = {
     }
   },
 
+  async getCredentialStatus(req: Request, res: Response): Promise<void> {
+    const credentialId = req.params.credentialId as string;
+    if (!credentialId) {
+      ResponseUtil.error(res, "credentialId is required", 400);
+      return;
+    }
+
+    try {
+      const status = await didService.getCredentialStatus(credentialId);
+      if (!status) {
+        ResponseUtil.notFound(res, "Credential not found");
+        return;
+      }
+
+      res.setHeader("Content-Type", "application/ld+json");
+      res.setHeader("Cache-Control", "public, max-age=300");
+      res.status(200).json(status);
+    } catch (err) {
+      ResponseUtil.error(res, "Failed to generate credential status list", 500);
+    }
+  },
+
   async revokeCredential(
     req: AuthenticatedRequest,
     res: Response,
@@ -112,6 +134,37 @@ export const CredentialsController = {
       ResponseUtil.success(res, { credentialId, revoked: true }, "Credential revoked");
     } catch (err) {
       ResponseUtil.error(res, "Failed to revoke credential", 500);
+    }
+  },
+
+  async revokeCredentials(
+    req: AuthenticatedRequest,
+    res: Response,
+  ): Promise<void> {
+    const { credentialIds, reason } = req.body ?? {};
+    if (!Array.isArray(credentialIds) || credentialIds.length === 0) {
+      ResponseUtil.error(res, "credentialIds must be a non-empty array", 400);
+      return;
+    }
+
+    try {
+      const count = await didService.revokeCredentials(credentialIds, reason);
+      await AuditLogService.log({
+        userId: req.user?.userId ?? null,
+        action: "CREDENTIALS_BATCH_REVOKED",
+        resourceType: "credential",
+        ipAddress: extractIpAddress(req),
+        userAgent: req.headers["user-agent"] || null,
+        metadata: { credentialIds, reason, count },
+      });
+
+      ResponseUtil.success(
+        res,
+        { revokedCount: count, credentialIds },
+        "Credentials revoked successfully",
+      );
+    } catch (err) {
+      ResponseUtil.error(res, "Failed to revoke credentials", 500);
     }
   },
 

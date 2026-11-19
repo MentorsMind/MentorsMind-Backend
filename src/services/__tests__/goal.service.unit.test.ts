@@ -21,16 +21,127 @@ jest.mock("../learners.service", () => ({
   },
 }));
 
+jest.mock("../../config/db", () => ({
+  __esModule: true,
+  default: {
+    query: jest.fn(),
+  },
+}));
+
+jest.mock("../../config/database", () => ({
+  __esModule: true,
+  pool: {
+    query: jest.fn(),
+  },
+  db: {
+    query: jest.fn(),
+  },
+}));
+
 import { GoalModel } from "../../models/goal.model";
 import { GoalService } from "../goal.service";
 
 const findById = GoalModel.findById as jest.Mock;
+const create = GoalModel.create as jest.Mock;
+const findByLearnerId = GoalModel.findByLearnerId as jest.Mock;
 const update = GoalModel.update as jest.Mock;
+const logProgress = GoalModel.logProgress as jest.Mock;
+const deleteGoal = GoalModel.delete as jest.Mock;
+const linkBooking = GoalModel.linkBooking as jest.Mock;
 const findBestMentorSuggestion = GoalModel.findBestMentorSuggestion as jest.Mock;
 
 describe("GoalService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("creates a goal and invalidates the learner cache", async () => {
+    const goal = {
+      id: "goal-1",
+      learner_id: "learner-1",
+      title: "Learn React",
+      progress: 0,
+      status: "active",
+    };
+    create.mockResolvedValueOnce(goal);
+
+    await expect(
+      GoalService.createGoal("learner-1", { title: "Learn React" }),
+    ).resolves.toEqual(goal);
+
+    expect(create).toHaveBeenCalledWith({
+      title: "Learn React",
+      learner_id: "learner-1",
+    });
+  });
+
+  it("updates progress and creates a progress log", async () => {
+    const activeGoal = {
+      id: "goal-1",
+      learner_id: "learner-1",
+      progress: 20,
+      status: "active",
+    };
+    const updatedGoal = { ...activeGoal, progress: 75 };
+    findById.mockResolvedValueOnce(activeGoal).mockResolvedValueOnce(activeGoal);
+    logProgress.mockResolvedValueOnce({
+      id: "log-1",
+      goal_id: "goal-1",
+      progress: 75,
+      notes: "Made progress",
+    });
+    update.mockResolvedValueOnce(updatedGoal);
+
+    await expect(
+      GoalService.updateProgress("goal-1", "learner-1", 75, "Made progress"),
+    ).resolves.toEqual(updatedGoal);
+
+    expect(logProgress).toHaveBeenCalledWith("goal-1", 75, "Made progress");
+    expect(update).toHaveBeenCalledWith("goal-1", { progress: 75 });
+  });
+
+  it("rejects progress above 100 before making database calls", async () => {
+    await expect(
+      GoalService.updateProgress("goal-1", "learner-1", 101),
+    ).rejects.toMatchObject({
+      message: "Bad request",
+      statusCode: 400,
+    });
+
+    expect(findById).not.toHaveBeenCalled();
+    expect(logProgress).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("lists goals for a learner", async () => {
+    const goals = [{ id: "goal-1", learner_id: "learner-1" }];
+    findByLearnerId.mockResolvedValueOnce(goals);
+
+    await expect(GoalService.listGoals("learner-1")).resolves.toEqual(goals);
+
+    expect(findByLearnerId).toHaveBeenCalledWith("learner-1");
+  });
+
+  it("deletes a goal after verifying ownership", async () => {
+    findById.mockResolvedValueOnce({ id: "goal-1", learner_id: "learner-1" });
+    deleteGoal.mockResolvedValueOnce(true);
+
+    await expect(
+      GoalService.deleteGoal("goal-1", "learner-1"),
+    ).resolves.toBeUndefined();
+
+    expect(deleteGoal).toHaveBeenCalledWith("goal-1");
+  });
+
+  it("links a session to a goal after verifying ownership", async () => {
+    findById.mockResolvedValueOnce({ id: "goal-1", learner_id: "learner-1" });
+    linkBooking.mockResolvedValueOnce(undefined);
+
+    await expect(
+      GoalService.linkSession("goal-1", "learner-1", "booking-1"),
+    ).resolves.toBeUndefined();
+
+    expect(linkBooking).toHaveBeenCalledWith("goal-1", "booking-1");
   });
 
   it("resets reminder flags when the target date changes", async () => {

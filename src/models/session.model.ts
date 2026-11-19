@@ -1,12 +1,35 @@
 import pool, { db } from "../config/database";
 import { CollaborationState } from "../types/collaboration.types";
 import { PaginationUtil } from "../utils/pagination.utils";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import {
   TenantContext,
   withTenantFilter,
   withCurrentTenantFilter,
 } from "../utils/tenant-context.utils";
+import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
+
+/**
+ * Valid session status values.
+ * Exported so TypeScript can derive the status type via `typeof SESSION_STATUSES[number]`.
+ * Combines statuses from SessionRecord (pending, confirmed) and SessionModel (scheduled, active, paused, completed, cancelled, no_show).
+ */
+export const SESSION_STATUSES = [
+  'pending',
+  'confirmed',
+  'scheduled',
+  'active',
+  'paused',
+  'completed',
+  'cancelled',
+  'no_show',
+] as const;
+
+/**
+ * Type derived from SESSION_STATUSES for compile-time status validation.
+ */
+export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
 export interface Session {
   id: string;
@@ -27,7 +50,7 @@ export interface SessionRecord {
   description: string | null;
   scheduled_at: Date;
   duration_minutes: number;
-  status: "pending" | "confirmed" | "cancelled" | "completed";
+  status: SessionStatus;
   meeting_link: string | null;
   meeting_url: string | null;
   meeting_provider: string | null;
@@ -78,7 +101,7 @@ export const SessionModel = {
       RETURNING *
     `;
 
-    const defaultState = null;
+    const defaultState = getDefaultCollaborationState();
     const { rows } = await db.query(query, [
       tenantId,
       payload.mentorId,
@@ -87,7 +110,7 @@ export const SessionModel = {
       payload.description || null,
       payload.scheduledAt,
       payload.durationMinutes,
-      defaultState,
+      JSON.stringify(defaultState),
     ]);
 
     return rows[0];
@@ -214,8 +237,17 @@ export const SessionModel = {
    */
   async updateStatus(
     id: string,
-    status: string,
+    status: SessionStatus,
   ): Promise<SessionRecord | null> {
+    const valid = SESSION_STATUSES as readonly string[];
+    if (!valid.includes(status)) {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'Invalid session status: ' + status + '. Allowed: ' + valid.join(', '),
+        field: 'status',
+        value: status,
+      });
+    }
+
     const { query, params } = withCurrentTenantFilter(
       `UPDATE sessions SET status = $1, updated_at = NOW() WHERE id = $2`,
       [status, id],
@@ -235,6 +267,27 @@ export const SessionModel = {
     id: string,
     payload: UpdateMeetingUrlPayload,
   ): Promise<SessionRecord | null> {
+    const { meetingUrl } = payload;
+
+    // Validate meeting URL (#1305): must be a valid https:// URL so stored
+    // links rendered in emails cannot be phishing/XSS vectors. Empty string
+    // is rejected (use null to clear); javascript:/data:/http: rejected.
+    if (typeof meetingUrl !== 'string' || meetingUrl.trim() === '') {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'meetingUrl must be a non-empty https:// URL',
+      });
+    }
+    try {
+      const parsed = new URL(meetingUrl);
+      if (parsed.protocol !== 'https:') {
+        throw new Error(`unsupported protocol ${parsed.protocol}`);
+      }
+    } catch {
+      throw createError(ErrorCode.VALIDATION_ERROR, 400, {
+        message: 'meetingUrl must be a valid https:// URL',
+      });
+    }
+
     const { query, params } = withCurrentTenantFilter(
       `UPDATE sessions
        SET
@@ -245,7 +298,7 @@ export const SessionModel = {
          updated_at = NOW()
        WHERE id = $5`,
       [
-        payload.meetingUrl,
+        meetingUrl,
         payload.meetingProvider,
         payload.meetingRoomId,
         payload.meetingExpiresAt,
@@ -379,18 +432,14 @@ export const SessionModel = {
       RETURNING id;
     `;
 
-    try {
-      const { rowCount } = await pool.query(moveQuery, [years]);
-      const moved = rowCount ?? 0;
-      if (moved > 0) {
-        logger.info("SessionModel: archived old sessions", { years, moved });
-      }
-      return moved;
-    } catch (error) {
-      logger.error("Failed to archive old sessions:", error);
-      return 0;
+    const { rowCount } = await pool.query(moveQuery, [years]);
+    const moved = rowCount ?? 0;
+    if (moved > 0) {
+      logger.info("SessionModel: archived old sessions", { years, moved });
     }
+    return moved;
   },
 };
 
 export default SessionModel;
+

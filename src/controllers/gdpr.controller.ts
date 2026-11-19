@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { accountDeletionService } from '../services/accountDeletion.service';
 
 // Blockchain data notice – immutable on‑chain escrow data cannot be removed.
@@ -9,9 +10,9 @@ const BLOCKCHAIN_DATA_NOTICE =
  * POST /api/v1/account/delete
  * Triggers GDPR right‑to‑erasure request for the authenticated user.
  */
-export async function requestAccountDeletion(req: Request, res: Response, next: NextFunction) {
+export async function requestAccountDeletion(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const userId = (req as any).user?.id; // Assuming auth middleware attaches user
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -32,7 +33,7 @@ export async function requestAccountDeletion(req: Request, res: Response, next: 
 export async function getDeletionStatus(req: Request, res: Response, next: NextFunction) {
   try {
     const { requestId } = req.params;
-    const row = await accountDeletionService.getDeletionRequestById(requestId);
+    const row = await (accountDeletionService as any).getDeletionRequestById(requestId);
     if (!row) {
       return res.status(404).json({ error: 'Deletion request not found' });
     }

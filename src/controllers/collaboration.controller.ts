@@ -1,5 +1,5 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { CollaborationService } from '../services/collaboration.service';
 import { SessionModel } from '../models/session.model';
 import { ResponseUtil } from '../utils/response.utils';

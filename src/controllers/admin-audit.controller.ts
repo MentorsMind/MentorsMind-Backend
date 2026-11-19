@@ -9,7 +9,7 @@
  */
 
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { ResponseUtil } from "../utils/response.utils";
 import { AuditLogService } from "../services/auditLog.service";
 
@@ -55,6 +55,8 @@ export const AdminAuditController = {
         page: result.page,
         limit: result.limit,
         totalPages: result.totalPages,
+        hasNext: result.page < result.totalPages,
+        hasPrev: result.page > 1,
       },
     );
   },

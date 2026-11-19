@@ -29,3 +29,4 @@ export { TenantModel } from './tenant.model';
 export { EventStoreModel, DomainEvent, Snapshot } from './event.model';
 export { MfaDeviceModel } from './mfa-device.model';
 export { UserSessionModel } from './user-session.model';
+export { SessionTemplateModel } from './session-template.model';

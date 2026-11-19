@@ -116,6 +116,7 @@ export function distributedRateLimit(options: DistributedRateLimitOptions = {}) 
         Math.ceil((result.resetTime.getTime() - Date.now()) / 1000)
       );
       res.setHeader("Retry-After", String(retryAfterSeconds));
+      res.setHeader("X-Rate-Limit-Scope", category);
 
       res.status(429).json({
         error: "Rate limit exceeded",

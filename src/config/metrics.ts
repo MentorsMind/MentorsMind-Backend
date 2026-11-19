@@ -26,6 +26,7 @@
  *   Queue / BullMQ
  *     queue_job_duration_seconds       histogram queue_name, job_name, status
  *     queue_jobs_total                 counter   queue_name, job_name, status
+ *     worker_jobs_failed_total         counter   queue
  *
  *   Stellar
  *     stellar_api_call_duration_seconds histogram  operation, network
@@ -37,13 +38,40 @@
  *   Webhooks
  *     webhook_circuit_breaker_state    gauge      url_hash
  *
+ *   API Versioning
+ *     deprecated_api_calls_total       counter    version
  * Default Node.js metrics (GC, heap, event loop lag) are collected
  * automatically via `collectDefaultMetrics()`.
  */
 
-import promClient, { Counter, Gauge, Histogram, Registry } from "prom-client";
+import * as promClient from "prom-client";
+const { Counter, Gauge, Histogram, Registry } = promClient;
 
-// ─── Registry ─────────────────────────────────────────────────────────────────
+// ─── SLO-aligned bucket definitions ─────────────────────────────────────────
+//
+// All HTTP latency histograms MUST use explicit buckets derived from these
+// SLO targets so that Prometheus recording rules and alerting expressions
+// (e.g. histogram_quantile(0.99, ...)) produce accurate results.
+//
+// SLO targets:
+//   p50  < 100 ms   (interactive API responses)
+//   p95  < 250 ms
+//   p99  < 500 ms   (SLO boundary — alert fires when violated)
+//   p999 < 2 s      (worst-case tolerable latency)
+//
+// Using Prometheus default buckets (.005 → 10) would miss the 50 ms and
+// 100 ms boundaries that matter for the p50/p99 SLOs.
+
+/** Buckets for HTTP request duration, aligned with the p99 < 500 ms SLO. */
+export const HTTP_LATENCY_BUCKETS = [
+  0.005, 0.01, 0.025, 0.05,
+  0.1,   0.15, 0.2,   0.25,  // dense coverage around the p50 target
+  0.3,   0.4,  0.5,           // p99 SLO boundary at 0.5 s
+  0.75,  1,    1.5,   2,      // degraded range
+  2.5,   5,    10,
+] as const;
+
+// ─── Registry ──────────────────────────────────────────────────────────[...]
 
 /**
  * A dedicated registry keeps our metrics isolated from any third-party library
@@ -57,7 +85,7 @@ promClient.collectDefaultMetrics({
   labels: { app: "mentorminds" },
 });
 
-// ─── HTTP ─────────────────────────────────────────────────────────────────────
+// ─── HTTP ───────────────────────────────────────────────────────────…[...]
 
 export const httpRequestsTotal = new Counter<string>({
   name: "http_requests_total",
@@ -68,14 +96,13 @@ export const httpRequestsTotal = new Counter<string>({
 
 export const httpRequestDurationSeconds = new Histogram<string>({
   name: "http_request_duration_seconds",
-  help: "HTTP request duration in seconds",
+  help: "HTTP request duration in seconds (SLO: p99 < 500 ms)",
   labelNames: ["method", "path", "status_code"],
-  // Buckets: 5 ms → 10 s — covers fast API responses and slow Stellar calls
-  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  buckets: [...HTTP_LATENCY_BUCKETS],
   registers: [metricsRegistry],
 });
 
-// ─── WebSocket ────────────────────────────────────────────────────────────────
+// ─── WebSocket ─────────────────────────────────────────────────────────…[...]
 
 export const activeWebsocketConnections = new Gauge<string>({
   name: "active_websocket_connections",
@@ -83,13 +110,23 @@ export const activeWebsocketConnections = new Gauge<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Database ─────────────────────────────────────────────────────────────────
+// ─── Database ──────────────────────────────────────────────────────────[...]
 
 export const dbQueryDurationSeconds = new Histogram<string>({
   name: "db_query_duration_seconds",
   help: "PostgreSQL query duration in seconds",
   labelNames: ["operation", "table"],
   buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+  registers: [metricsRegistry],
+});
+
+export const dbQueryDurationMs = dbQueryDurationSeconds;
+
+export const dbQueryDurationHistogram = new Histogram<string>({
+  name: "db_query_duration_histogram",
+  help: "PostgreSQL query duration histogram with operation and table labels",
+  labelNames: ["operation", "table"],
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
   registers: [metricsRegistry],
 });
 
@@ -136,7 +173,7 @@ export const dbTableSizeBytes = new Gauge<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Redis ────────────────────────────────────────────────────────────────────
+// ─── Redis ──────────────────────────────────────────────────────────…[...]
 
 export const redisCallDurationSeconds = new Histogram<string>({
   name: "redis_call_duration_seconds",
@@ -146,7 +183,7 @@ export const redisCallDurationSeconds = new Histogram<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Chatbot ─────────────────────────────────────────────────────────────────
+// ─── Chatbot ──────────────────────────────────────────────────────────[...]
 
 export const chatbotMessagesTotal = new Counter<string>({
   name: "chatbot_messages_total",
@@ -155,7 +192,7 @@ export const chatbotMessagesTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Queue / BullMQ ──────────────────────────────────────────────────────────
+// ─── Queue / BullMQ ───────────────────────────────────────────────────────…[...]
 
 export const queueJobDurationSeconds = new Histogram<string>({
   name: "queue_job_duration_seconds",
@@ -172,7 +209,14 @@ export const queueJobsTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Stellar ──────────────────────────────────────────────────────────────────
+export const workerJobsFailedTotal = new Counter<string>({
+  name: "worker_jobs_failed_total",
+  help: "Total BullMQ jobs that failed (including exhausted retries), partitioned by queue",
+  labelNames: ["queue"],
+  registers: [metricsRegistry],
+});
+
+// ─── Stellar ──────────────────────────────────────────────────────────[...]
 
 export const stellarApiCallDurationSeconds = new Histogram<string>({
   name: "stellar_api_call_duration_seconds",
@@ -205,7 +249,7 @@ export const mentorQualityScoreGauge = new Gauge<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Feature Flags ────────────────────────────────────────────────────────────
+// ─── Feature Flags ────────────────────────────────────────────────────────[...]
 
 export const featureFlagEvaluationsTotal = new Counter<string>({
   name: "feature_flag_evaluations_total",
@@ -214,12 +258,19 @@ export const featureFlagEvaluationsTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Rate Limiting ────────────────────────────────────────────────────────────
+// ─── Rate Limiting ────────────────────────────────────────────────────────[...]
 
 export const rateLimitExceededTotal = new Counter<string>({
   name: "rate_limit_exceeded_total",
   help: "Total number of rate limit exceeded events",
   labelNames: ["tier", "endpoint_category"],
+  registers: [metricsRegistry],
+});
+
+export const stellarVerificationAttemptsTotal = new Counter<string>({
+  name: "stellar_verification_attempts_total",
+  help: "Total Stellar transaction verification attempts by outcome",
+  labelNames: ["outcome"],
   registers: [metricsRegistry],
 });
 
@@ -232,7 +283,7 @@ export const goalRemindersSentTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Notifications ───────────────────────────────────────────────────────────
+// ─── Notifications ────────────────────────────────────────────────────────[...]
 
 export const notificationDeliveryAttemptsTotal = new Counter<string>({
   name: "notification_delivery_attempts_total",
@@ -241,11 +292,88 @@ export const notificationDeliveryAttemptsTotal = new Counter<string>({
   registers: [metricsRegistry],
 });
 
-// ─── Webhooks ─────────────────────────────────────────────────────────────────
+export const emailDeliveryFailuresTotal = new Counter<string>({
+  name: "email_delivery_failures_total",
+  help: "Total email delivery failures, partitioned by provider",
+  labelNames: ["provider"],
+  registers: [metricsRegistry],
+});
+
+export const emailDeliverySuccessTotal = new Counter<string>({
+  name: "email_delivery_success_total",
+  help: "Total successful email deliveries, partitioned by provider",
+  labelNames: ["provider"],
+  registers: [metricsRegistry],
+});
+
+export const pushTokenInvalidTotal = new Counter<string>({
+  name: "push_token_invalid_total",
+  help: "Total invalid push tokens encountered",
+  labelNames: ["reason"],
+  registers: [metricsRegistry],
+});
+
+export const pushNotificationsSentTotal = new Counter<string>({
+  name: "push_notifications_sent_total",
+  help: "Total push notifications sent",
+  labelNames: ["status"],
+  registers: [metricsRegistry],
+});
+
+// ─── Webhooks ─────────────────────────────────────────────────────────…[...]
 
 export const webhookCircuitBreakerState = new Gauge<string>({
   name: "webhook_circuit_breaker_state",
   help: "Webhook per-endpoint circuit breaker state (0=closed, 1=open, 2=half-open)",
   labelNames: ["url_hash"],
+  registers: [metricsRegistry],
+});
+
+// ─── Wallet Reconciliation ─────────────────────────────────────────────────
+
+export const walletReconciliationsTotal = new Counter<string>({
+  name: "wallet_reconciliations_total",
+  help: "Total wallet reconciliation runs, partitioned by outcome (success, no_wallet, error)",
+  labelNames: ["status"],
+  registers: [metricsRegistry],
+});
+
+export const walletDiscrepanciesTotal = new Counter<string>({
+  name: "wallet_discrepancies_total",
+  help: "Total asset balance discrepancies detected during reconciliation, partitioned by asset type",
+  labelNames: ["asset_type"],
+  registers: [metricsRegistry],
+});
+
+// ─── Audit Logging ────────────────────────────────────────────────────────[...]
+
+export const auditLogQueueRejectionsTotal = new Counter<string>({
+  name: "audit_log_queue_rejections_total",
+  help: "Total audit log queue rejections when enqueueing entries fails, partitioned by reason (queue_full, redis_unavailable, unknown)",
+  labelNames: ["reason"],
+  registers: [metricsRegistry],
+});
+
+// ─── Backups (issue #1303) ────────────────────────────────────────────────
+
+export const backupDurationSeconds = new Histogram<string>({
+  name: "backup_duration_seconds",
+  help: "Backup operation duration in seconds, partitioned by backup type",
+  labelNames: ["type"],
+  buckets: [0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300],
+  registers: [metricsRegistry],
+});
+
+export const backupOperationsTotal = new Counter<string>({
+  name: "backup_operations_total",
+  help: "Total backup operations, partitioned by type and status (success, failure)",
+  labelNames: ["type", "status"],
+  registers: [metricsRegistry],
+});
+
+export const backupSizeBytes = new Gauge<string>({
+  name: "backup_size_bytes",
+  help: "Last completed backup file size in bytes, partitioned by backup type",
+  labelNames: ["type"],
   registers: [metricsRegistry],
 });

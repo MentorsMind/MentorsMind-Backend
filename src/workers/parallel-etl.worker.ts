@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Parallel ETL Worker
  * Handles parallel processing of ETL tasks
  * Issue #873
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { Worker } from 'worker_threads';
 
 export interface WorkerTask {

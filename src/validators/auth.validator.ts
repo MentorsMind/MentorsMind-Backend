@@ -5,8 +5,8 @@ export const registerSchema = z.object({
     body: z.object({
         email: emailSchema,
         password: passwordSchema,
-        firstName: z.string().min(2, 'First name is required').max(50),
-        lastName: z.string().min(2, 'Last name is required').max(50),
+        firstName: z.string().trim().min(2, 'First name is required').max(50),
+        lastName: z.string().trim().min(2, 'Last name is required').max(50),
         role: z.enum(['mentee', 'mentor'])
             .default('mentee'),
     }).strict()

@@ -129,6 +129,14 @@ export const StorageService = {
   },
 
   /**
+   * Build an S3 object key for forensics evidence bundles.
+   * Layout: forensics/incidents/{incidentId}/{timestamp}.json
+   */
+  buildForensicsKey(incidentId: string, timestamp: number): string {
+    return `forensics/incidents/${incidentId}/${timestamp}.json`;
+  },
+
+  /**
    * Build an S3 object key for session recordings
    */
   buildRecordingKey(sessionId: string, recordingId: string, extension: string = 'mp4'): string {
@@ -206,11 +214,11 @@ export const StorageService = {
             Transitions: [
               {
                 Days: 30,
-                StorageClass: 'STANDARD_IA' as StorageClass,
+                StorageClass: 'STANDARD_IA',
               },
               {
                 Days: 90,
-                StorageClass: 'GLACIER' as StorageClass,
+                StorageClass: 'GLACIER',
               },
             ],
             Expiration: {

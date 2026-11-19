@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Intelligent Connection Pool Manager
  * Manages adaptive pool sizing, health monitoring, failover, and leak detection
  */
 
 import { EventEmitter } from 'events';
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { PoolOptimizationConfig, PoolMetrics, defaultPoolConfig } from '../config/pool-optimization';
 import { ConnectionHealthService } from './connection-health.service';
 

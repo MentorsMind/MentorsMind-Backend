@@ -11,8 +11,8 @@
  *  - Virus-scan job enqueued via the existing VIRUS_SCAN queue
  */
 
-import sharp from 'sharp';
 import { StorageService } from './storage.service';
+import { ImageOptimizationService } from './image-optimization.service';
 import { virusScanQueue } from '../queues/virus-scan.queue';
 import { logger } from '../utils/logger.utils';
 import { env } from '../config/env';
@@ -141,10 +141,10 @@ export const UploadService = {
 
     // ── 4. Generate a unique S3 key ─────────────────────────────────────────
     const timestamp = Date.now();
-    const s3Key = `avatars/${userId}/${timestamp}.jpg`;
+    const s3Key = `avatars/${userId}/${timestamp}.webp`;
 
     // ── 5. Upload to S3 ─────────────────────────────────────────────────────
-    await StorageService.uploadFile(s3Key, processedBuffer, 'image/jpeg', {
+    await StorageService.uploadFile(s3Key, processedBuffer, 'image/webp', {
       userId,
       uploadedAt: new Date().toISOString(),
     });

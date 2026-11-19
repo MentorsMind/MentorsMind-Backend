@@ -2,6 +2,7 @@ import helmet from 'helmet';
 import { Request, Response, NextFunction } from 'express';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
+import config from '../config';
 import { validationConfig } from '../config/validation.config';
 
 export const securityMiddleware = helmet({
@@ -18,12 +19,13 @@ export const securityMiddleware = helmet({
       mediaSrc: ["'self'"],
       manifestSrc: ["'self'"],
       workerSrc: ["'self'"],
+      reportUri: ['/api/v1/csp-report'],
       upgradeInsecureRequests: [],
     },
     reportOnly: false,
   },
   hsts: {
-    maxAge: 31536000, // 1 year
+    maxAge: config.security.hstsMaxAge,
     includeSubDomains: true,
     preload: true,
   },
@@ -138,7 +140,8 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
         contentLength,
         maxAllowed: validationConfig.maxBodySize
       });
-      return res.status(413).json({
+      res.status(413).json({
+
         status: 'error',
         code: 'PAYLOAD_TOO_LARGE',
         message: 'Request body size exceeds the allowed limit'
@@ -164,7 +167,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
           url: req.originalUrl,
           injectionTypes: { sql: sqlDetected, xss: xssDetected, cmd: cmdDetected }
         });
-        return res.status(400).json({
+        res.status(400).json({
           status: 'error',
           code: 'MALICIOUS_INPUT_DETECTED',
           message: 'Request contains potentially malicious content'
@@ -192,7 +195,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
             paramLength: value.length,
             maxAllowed: validationConfig.maxQueryParamLength
           });
-          return res.status(400).json({
+          res.status(400).json({
             status: 'error',
             code: 'QUERY_PARAM_TOO_LARGE',
             message: `Query parameter '${key}' exceeds size limit`
@@ -223,7 +226,7 @@ export const sanitizeInput = (req: Request, res: Response, next: NextFunction): 
     });
     
     // Fail securely - reject request if security validation fails
-    return res.status(500).json({
+    res.status(500).json({
       status: 'error',
       code: 'SECURITY_VALIDATION_ERROR',
       message: 'Security validation failed'

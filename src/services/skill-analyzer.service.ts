@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Skill Analyzer Service
  * Analyzes skill gaps and provides recommendations
  * Issue #874
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface SkillCategory {
   category: string;

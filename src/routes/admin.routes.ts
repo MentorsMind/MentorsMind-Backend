@@ -26,6 +26,8 @@ import { MentorQualityController } from "../controllers/mentor-quality.controlle
 import { TraceController } from "../controllers/trace.controller";
 import { EscrowController } from "../controllers/escrow.controller";
 import { BackgroundCheckController } from "../controllers/background-check.controller";
+import { WalletReconciliationController } from "../controllers/wallet-reconciliation.controller";
+import { WebhookEventsController } from "../controllers/webhook-events.controller";
 import { getTraceSchema } from "../validators/schemas/trace.schemas";
 import {
   listAdminUsersSchema,
@@ -514,6 +516,15 @@ router.get("/sessions", validate(listAdminSessionsSchema), asyncHandler(AdminCon
  *         description: Paginated list of payments
  */
 router.get("/payments", validate(listAdminPaymentsSchema), asyncHandler(AdminController.listPayments));
+
+/** GET /admin/payments/reconciliation — list Stripe/Stellar mismatch review queue */
+router.get("/payments/reconciliation", asyncHandler(AdminController.listPaymentReconciliations));
+
+/** PATCH /admin/payments/reconciliation/:id/review — update discrepancy review status */
+router.patch(
+  "/payments/reconciliation/:id/review",
+  asyncHandler(AdminController.reviewPaymentReconciliation),
+);
 
 /**
  * @swagger
@@ -1748,7 +1759,7 @@ router.post(
     action: AuditAction.ADMIN_ACTION,
     getEntityDetails: (req) => ({ type: "USER", id: req.params.id as string }),
   }),
-  asyncHandler(AdminController.startImpersonation),
+  asyncHandler((AdminController as any).startImpersonation),
 );
 
 /**
@@ -1779,7 +1790,7 @@ router.delete(
     action: AuditAction.ADMIN_ACTION,
     getEntityDetails: (req) => ({ type: "IMPERSONATION_SESSION", id: req.params.sessionId as string }),
   }),
-  asyncHandler(AdminController.endImpersonation),
+  asyncHandler((AdminController as any).endImpersonation),
 );
 
 /**
@@ -1794,4 +1805,41 @@ router.delete(
  *       200:
  *         description: List of active impersonation sessions
  */
-router.get("/impersonation", asyncHandler(AdminController.listActiveImpersonations));
+router.get("/impersonation", asyncHandler((AdminController as any).listActiveImpersonations));
+
+/**
+ * @swagger
+ * /admin/wallets/{id}/sync:
+ *   post:
+ *     summary: Reconcile a wallet's stored balances against the Stellar network
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Wallet ID (wallets.id)
+ *     responses:
+ *       200:
+ *         description: Reconciliation result with per-asset deltas
+ *       404:
+ *         description: Wallet not found
+ *       502:
+ *         description: Reconciliation failed (e.g. Horizon unreachable)
+ */
+router.post(
+  "/wallets/:id/sync",
+  asyncHandler(WalletReconciliationController.syncWallet),
+);
+
+// Inbound webhook idempotency admin (issue #979)
+router.get(
+  "/webhooks/events",
+  asyncHandler(WebhookEventsController.list as any),
+);
+router.post(
+  "/webhooks/events/:id/replay",
+  asyncHandler(WebhookEventsController.replay as any),
+);

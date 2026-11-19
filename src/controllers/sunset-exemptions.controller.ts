@@ -77,12 +77,15 @@ export const SunsetExemptionsController = {
   async revoke(req: Request, res: Response): Promise<void> {
     const { userId, apiVersion } = req.params;
 
-    if (!VERSION_PATTERN.test(apiVersion ?? "")) {
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+    const apiVersionStr = Array.isArray(apiVersion) ? apiVersion[0] : apiVersion;
+
+    if (!VERSION_PATTERN.test(apiVersionStr ?? "")) {
       res.status(400).json({ success: false, error: "Invalid apiVersion" });
       return;
     }
 
-    const revoked = await SunsetExemptionService.revoke(userId, apiVersion);
+    const revoked = await SunsetExemptionService.revoke(userIdStr, apiVersionStr);
     if (!revoked) {
       res.status(404).json({
         success: false,

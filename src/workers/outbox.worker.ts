@@ -123,7 +123,7 @@ async function tick(): Promise<void> {
 
         const grouped = groupJobsByDestination(allJobs);
 
-        for (const [destination, jobs] of grouped.entries()) {
+        for (const [destination, jobs] of Array.from(grouped.entries())) {
           const queue = queueFor(destination);
           try {
             await queue.addBulk(
@@ -134,7 +134,7 @@ async function tick(): Promise<void> {
               })),
             );
             for (const j of jobs) {
-              for (const [eventId, jobIds] of eventToJobIds.entries()) {
+              for (const [eventId, jobIds] of Array.from(eventToJobIds.entries())) {
                 if (jobIds.includes(j.jobId ?? "")) {
                   processedSet.add(eventId);
                 }
@@ -153,7 +153,7 @@ async function tick(): Promise<void> {
             // the whole batch.
             for (const j of jobs) {
               let ownerEventId: string | null = null;
-              for (const [eventId, jobIds] of eventToJobIds.entries()) {
+              for (const [eventId, jobIds] of Array.from(eventToJobIds.entries())) {
                 if (jobIds.includes(j.jobId ?? "")) {
                   ownerEventId = eventId;
                   break;

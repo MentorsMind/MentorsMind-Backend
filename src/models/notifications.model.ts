@@ -1,5 +1,5 @@
-import pool from "../config/database";
-import { logger } from "../utils/logger";
+﻿import pool from "../config/database";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface NotificationRecord {
   id: string;
@@ -33,6 +33,8 @@ export enum NotificationType {
   GOAL_DEADLINE_REMINDER = "goal_deadline_reminder",
   GOAL_OVERDUE = "goal_overdue",
   DISPUTE_CREATED = "dispute_created",
+  SESSION_NO_SHOW = "session_no_show",
+  NO_SHOW_DISPUTE = "no_show_dispute",
   SYSTEM_ALERT = "system_alert",
   MEETING_CONFIRMED = "meeting_confirmed",
   MESSAGE_RECEIVED = "message_received",
@@ -114,7 +116,7 @@ export const NotificationsModel = {
 
   /**
    * Get notifications for a user with filtering options.
-   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) — verified correct, no bare paramCount interpolation.
+   * All dynamic WHERE, LIMIT, and OFFSET clauses use $N placeholders (e.g. $${paramCount++}) â€” verified correct, no bare paramCount interpolation.
    */
   async getByUserId(
     userId: string,
@@ -361,3 +363,4 @@ export const NotificationsModel = {
     }
   },
 };
+

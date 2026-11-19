@@ -1,3 +1,4 @@
+import { trace, SpanStatusCode } from "@opentelemetry/api";
 import { logger } from '../utils/logger.utils';
 import { redisConfig } from '../config/redis.config';
 
@@ -28,8 +29,9 @@ const memStore = new Map<string, MemEntry>();
 // Evict expired entries every minute
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of memStore.entries()) {
-    if (entry.expiresAt <= now) memStore.delete(key);
+  for (const entry of Array.from(memStore.entries())) {
+    const [key, entryValue] = entry;
+    if (entryValue.expiresAt <= now) memStore.delete(key);
   }
 }, 60_000);
 
@@ -52,7 +54,7 @@ function memDel(key: string): void {
 
 function memKeys(pattern: string): string[] {
   const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-  return [...memStore.keys()].filter((k) => regex.test(k));
+  return Array.from(memStore.keys()).filter((k) => regex.test(k));
 }
 
 // ─── Redis Client ─────────────────────────────────────────────────────────────
@@ -109,6 +111,42 @@ function track(event: keyof CacheMetrics, key: string): void {
   }
 }
 
+// ─── OpenTelemetry Span Helper ────────────────────────────────────────────────
+
+/**
+ * Runs a cache backend operation inside an OpenTelemetry span named
+ * `cache.<operation>` so Redis call latency and errors are visible in traces.
+ * Uses @opentelemetry/api directly — when the SDK has not been initialised the
+ * API returns no-op spans, so this stays cheap in test/dev environments.
+ */
+function withCacheSpan<T>(
+  operation: string,
+  key: string | undefined,
+  backend: "redis" | "memory",
+  fn: () => Promise<T>,
+): Promise<T> {
+  const tracer = trace.getTracer("mentorminds");
+  return tracer.startActiveSpan(`cache.${operation}`, async (span) => {
+    span.setAttribute("cache.operation", operation);
+    span.setAttribute("cache.backend", backend);
+    if (key !== undefined) span.setAttribute("cache.key", key);
+    try {
+      const result = await fn();
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (err) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: err instanceof Error ? err.message : String(err),
+      });
+      span.recordException(err instanceof Error ? err : new Error(String(err)));
+      throw err;
+    } finally {
+      span.end();
+    }
+  });
+}
+
 // ─── Public Service ───────────────────────────────────────────────────────────
 
 export class CacheService {
@@ -116,13 +154,15 @@ export class CacheService {
   static async get<T>(key: string): Promise<T | null> {
     try {
       const client = await getClient();
-      const raw = client ? await client.get(key) : memGet(key);
-      if (raw === null) {
+      const raw = client
+        ? await withCacheSpan("get", key, "redis", () => client.get(key))
+        : memGet(key);
+      if (!raw) {
         track('misses', key);
         return null;
       }
       track('hits', key);
-      return JSON.parse(raw) as T;
+      return JSON.parse(raw as any) as T;
     } catch (err: any) {
       track('errors', key);
       logger.warn('Cache get error', { key, error: err.message });
@@ -140,7 +180,9 @@ export class CacheService {
       const serialized = JSON.stringify(value);
       const client = await getClient();
       if (client) {
-        await client.setex(key, ttlSeconds, serialized);
+        await withCacheSpan("set", key, "redis", () =>
+          client.setex(key, ttlSeconds, serialized),
+        );
       } else {
         memSet(key, serialized, ttlSeconds);
       }
@@ -151,12 +193,56 @@ export class CacheService {
     }
   }
 
+
+  /** Add members to a set */
+  static async sadd(key: string, members: string[], ttlSeconds = redisConfig.defaultTtl): Promise<void> {
+    try {
+      if (members.length === 0) return;
+      const client = await getClient();
+      if (client) {
+        await withCacheSpan("sadd", key, "redis", () => client.sadd(key, ...members));
+        await withCacheSpan("expire", key, "redis", () => client.expire(key, ttlSeconds));
+      } else {
+        const current = new Set(JSON.parse(memGet(key) || '[]') as string[]);
+        for (const m of members) current.add(m);
+        memSet(key, JSON.stringify(Array.from(current)), ttlSeconds);
+      }
+      track('sets', key);
+    } catch (err: any) {
+      track('errors', key);
+      logger.warn('Cache sadd error', { key, error: err.message });
+    }
+  }
+
+  /** Check if member is in set */
+  static async sismember(key: string, member: string): Promise<boolean> {
+    try {
+      const client = await getClient();
+      if (client) {
+        const res = await withCacheSpan("sismember", key, "redis", () => client.sismember(key, member));
+        track('hits', key);
+        return res === 1;
+      } else {
+        const current = JSON.parse(memGet(key) || '[]') as string[];
+        track('hits', key);
+        return current.includes(member);
+      }
+    } catch (err: any) {
+      track('errors', key);
+      logger.warn('Cache sismember error', { key, error: err.message });
+      return false;
+    }
+  }
+
   /** Delete a specific key */
   static async del(key: string): Promise<void> {
     try {
       const client = await getClient();
-      if (client) await client.del(key);
-      else memDel(key);
+      if (client) {
+        await withCacheSpan("del", key, "redis", () => client.del(key));
+      } else {
+        memDel(key);
+      }
       track('deletes', key);
     } catch (err: any) {
       track('errors', key);
@@ -175,9 +261,13 @@ export class CacheService {
       const serialized = JSON.stringify(value);
       const client = await getClient();
       if (client) {
-        await client.lpush(key, serialized);
-        await client.ltrim(key, 0, maxLength - 1);
-        await client.expire(key, ttlSeconds);
+        await withCacheSpan("lpush", key, "redis", () => client.lpush(key, serialized));
+        await withCacheSpan("ltrim", key, "redis", () =>
+          client.ltrim(key, 0, maxLength - 1),
+        );
+        await withCacheSpan("expire", key, "redis", () =>
+          client.expire(key, ttlSeconds),
+        );
       } else {
         const current = JSON.parse(memGet(key) || '[]') as T[];
         current.unshift(value);
@@ -195,7 +285,9 @@ export class CacheService {
     try {
       const client = await getClient();
       const rawItems: string[] = client
-        ? await client.lrange(key, start, stop)
+        ? await withCacheSpan("lrange", key, "redis", () =>
+            client.lrange(key, start, stop),
+          )
         : (JSON.parse(memGet(key) || '[]') as T[])
             .slice(start, stop === -1 ? undefined : stop + 1)
             .map((item) => JSON.stringify(item));
@@ -214,8 +306,12 @@ export class CacheService {
     try {
       const client = await getClient();
       if (client) {
-        const keys: string[] = await client.keys(pattern);
-        if (keys.length) await client.del(...keys);
+        const keys: string[] = await withCacheSpan("keys", pattern, "redis", () =>
+          client.keys(pattern),
+        );
+        if (keys.length) {
+          await withCacheSpan("del", pattern, "redis", () => client.del(...keys));
+        }
       } else {
         for (const key of memKeys(pattern)) memDel(key);
       }
@@ -263,7 +359,7 @@ export class CacheService {
   static async ping(): Promise<void> {
     const client = await getClient();
     if (!client) throw new Error('Redis client unavailable');
-    const pong = await client.ping();
+    const pong = await withCacheSpan("ping", undefined, "redis", () => client.ping());
     if (pong !== 'PONG') throw new Error(`Unexpected ping response: ${pong}`);
   }
 

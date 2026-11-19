@@ -4,18 +4,21 @@ import { BulkService } from "../services/bulk.service";
 import { bulkQueue } from "../queues/bulk.queue";
 import { createError } from "../middleware/errorHandler";
 import { BulkJobModel } from "../models/bulk-job.model";
+import { routeParam } from "../utils/route-params.utils";
 
 export const BulkProgressController = {
   async getStatus(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobId } = req.params;
+      const jobId = routeParam(req.params.jobId);
       const requestedBy = req.user?.id || req.user?.userId;
 
       if (!requestedBy) {
         throw createError("Unauthorized", 401);
       }
 
-      const job = await BulkService.getJob(jobId, requestedBy);
+      const userId = Array.isArray(requestedBy) ? requestedBy[0] : requestedBy;
+
+      const job = await BulkService.getJob(jobId, userId);
       if (!job) {
         throw createError("Job not found", 404);
       }
@@ -56,14 +59,16 @@ export const BulkProgressController = {
 
   async deleteJob(req: Request, res: Response, next: NextFunction) {
     try {
-      const { jobId } = req.params;
+      const jobId = routeParam(req.params.jobId);
       const requestedBy = req.user?.id || req.user?.userId;
 
       if (!requestedBy) {
         throw createError("Unauthorized", 401);
       }
 
-      const job = await BulkService.getJob(jobId, requestedBy);
+      const userId = Array.isArray(requestedBy) ? requestedBy[0] : requestedBy;
+
+      const job = await BulkService.getJob(jobId, userId);
       if (!job) {
         throw createError("Job not found", 404);
       }

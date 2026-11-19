@@ -1,17 +1,17 @@
-// @ts-nocheck
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { WalletsService } from '../services/wallets.service';
 import { stellarService } from '../services/stellar.service';
 import { defiWalletService } from '../services/defi-wallet.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { logger } from '../utils/logger.utils';
-import type { 
-  PayoutRequestInput, 
+import type {
+  PayoutRequestInput,
   TrustlineRequestInput,
   TransactionQuery,
   EarningsQuery,
-  BalanceQuery 
+  BalanceQuery,
+  WalletTransferInput
 } from '../validators/schemas/wallet.schemas';
 
 export const WalletsController = {
@@ -124,8 +124,8 @@ export const WalletsController = {
         stellar_private_key: undefined,
         seed_phrase: undefined,
         // Only show first 8 and last 8 characters of public key for verification
-        stellar_public_key_display: `${walletInfo.stellar_public_key.substring(0, 8)}...${walletInfo.stellar_public_key.substring(-8)}`,
-        stellar_public_key: walletInfo.stellar_public_key, // Keep full key for API operations
+        stellar_public_key_display: `${walletInfo.stellarPublicKey.substring(0, 8)}...${walletInfo.stellarPublicKey.substring(-8)}`,
+        stellar_public_key: walletInfo.stellarPublicKey, // Keep full key for API operations
       };
 
       // Log wallet access event with rate limiting check
@@ -133,7 +133,7 @@ export const WalletsController = {
         eventType: 'balance_check',
         metadata: { 
           action: 'wallet_info_access',
-          hasPublicKey: !!walletInfo.stellar_public_key,
+          hasPublicKey: !!walletInfo.stellarPublicKey,
           walletStatus: walletInfo.status || 'unknown'
         },
         ipAddress: req.ip,
@@ -235,7 +235,7 @@ export const WalletsController = {
   async getTransactions(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { cursor, limit = 10, order = 'desc' } = req.query as TransactionQuery;
+      const { cursor, limit = 10, order = 'desc' } = req.query as unknown as TransactionQuery;
       
       const wallet = await WalletsService.getUserWallet(userId);
       
@@ -420,7 +420,7 @@ export const WalletsController = {
   async getEarnings(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user!.id;
-      const { startDate, endDate, assetCode = 'USD' } = req.query as EarningsQuery;
+      const { startDate, endDate, assetCode = 'USD' } = req.query as unknown as EarningsQuery;
       
       const earningsSummary = await WalletsService.getEarningsSummary(
         userId,
@@ -477,6 +477,61 @@ export const WalletsController = {
         error: error instanceof Error ? error.message : error,
       });
       ResponseUtil.error(res, 'Failed to retrieve payout requests', 500);
+    }
+  },
+
+  /** POST /wallets/:id/transfer */
+  async transfer(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user!.userId;
+      const { id: walletId } = req.params;
+      const { amount, destinationAddress, assetCode, memo } = req.body as WalletTransferInput;
+
+      const wallet = await WalletsService.getUserWallet(userId);
+      if (!wallet) {
+        ResponseUtil.notFound(res, 'Wallet not found');
+        return;
+      }
+
+      if (wallet.id !== walletId) {
+        ResponseUtil.error(res, 'Unauthorized', 403);
+        return;
+      }
+
+      const transactionResponse = await (stellarService as any).transfer(
+        wallet.stellar_public_key,
+        destinationAddress,
+        amount,
+        assetCode || 'XLM',
+        memo
+      );
+
+      await WalletsService.logWalletEvent(userId, {
+        eventType: 'transfer' as any,
+        metadata: {
+          destinationAddress,
+          amount,
+          assetCode: assetCode || 'XLM',
+          txHash: transactionResponse.hash,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      ResponseUtil.success(res, {
+        transactionHash: transactionResponse.hash,
+        status: 'pending',
+        amount,
+        destinationAddress,
+        assetCode: assetCode || 'XLM',
+        timestamp: new Date().toISOString(),
+      }, 'Transfer initiated successfully', 202);
+    } catch (error) {
+      logger.error('wallets.transfer failed', {
+        userId: req.user?.userId,
+        error: error instanceof Error ? error.message : error,
+      });
+      ResponseUtil.error(res, 'Failed to process transfer', 500);
     }
   },
 };

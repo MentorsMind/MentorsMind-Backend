@@ -4,8 +4,9 @@ import { PresenceService } from '../services/presence.service';
 import { redisClient } from '../config/redis';
 import { logger } from '../utils/logger.utils';
 import { BookingModel } from '../models/booking.model';
+import { routeParam } from '../utils/route-params.utils';
 
-const presenceService = new PresenceService(redisClient);
+const presenceService = new PresenceService(redisClient as any);
 
 /**
  * POST /api/v1/sessions/:id/join
@@ -20,9 +21,12 @@ const presenceService = new PresenceService(redisClient);
  */
 export async function joinSession(req: Request, res: Response): Promise<void> {
   try {
-    const { id: sessionId } = req.params;
+    const sessionId = routeParam(req.params.id);
     const userId = req.user!.id;
     const userRole = req.user!.role;
+
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+    const userRoleStr = Array.isArray(userRole) ? userRole[0] : userRole;
 
     // Verify session exists
     const booking = await BookingModel.findById(sessionId);
@@ -35,8 +39,8 @@ export async function joinSession(req: Request, res: Response): Promise<void> {
     }
 
     // Verify user is a participant
-    const isMentor = booking.mentor_id === userId;
-    const isMentee = booking.mentee_id === userId;
+    const isMentor = booking.mentor_id === userIdStr;
+    const isMentee = booking.mentee_id === userIdStr;
 
     if (!isMentor && !isMentee) {
       res.status(403).json({ 
@@ -71,13 +75,13 @@ export async function joinSession(req: Request, res: Response): Promise<void> {
     // Mark as joined
     const joinedAt = await presenceService.markSessionJoined(
       sessionId,
-      userId,
+      userIdStr,
       role
     );
 
     logger.info('User joined session', {
       sessionId,
-      userId,
+      userId: userIdStr,
       role,
       joinedAt,
     });
@@ -118,8 +122,11 @@ export async function getSessionPresence(
   res: Response
 ): Promise<void> {
   try {
-    const { id: sessionId } = req.params;
+    const sessionId = routeParam(req.params.id);
     const userId = req.user!.id;
+    const userIdParam = req.query.userId;
+    const userIdValue = Array.isArray(userIdParam) ? userIdParam[0] : userIdParam;
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
 
     // Verify session exists
     const booking = await BookingModel.findById(sessionId);
@@ -133,7 +140,7 @@ export async function getSessionPresence(
 
     // Verify user is a participant
     const isParticipant =
-      booking.mentor_id === userId || booking.mentee_id === userId;
+      booking.mentor_id === userIdStr || booking.mentee_id === userIdStr;
 
     if (!isParticipant) {
       res.status(403).json({ 

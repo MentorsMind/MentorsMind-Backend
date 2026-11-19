@@ -82,6 +82,8 @@ export interface SecurityIncident {
   affected_resource: string | null;
   /** Analyst notes (free text) */
   analyst_notes: string | null;
+  /** S3 URI of the uploaded forensic evidence bundle (set after S3 upload) */
+  s3_uri: string | null;
   /** UTC timestamp when the threat was first observed (may predate created_at) */
   first_seen_at: Date;
   /** UTC timestamp of the most recent related event */
@@ -343,6 +345,22 @@ export const SecurityIncidentModel = {
        WHERE id = $1
        RETURNING *`,
       [id, newScore ?? null],
+    );
+    return rows[0] ?? null;
+  },
+
+  /**
+   * Store the S3 URI of the uploaded forensic evidence bundle on the incident record.
+   * Writes to the s3_uri column (added in the forensics S3 upload migration).
+   */
+  async setS3Uri(id: string, s3Uri: string): Promise<SecurityIncident | null> {
+    const { rows } = await pool.query<SecurityIncident>(
+      `UPDATE security_incidents
+       SET s3_uri = $2,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [id, s3Uri],
     );
     return rows[0] ?? null;
   },

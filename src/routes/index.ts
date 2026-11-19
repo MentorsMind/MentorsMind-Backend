@@ -31,6 +31,7 @@ import subscriptionRoutes from "./subscriptions.routes";
 import taxRoutes from "./tax.routes";
 import oracleRoutes from "./oracle.routes";
 import vestingRoutes from "./vesting.routes";
+import stakingRoutes from "./staking.routes";
 import { BookingsService } from "../services/bookings.service";
 import { notificationCleanupService } from "../services/notification-cleanup.service";
 import {
@@ -52,6 +53,7 @@ import { monitoringConfig } from "../config/monitoring.config";
 import adminAuditRoutes from "./admin/audit-logs.routes";
 import hsmAdminRoutes from "./admin/hsm.routes";
 import collaborativeLearningRoutes from "./collaborative-learning.routes";
+import adaptiveAuthRoutes from "./adaptive-auth.routes";
 
 const router = Router();
 
@@ -104,9 +106,11 @@ router.use("/developer", developerRoutes);
 router.use("/subscriptions", subscriptionRoutes);
 router.use("/tax", taxRoutes);
 router.use("/oracle", oracleRoutes);
+router.use("/staking", stakingRoutes);
 router.use("/admin/audit-logs", adminAuditRoutes);
 router.use("/admin/hsm", hsmAdminRoutes);
 router.use("/collaborative-learning", collaborativeLearningRoutes);
+router.use("/adaptive-auth", adaptiveAuthRoutes);
 router.use("/", exportRoutes);
 
 // JWKS public endpoint — no auth required

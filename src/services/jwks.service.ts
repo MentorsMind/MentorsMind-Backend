@@ -307,6 +307,25 @@ export const JwksService = {
   },
 
   /**
+   * Return the verification method metadata currently used to sign DID credentials.
+   * This supports downstream W3C verification and public revocation registry proofs.
+   */
+  async getCurrentVerificationMethod(): Promise<{ id: string; type: string; controller: string; publicKeyPem: string; kid: string }> {
+    const current = await this.getCurrentKey();
+    if (!current) {
+      throw new Error("No signing key available for DID verification method");
+    }
+
+    return {
+      id: `${process.env.PLATFORM_DID || "did:web:api.mentorminds.com"}#key-1`,
+      type: "RsaVerificationKey2018",
+      controller: process.env.PLATFORM_DID || "did:web:api.mentorminds.com",
+      publicKeyPem: current.publicKeyPem,
+      kid: current.kid,
+    };
+  },
+
+  /**
    * Check whether a key is still within its validity window.
    */
   isKeyValid(key: KeyPair): boolean {

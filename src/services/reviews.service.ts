@@ -1,8 +1,9 @@
-import { PoolClient } from "pg";
+﻿import { PoolClient } from "pg";
 import pool from "../config/database";
 import { createError } from "../middleware/errorHandler";
 import { env } from "../config/env";
 import { UsersService } from "./users.service";
+import { PaginationUtil } from "../utils/pagination.utils";
 import { InAppNotificationService } from "./inAppNotification.service";
 import { emailService } from "./email.service";
 import { ModerationService } from "./moderation.service";
@@ -276,14 +277,16 @@ export const ReviewsService = {
     try {
       await client.query("BEGIN");
 
-      // Verify a completed booking exists where id = session_id and mentee_id = reviewerId
+      // Verify a completed booking exists where id = session_id (issue #1302:
+      // participant check below, at service layer, so it applies regardless of call path)
       const bookingResult = await client.query<{
         id: string;
         mentor_id: string;
+        mentee_id: string;
       }>(
-        `SELECT id, mentor_id FROM bookings
-         WHERE id = $1 AND mentee_id = $2 AND status = 'completed'`,
-        [payload.session_id, reviewerId],
+        `SELECT id, mentor_id, mentee_id FROM bookings
+         WHERE id = $1 AND status = 'completed'`,
+        [payload.session_id],
       );
 
       if (bookingResult.rows.length === 0) {
@@ -294,7 +297,29 @@ export const ReviewsService = {
       }
 
       const booking = bookingResult.rows[0];
+
+      // Issue #1302: reviewer must be a booking participant (mentee or mentor).
+      // Blocks fraudulent reviews from non-participants guessing a valid bookingId.
+      if (booking.mentee_id !== reviewerId && booking.mentor_id !== reviewerId) {
+        throw createError(
+          "You are not a participant of this booking",
+          403,
+        );
+      }
+
       const mentorId = booking.mentor_id;
+
+      // Prevent self-review: reviewer cannot be the same as reviewee
+      if (reviewerId === mentorId) {
+        throw createError(
+          "You cannot review yourself",
+          400,
+        );
+      }
+
+      // Verify booking ownership: mentee and mentor match the session
+      // (already verified mentee_id above; also verify mentor_id is not the reviewer)
+      // This additional check prevents booking manipulation attacks
 
       // Check for existing review on same booking_id + reviewer_id
       const existingReview = await client.query(
@@ -358,7 +383,7 @@ export const ReviewsService = {
       throw createError("Mentor not found", 404);
     }
 
-    const limit = params.limit ?? 10;
+    const limit = params.limit ?? 20;
     const page = params.page ?? 1;
 
     // Count total reviews for this mentor (optional for cursor perf, but kept for backward compatibility)
@@ -371,7 +396,7 @@ export const ReviewsService = {
     // Cursor-based (seek) pagination
     if (params.cursor) {
       const decoded =
-        require("../utils/pagination.utils").PaginationUtil.decodeCursor(
+        PaginationUtil.decodeCursor(
           params.cursor,
         );
       // decoded: { id, created_at }
@@ -407,7 +432,7 @@ export const ReviewsService = {
       const lastItem = data[data.length - 1];
       const next_cursor =
         has_more && lastItem
-          ? require("../utils/pagination.utils").PaginationUtil.encodeCursor({
+          ? PaginationUtil.encodeCursor({
               id: lastItem.id,
               created_at: lastItem.created_at.toISOString(),
             })
@@ -895,3 +920,4 @@ export const ReviewsService = {
   // Expose recalculateMentorRating for use in tests
   recalculateMentorRating,
 };
+

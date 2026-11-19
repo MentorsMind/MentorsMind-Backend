@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 import pool from "../config/database";
 import { redis } from "../config/redis";
 import { EncryptionUtil } from "../utils/encryption.utils";
@@ -54,7 +55,7 @@ class KeyRotationJob {
 
     try {
       // Attempt to acquire lock (SET NX EX 3600)
-      const acquired = await redis.set(lockKey, replicaId, "NX", "EX", 3600);
+      const acquired = await (redis as any).set(lockKey, replicaId, "NX", "EX", 3600);
       if (!acquired) {
         logger.info("JWT key rotation skipped: lock acquired by another instance");
         return;
@@ -85,9 +86,7 @@ class KeyRotationJob {
 
   /** PII/encryption key rotation — runs weekly at 1 AM UTC */
   private startPiiRotation(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 1 * * 0", async () => {
+    try {      const job = new CronJob("0 1 * * 0", async () => {
         logger.info("Running scheduled PII encryption key rotation");
         try {
           await this.runPiiRotation();
@@ -286,9 +285,7 @@ class KeyRotationJob {
 
   /** HSM key rotation — runs daily at 2 AM UTC (complements PII rotation) */
   private startHsmRotation(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 2 * * *", async () => {
+    try {      const job = new CronJob("0 2 * * *", async () => {
         logger.info("Running scheduled HSM key rotation sweep");
         try {
           const summaries = await keyManagementService.runScheduledRotation();

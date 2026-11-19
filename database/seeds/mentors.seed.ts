@@ -1,3 +1,10 @@
+/**
+ * Mentors Seed — Creates wallet profiles and XLM balances for all users.
+ * 
+ * Adds wallet records (linked to Stellar public keys) and native XLM balance entries.
+ * Mentors receive 100–1000 XLM; mentees receive 10–200 XLM.
+ */
+
 import { PoolClient } from 'pg';
 import { SeedFn, SeedSize, seededRandom } from '../../src/utils/seed-runner.utils';
 import { seededUsers } from './users.seed';

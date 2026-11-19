@@ -1,6 +1,28 @@
 import { Request, Response, NextFunction } from 'express';
-import { getCircuitState, CircuitBreakerError } from '../services/database.service';
+import { DatabaseError } from 'pg';
+import { getCircuitState, CircuitBreakerError, onPoolPressure } from '../services/database.service';
 import config from '../config';
+
+/**
+ * Type guard for pg.DatabaseError
+ */
+export function isDatabaseError(err: unknown): err is DatabaseError {
+  return err instanceof DatabaseError;
+}
+
+/**
+ * Checks if a DatabaseError code indicates connection or pool failure that should trigger circuit breaker tracking.
+ */
+export function handleDbErrorCode(err: unknown): string | undefined {
+  if (isDatabaseError(err)) {
+    const code = err.code;
+    if (code && ['57P01', '57014', '08000', '08003', '08006'].includes(code)) {
+      onPoolPressure();
+    }
+    return code;
+  }
+  return undefined;
+}
 
 export function dbCircuitBreakerMiddleware(
   req: Request,

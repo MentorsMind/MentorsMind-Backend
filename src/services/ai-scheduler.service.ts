@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { logger } from "../utils/logger.utils";
 import { TimeSlot } from "./smart-calendar.service";
 
 export interface SchedulingPreferences {
@@ -166,3 +166,4 @@ export class AISchedulerService {
 }
 
 export const aiSchedulerService = new AISchedulerService();
+

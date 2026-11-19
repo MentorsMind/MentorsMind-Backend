@@ -36,6 +36,7 @@ import { stellarMonitorJob } from "./jobs/stellarMonitor.job";
 import backupJob from "./jobs/backup.job";
 import { goalReminderJob } from "./jobs/goalReminder.job";
 import keyRotationJob from "./jobs/keyRotation.job";
+import baselineRefreshJob from "./jobs/baselineRefresh.job";
 import { runReEncryptionJob } from "./jobs/re-encrypt-pii.job";
 import {
   emailWorker,
@@ -50,6 +51,8 @@ import {
   maintenanceWorker,
   webhookDeliveryWorker,
   transcriptionWorker,
+  onboardingNudgeWorker,
+  taxReportingWorker,
   startScheduler,
   stopScheduler,
   startRetentionEnforcementWorker,
@@ -59,6 +62,9 @@ import { initializeEmailTemplates } from "./services/template-initializer.servic
 import { logger } from "./utils/logger.utils";
 import { validateRequiredTables } from "./utils/table-validator.utils";
 import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
+import { stopPoolMonitoring } from "./config/database";
+import { stopAuthDebounceCleanup } from "./middleware/auth.middleware";
+import { stopAllSyncs as stopAllCalendarSyncs } from "./services/calendar-sync.service";
 import { JwksService } from "./services/jwks.service";
 import { registerBookingProjectionHandlers } from "./events/booking.projections";
 import { ProjectionService } from "./services/projection.service";
@@ -116,6 +122,7 @@ import("./services/jwks.service").then(({ JwksService }) =>
 
 // Initialize key rotation jobs
 keyRotationJob.initialize();
+baselineRefreshJob.initialize();
 runReEncryptionJob().catch(err => {
   logger.error("Failed to run Google Calendar re-encryption job", { error: err });
 });
@@ -204,6 +211,8 @@ async function shutdown(signal: string) {
   backupJob.stop();
   goalReminderJob.stop();
   keyRotationJob.stop();
+  baselineRefreshJob.stop();
+  stopAuthDebounceCleanup();
   await Promise.all([
     emailWorker.close(),
     paymentWorker.close(),
@@ -217,9 +226,14 @@ async function shutdown(signal: string) {
     maintenanceWorker.close(),
     webhookDeliveryWorker.close(),
     transcriptionWorker.close(),
+    onboardingNudgeWorker.close(),
+    taxReportingWorker.close(),
     stopScheduler(),
     stopRetentionEnforcementWorker(),
     Promise.resolve(stopPoolMonitor()),
+    Promise.resolve(stopPoolMonitoring()),
+    Promise.resolve(stopAuthDebounceCleanup()),
+    Promise.resolve(stopAllCalendarSyncs()),
   ]);
   server.close(() => {
     logger.info("HTTP server closed");

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { z } from "zod";
 import { SubscriptionService } from "../services/subscription.service";
 import { ResponseUtil } from "../utils/response.utils";
@@ -26,9 +27,8 @@ export const SubscriptionController = {
    * GET /api/v1/subscriptions/current
    * Get the authenticated user's active subscription
    */
-  getCurrent: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id;
+  getCurrent: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id;
       if (!userId) {
         ResponseUtil.error(res, "Unauthorized", 401);
         return;
@@ -43,8 +43,8 @@ export const SubscriptionController = {
    * GET /api/v1/subscriptions
    * List all subscriptions for the authenticated user
    */
-  list: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  list: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       ResponseUtil.error(res, "Unauthorized", 401);
       return;
@@ -58,9 +58,8 @@ export const SubscriptionController = {
    * POST /api/v1/subscriptions
    * Subscribe to a tier
    */
-  subscribe: asyncHandler(
-    async (req: Request, res: Response): Promise<void> => {
-      const userId = (req as any).user?.id;
+  subscribe: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+      const userId = req.user?.id;
       if (!userId) {
         ResponseUtil.error(res, "Unauthorized", 401);
         return;
@@ -87,8 +86,8 @@ export const SubscriptionController = {
    * DELETE /api/v1/subscriptions/:id
    * Cancel a subscription
    */
-  cancel: asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const userId = (req as any).user?.id;
+  cancel: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user?.id;
     if (!userId) {
       ResponseUtil.error(res, "Unauthorized", 401);
       return;

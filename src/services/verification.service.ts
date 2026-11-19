@@ -349,7 +349,7 @@ export const VerificationService = {
                     await enqueueEmail({
                         to: [row.email],
                         subject: `[MentorsMind] Action Required: Mentor Verification Expires in ${t.days} Days`,
-                        html: `<p>Hi ${row.first_name || 'Mentor'},</p><p>Your verification expires on ${new Date(row.expires_at).toLocaleDateString()}. Please renew it to keep your mentor status active.</p>`
+                        htmlContent: `<p>Hi ${row.first_name || 'Mentor'},</p><p>Your verification expires on ${new Date(row.expires_at).toLocaleDateString()}. Please renew it to keep your mentor status active.</p>`
                     }, emailOpts as any);
                 }
                 

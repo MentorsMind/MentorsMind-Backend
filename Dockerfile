@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1 — builder: install all deps and compile TypeScript
 # -----------------------------------------------------------------------------
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -17,7 +17,7 @@ RUN pnpm run build
 # -----------------------------------------------------------------------------
 # Stage 2 — runner: production image (Node slim, non-root, prod deps only)
 # -----------------------------------------------------------------------------
-FROM node:20-bookworm-slim AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 

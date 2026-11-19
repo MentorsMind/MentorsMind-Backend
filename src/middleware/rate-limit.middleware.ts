@@ -34,6 +34,7 @@ interface CreateLimiterOptions {
 function createLimiter(options: CreateLimiterOptions) {
   const { profile, keyStrategy = "ip", message } = options;
   const responseMessage = message ?? profile.message;
+  const scope = profile.scope ?? "general";
 
   return async (
     req: Request,
@@ -76,6 +77,7 @@ function createLimiter(options: CreateLimiterOptions) {
         "Retry-After",
         Math.ceil((result.resetTime.getTime() - Date.now()) / 1000),
       );
+      res.setHeader("X-Rate-Limit-Scope", scope);
       res.status(429).json({
         status: "error",
         message: responseMessage,

@@ -10,5 +10,6 @@ router.use(syncCursorMiddleware);
 
 router.post('/', SyncController.sync);
 router.get('/state', SyncController.getState);
+router.get('/conflicts', SyncController.getConflicts);
 
 export default router;

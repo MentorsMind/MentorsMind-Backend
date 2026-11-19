@@ -1,8 +1,8 @@
-import * as admin from "firebase-admin";
+﻿import * as admin from "firebase-admin";
 import { PushTokensModel } from "../models/push-tokens.model";
 import { UsersService } from "./users.service";
 import { NotificationChannel } from "./notification.service";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
 import { env } from "../config/env";
 import {
   pushTokenInvalidTotal,
@@ -433,6 +433,24 @@ export const PushService = {
       "This is a test push notification from MentorMinds",
       { type: "test" },
     );
+  },
+
+  /**
+   * Send a streak milestone push notification (issue #984).
+   * Called when a user crosses a gamification streak milestone
+   * (e.g. 7-day, 30-day, 60-day streaks).
+   */
+  async sendStreakMilestone(
+    userId: string,
+    milestone: number,
+  ): Promise<PushSendResult> {
+    const title = `🔥 ${milestone}-Day Streak!`;
+    const body = `Amazing consistency! You hit a ${milestone}-day streak. Keep it going!`;
+    return this.sendToUser(userId, title, body, {
+      type: "streak_milestone",
+      milestone: String(milestone),
+      deepLink: "mentorsmind://gamification/me",
+    });
   },
 
   /**

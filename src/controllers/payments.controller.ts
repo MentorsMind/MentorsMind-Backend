@@ -1,10 +1,9 @@
-// @ts-nocheck
-/**
+﻿/**
  * Payments Controller
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { PaymentsService, PaymentStatus, PaymentType } from '../services/payments.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { InitiatePaymentInput, ConfirmPaymentInput, ListPaymentsQuery } from '../validators/schemas/payments.schemas';

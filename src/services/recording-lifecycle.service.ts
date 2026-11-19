@@ -201,7 +201,7 @@ export const RecordingLifecycleService = {
 
     const counts: Record<string, number> = {};
     for (const row of result.rows) {
-      counts[row.storage_tier] = parseInt(row.count, 10);
+      counts[row.storage_tier as string] = parseInt(row.count, 10);
     }
 
     return {

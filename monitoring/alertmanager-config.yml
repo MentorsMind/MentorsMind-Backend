@@ -1,0 +1,337 @@
+# AlertManager Configuration for MentorsMind
+# Handles alert routing, notification channels, and escalation logic
+
+global:
+  # ResolveTimeout is how long the alert manager will consider an alert resolved
+  resolve_timeout: 5m
+
+  # Slack API key (from environment or secret)
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+  
+  # PagerDuty API key (from environment or secret)
+  pagerduty_url: https://events.pagerduty.com/v2/enqueue
+  
+  # Email configuration
+  smtp_smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+  smtp_auth_username: "${SMTP_USER}"
+  smtp_auth_password: "${SMTP_PASSWORD}"
+  smtp_from: "alerts@mentorminds.io"
+  smtp_require_tls: true
+
+# Templates for notification messages
+templates:
+  - 'alertmanager-templates/*.tmpl'
+
+# Root route configuration
+route:
+  # Default receiver when no routes match
+  receiver: "default"
+  
+  # How long to wait for grouping similar alerts
+  group_wait: 10s
+  
+  # How long to wait before sending an update for a grouped alert
+  group_interval: 10s
+  
+  # How long to wait before re-sending a notification
+  repeat_interval: 12h
+  
+  # Route tree for different alert types
+  routes:
+    # ─── CRITICAL ALERTS - Immediate escalation to PagerDuty ─────────────────
+    - match:
+        severity: critical
+        escalate: "true"
+      receiver: "critical-pagerduty"
+      group_wait: 0s  # Send immediately
+      group_interval: 5m
+      repeat_interval: 30m
+      continue: false
+
+    # ─── Payment Alerts - Direct to payments team ────────────────────────────
+    - match:
+        component: payments
+      receiver: "payments-team"
+      group_wait: 5s
+      group_interval: 10m
+      repeat_interval: 1h
+      continue: false
+
+    # ─── Database Alerts - Database team + Slack ─────────────────────────────
+    - match:
+        component: database
+      receiver: "database-alerts"
+      group_wait: 5s
+      group_interval: 10m
+      repeat_interval: 2h
+      continue: false
+
+    # ─── Authentication Alerts - Security team ───────────────────────────────
+    - match:
+        component: authentication
+      receiver: "security-alerts"
+      group_wait: 10s
+      group_interval: 15m
+      repeat_interval: 4h
+      continue: false
+
+    # ─── API/Performance Alerts ───────────────────────────────────────────────
+    - match:
+        component: api
+      receiver: "api-performance"
+      group_wait: 15s
+      group_interval: 10m
+      repeat_interval: 2h
+      continue: false
+
+    # ─── Blockchain/Stellar Alerts ────────────────────────────────────────────
+    - match:
+        component: blockchain
+      receiver: "blockchain-team"
+      group_wait: 10s
+      group_interval: 10m
+      repeat_interval: 1h
+      continue: false
+
+    # ─── Notification/Integration Alerts ──────────────────────────────────────
+    - match:
+        component: notifications
+      receiver: "notifications-team"
+      group_wait: 30s
+      group_interval: 30m
+      repeat_interval: 6h
+      continue: false
+
+    # ─── Webhook Circuit Breaker Alerts ───────────────────────────────────────
+    - match:
+        component: webhooks
+      receiver: "webhook-alerts"
+      group_wait: 20s
+      group_interval: 20m
+      repeat_interval: 4h
+      continue: false
+
+    # ─── Business Metrics Anomalies ───────────────────────────────────────────
+    - match:
+        component: business
+      receiver: "business-intel"
+      group_wait: 5m
+      group_interval: 1h
+      repeat_interval: 24h
+      continue: false
+
+    # ─── Resource/Infrastructure Alerts ───────────────────────────────────────
+    - match:
+        resource: pool
+      receiver: "infrastructure"
+      group_wait: 5s
+      group_interval: 10m
+      repeat_interval: 1h
+      continue: false
+
+    - match:
+        resource: memory
+      receiver: "infrastructure"
+      group_wait: 10s
+      group_interval: 20m
+      repeat_interval: 2h
+      continue: false
+
+    # ─── Cache/Redis Alerts ──────────────────────────────────────────────────
+    - match:
+        component: cache
+      receiver: "cache-alerts"
+      group_wait: 5s
+      group_interval: 10m
+      repeat_interval: 1h
+      continue: false
+
+# Alert receivers configuration
+receivers:
+  # Default receiver for low-priority alerts
+  - name: "default"
+    slack_configs:
+      - channel: "#alerts-general"
+        title: "Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ range .Alerts }}{{ .Annotations.description }}\n{{ end }}"
+        send_resolved: true
+
+  # ─── CRITICAL ALERTS - PagerDuty with incident escalation ──────────────────
+  - name: "critical-pagerduty"
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_CRITICAL}"
+        description: "{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}"
+        details:
+          firing: "{{ range .Alerts.Firing }}{{ .Annotations.description }}\n{{ end }}"
+          dashboard: "{{ .CommonAnnotations.dashboard }}"
+          runbook: "{{ .CommonAnnotations.runbook }}"
+    # Also notify Slack for visibility
+    slack_configs:
+      - channel: "#critical-alerts"
+        title: "🚨 CRITICAL: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.summary }}\n{{ .CommonAnnotations.description }}"
+        color: "danger"
+        send_resolved: true
+    # Email to on-call lead
+    email_configs:
+      - to: "${ONCALL_EMAIL_CRITICAL}"
+        from: "alerts@mentorminds.io"
+        smarthost: "${SMTP_HOST}:${SMTP_PORT}"
+        auth_username: "${SMTP_USER}"
+        auth_password: "${SMTP_PASSWORD}"
+        headers:
+          Subject: "🚨 CRITICAL Alert: {{ .GroupLabels.alertname }}"
+
+  # ─── Payment Alerts - Dedicated team notification ──────────────────────────
+  - name: "payments-team"
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_PAYMENTS}"
+        description: "{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}"
+        severity: "{{ if eq .GroupLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+    slack_configs:
+      - channel: "#payments-team"
+        title: "💳 Payment Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        color: "warning"
+        send_resolved: true
+    email_configs:
+      - to: "${PAYMENTS_TEAM_EMAIL}"
+
+  # ─── Database Alerts ─────────────────────────────────────────────────────────
+  - name: "database-alerts"
+    slack_configs:
+      - channel: "#database-alerts"
+        title: "🗄️ Database Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_DATABASE}"
+        description: "{{ .CommonAnnotations.summary }}"
+        severity: "{{ if eq .GroupLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+    email_configs:
+      - to: "${DATABASE_TEAM_EMAIL}"
+
+  # ─── Security/Authentication Alerts ──────────────────────────────────────────
+  - name: "security-alerts"
+    slack_configs:
+      - channel: "#security-alerts"
+        title: "🔒 Security Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_SECURITY}"
+        description: "{{ .CommonAnnotations.summary }}"
+        severity: "{{ if eq .GroupLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+    email_configs:
+      - to: "${SECURITY_TEAM_EMAIL}"
+
+  # ─── API Performance Alerts ──────────────────────────────────────────────────
+  - name: "api-performance"
+    slack_configs:
+      - channel: "#api-performance"
+        title: "⚡ API Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}"
+        send_resolved: true
+
+  # ─── Blockchain/Stellar Alerts ───────────────────────────────────────────────
+  - name: "blockchain-team"
+    slack_configs:
+      - channel: "#blockchain-alerts"
+        title: "⛓️ Blockchain Alert: {{ .GroupLabels.alertname }}"
+        text: "Network: {{ .GroupLabels.network }}\n{{ .CommonAnnotations.description }}"
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_BLOCKCHAIN}"
+        description: "{{ .CommonAnnotations.summary }}"
+
+  # ─── Notification/Integration Alerts ─────────────────────────────────────────
+  - name: "notifications-team"
+    slack_configs:
+      - channel: "#notifications-team"
+        title: "📧 Notification Alert: {{ .GroupLabels.alertname }}"
+        text: "Delivery Rate: {{ .CommonAnnotations.description }}"
+        send_resolved: true
+
+  # ─── Webhook Alerts ──────────────────────────────────────────────────────────
+  - name: "webhook-alerts"
+    slack_configs:
+      - channel: "#webhook-alerts"
+        title: "🪝 Webhook Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+
+  # ─── Business Intelligence Alerts ────────────────────────────────────────────
+  - name: "business-intel"
+    slack_configs:
+      - channel: "#business-metrics"
+        title: "📊 Business Metric Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.summary }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+
+  # ─── Infrastructure/Resource Alerts ──────────────────────────────────────────
+  - name: "infrastructure"
+    slack_configs:
+      - channel: "#infrastructure-alerts"
+        title: "🏗️ Infrastructure Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+    pagerduty_configs:
+      - service_key: "${PAGERDUTY_SERVICE_KEY_INFRASTRUCTURE}"
+        description: "{{ .CommonAnnotations.summary }}"
+        severity: "{{ if eq .GroupLabels.severity \"critical\" }}critical{{ else }}warning{{ end }}"
+
+  # ─── Cache/Redis Alerts ──────────────────────────────────────────────────────
+  - name: "cache-alerts"
+    slack_configs:
+      - channel: "#cache-alerts"
+        title: "💾 Cache Alert: {{ .GroupLabels.alertname }}"
+        text: "{{ .CommonAnnotations.description }}\nAction: {{ .CommonAnnotations.action }}"
+        send_resolved: true
+
+# Alert grouping: group alerts by these labels
+grouping:
+  # Group by alert name and severity
+  - alertname
+  - severity
+  - component
+
+# Inhibition rules: suppress alerts when certain conditions are met
+inhibit_rules:
+  # Don't alert on high latency if the service is completely down
+  - source_match:
+      severity: "critical"
+      component: "api"
+    target_match:
+      component: "api"
+    equal: ["component"]
+
+  # Don't alert on high error rate if database is down
+  - source_match:
+      severity: "critical"
+      component: "database"
+    target_match:
+      component: "api"
+    equal: ["component"]
+
+  # Don't alert on notification delivery if notification service is down
+  - source_match:
+      severity: "critical"
+      component: "notifications"
+    target_match:
+      component: "notifications"
+    equal: ["component"]
+
+  # Don't alert on webhook delivery if webhook service is unavailable
+  - source_match:
+      severity: "critical"
+      component: "webhooks"
+    target_match:
+      component: "webhooks"
+    equal: ["component"]
+
+  # Suppress warnings if critical alert is already firing for same component
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["component"]

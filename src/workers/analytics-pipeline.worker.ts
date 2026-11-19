@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Analytics Pipeline Worker
  *
  * Processes domain events (INSERT/UPDATE/DELETE on core tables) forwarded from
@@ -13,7 +13,7 @@
 
 import { Worker, Job } from 'bullmq';
 import { queueConnection } from '../queues/queue.config';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 import { CacheService } from '../services/cache.service';
 import { RealtimeAnalyticsService } from '../services/realtime-analytics.service';
 import pool from '../config/database';

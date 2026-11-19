@@ -1,9 +1,11 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
+import * as https from "https";
+import * as http from "http";
 import { StorageService } from "./storage.service";
 import { EmailService } from "./email.service";
 import { generateInvoicePdf } from "../utils/invoice-pdf.utils";
 import { env } from "../config/env";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
 
 export interface LineItem {
   description: string;
@@ -418,7 +420,7 @@ export class InvoiceService {
  */
 async function fetchPdfBytes(url: string): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
-    const protocol = url.startsWith("https") ? require("https") : require("http");
+    const protocol = url.startsWith("https") ? https : http;
     const chunks: Buffer[] = [];
 
     const req = protocol.get(url, (res: any) => {

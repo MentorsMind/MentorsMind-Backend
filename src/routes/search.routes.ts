@@ -50,6 +50,29 @@ const router = Router();
  */
 router.get('/', authenticate, asyncHandler(globalSearch));
 
+/**
+ * @deprecated Under /api/v1 — use GET /api/v2/search/mentors instead (issue #1096).
+ * v1 responses carry Deprecation, Sunset and Link headers via deprecationMiddleware.
+ *
+ * @swagger
+ * /search/mentors:
+ *   get:
+ *     summary: Search mentors (v1 — deprecated, migrate to /api/v2/search/mentors)
+ *     tags: [Search]
+ *     deprecated: true
+ *     responses:
+ *       200:
+ *         description: Matching mentors. v1 responses include Deprecation and Sunset headers.
+ *         headers:
+ *           Deprecation:
+ *             schema:
+ *               type: string
+ *             description: Always "true" for deprecated endpoints
+ *           Sunset:
+ *             schema:
+ *               type: string
+ *             description: HTTP date after which the v1 endpoint is removed
+ */
 router.get('/mentors', findMentors);
 router.get('/autocomplete/:query', autocomplete);
 router.get('/similar/:mentorId', getSimilarMentors);

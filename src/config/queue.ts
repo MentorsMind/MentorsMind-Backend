@@ -59,6 +59,12 @@ export const QUEUE_NAMES = {
   INSIGHT_GENERATION: "insight-generation-queue",
   SECURITY_ANALYSIS: "security-analysis-queue",
   INCIDENT_RESPONSE: "incident-response-queue",
+  ONBOARDING_NUDGE: "onboarding-nudge-queue",
+  REPUTATION_SYNC: "reputation-sync-queue",
+  TAX_REPORTING: "tax-reporting-queue",
+  VESTING_SYNC: "vesting-sync-queue",
+  // Cron-driven (no BullMQ jobs) — registered so startup queue-name validation can catch renames
+  RETENTION_ENFORCEMENT: "retention-enforcement-queue",
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -120,4 +126,6 @@ export const CONCURRENCY = {
   INSIGHT_GENERATION: 20,
   SECURITY_ANALYSIS: 5,
   INCIDENT_RESPONSE: 3,
+  ONBOARDING_NUDGE: 2,
+  REPUTATION_SYNC: 2,
 } as const;

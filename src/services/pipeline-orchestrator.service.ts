@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Pipeline Orchestrator Service
  * Manages ETL pipeline scheduling and execution
  * Issue #873
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { EventEmitter } from 'events';
 import { ETLOptimizerService } from './etl-optimizer.service';
 

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS recording_cleanup_log (
     detected_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     -- When the object will be / was hard-deleted from S3
     scheduled_deletion_at TIMESTAMP WITH TIME ZONE NOT NULL
-        GENERATED ALWAYS AS (detected_at + INTERVAL '7 days') STORED,
+        DEFAULT (NOW() + INTERVAL '7 days'),
     deleted_at TIMESTAMP WITH TIME ZONE,
     recovered_at TIMESTAMP WITH TIME ZONE,
 

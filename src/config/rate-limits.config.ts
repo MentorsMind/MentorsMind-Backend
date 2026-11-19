@@ -9,6 +9,8 @@ export interface RateLimitProfile {
   skipSuccessfulRequests?: boolean;
   skipFailedRequests?: boolean;
   message: string;
+  /** Identifies which limiter fired — sent as X-Rate-Limit-Scope on 429 responses */
+  scope?: string;
 }
 
 export interface RateLimitConfig {
@@ -30,11 +32,14 @@ export interface RateLimitConfig {
   webhook: RateLimitProfile;
 }
 
+import { env } from "./env";
+
 const rateLimitsConfig: RateLimitConfig = {
   general: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS ?? '900000', 10), // 15 min
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS ?? '100', 10),
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    max: env.RATE_LIMIT_MAX_REQUESTS,
     message: 'Too many requests from this IP, please try again later.',
+    scope: 'general',
   },
 
   auth: {
@@ -42,42 +47,49 @@ const rateLimitsConfig: RateLimitConfig = {
     max: 10,
     skipSuccessfulRequests: true,
     message: 'Too many authentication attempts, please try again later.',
+    scope: 'auth',
   },
 
   api: {
     windowMs: 60 * 1000, // 1 min
     max: 60,
     message: 'API rate limit exceeded, please slow down.',
+    scope: 'api',
   },
 
   sensitive: {
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 5,
     message: 'Too many sensitive requests, please try again in an hour.',
+    scope: 'sensitive',
   },
 
   payment: {
     windowMs: 60 * 1000, // 1 min
     max: 20,
     message: 'Payment rate limit exceeded, please slow down.',
+    scope: 'payment',
   },
 
   public: {
     windowMs: 60 * 1000, // 1 min
     max: 120,
     message: 'Public rate limit exceeded, please slow down.',
+    scope: 'public',
   },
 
   export: {
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 3,
     message: 'Export rate limit exceeded. Maximum 3 export requests per hour.',
+    scope: 'export',
   },
 
   webhook: {
     windowMs: 60 * 1000, // 1 min
     max: 30,
     message: 'Webhook rate limit exceeded for this API key.',
+    scope: 'webhook',
   },
 };
 

@@ -1,34 +1,21 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { NotificationService } from '../services/notification.service';
 import { UsersService } from '../services/users.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 
-/**
- * Notification Preferences Controller - Handles user notification settings
- */
 export const NotificationPreferencesController = {
-  /**
-   * Get current user's notification preferences
-   * GET /api/v1/notifications/preferences
-   */
-  getPreferences: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
-
-    if (!userId) {
-      return ResponseUtil.error(res, 'Unauthorized', 401);
-    }
+  getPreferences: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) return ResponseUtil.error(res, 'Unauthorized', 401);
 
     const preferences = await NotificationService.getUserPreferences(userId);
     ResponseUtil.success(res, { preferences });
   }),
 
-  /**
-   * Update current user's notification preferences
-   * PUT /api/v1/notifications/preferences
-   */
-  updatePreferences: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  updatePreferences: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
     const { preferences } = req.body;
 
     if (!userId) {
@@ -53,12 +40,8 @@ export const NotificationPreferencesController = {
     });
   }),
 
-  /**
-   * Reset notification preferences to defaults
-   * POST /api/v1/notifications/preferences/reset
-   */
-  resetPreferences: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
+  resetPreferences: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id;
 
     if (!userId) {
       return ResponseUtil.error(res, 'Unauthorized', 401);

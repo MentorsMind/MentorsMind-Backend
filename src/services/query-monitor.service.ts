@@ -8,7 +8,8 @@
 
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
+import { QueryAnalyzer } from "../utils/query-analyzer";
 
 // Redis key prefix for per-fingerprint execution-time sorted sets.
 // Each set stores raw execution times (ms) as scores with random UUID members.
@@ -172,30 +173,38 @@ export const QueryMonitorService = {
     const recommendations: IndexRecommendation[] = [];
     if (!planJson) return recommendations;
 
-    const planText =
-      typeof planJson === "string"
-        ? planJson
-        : JSON.stringify(planJson);
+    const analysis = QueryAnalyzer.analyzeExplainPlan(planJson);
 
-    // Pattern: "Seq Scan on <table>  (cost=... rows=<N> ...)"
-    // We look for large row estimates adjacent to Seq Scan nodes.
-    const seqScanPattern =
-      /Seq Scan on (\w+)[\s\S]*?rows=(\d+)/gi;
+    for (const recommendation of analysis.recommendations) {
+      recommendations.push({
+        table: recommendation.table,
+        reason: recommendation.reason,
+        suggestion: recommendation.sql,
+      });
+    }
 
-    let match: RegExpExecArray | null;
-    const seen = new Set<string>();
+    if (recommendations.length === 0) {
+      const planText =
+        typeof planJson === "string"
+          ? planJson
+          : JSON.stringify(planJson);
 
-    while ((match = seqScanPattern.exec(planText)) !== null) {
-      const table = match[1];
-      const rows = parseInt(match[2], 10);
+      const seqScanPattern = /Seq Scan on (\w+)[\s\S]*?rows=(\d+)/gi;
+      let match: RegExpExecArray | null;
+      const seen = new Set<string>();
 
-      if (rows > 10_000 && !seen.has(table)) {
-        seen.add(table);
-        recommendations.push({
-          table,
-          reason: `Sequential scan detected on table "${table}" scanning ~${rows.toLocaleString()} rows`,
-          suggestion: `CREATE INDEX CONCURRENTLY ON ${table} (<filtered_column>);`,
-        });
+      while ((match = seqScanPattern.exec(planText)) !== null) {
+        const table = match[1];
+        const rows = parseInt(match[2], 10);
+
+        if (rows > 10_000 && !seen.has(table)) {
+          seen.add(table);
+          recommendations.push({
+            table,
+            reason: `Sequential scan detected on table "${table}" scanning ~${rows.toLocaleString()} rows`,
+            suggestion: `CREATE INDEX CONCURRENTLY ON ${table} (<filtered_column>);`,
+          });
+        }
       }
     }
 

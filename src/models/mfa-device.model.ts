@@ -189,9 +189,9 @@ export const MfaDeviceModel = {
       );
       await client.query('COMMIT');
       return (rowCount ?? 0) > 0;
-    } catch {
+    } catch (err) {
       await client.query('ROLLBACK');
-      throw;
+      throw err;
     } finally {
       client.release();
     }
@@ -289,9 +289,9 @@ export const MfaDeviceModel = {
       await client.query(`DELETE FROM mfa_challenges WHERE id = $1`, [rows[0].id]);
       await client.query('COMMIT');
       return rows[0];
-    } catch {
+    } catch (err) {
       await client.query('ROLLBACK');
-      throw;
+      throw err;
     } finally {
       client.release();
     }

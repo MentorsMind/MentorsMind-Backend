@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   Horizon,
   TransactionBuilder,
@@ -13,11 +12,13 @@ import {
   getPlatformKeypair,
 } from "../config/stellar";
 import { CacheService } from "./cache.service";
+import { redis } from "../config/redis";
 import { CacheKeys, CacheTTL } from "../utils/cache-key.utils";
 import { logger } from "../utils/logger.utils";
 import { parseAccountInfo, withRetry, TtlCache } from "../utils/stellar.utils";
 import type {
   StellarAccountInfo,
+  StellarBalance,
   StellarTransactionResult,
   StellarPaymentRecord,
   PaymentHandler,
@@ -28,6 +29,13 @@ import type {
 
 const ACCOUNT_CACHE_TTL_MS = 5_000;
 const MAX_RETRIES = 3;
+const VERIFICATION_FAILURE_TTL_SECONDS = 300;
+const MAX_VERIFICATION_BACKOFF_MS = 60_000;
+
+export interface VerificationBackoff {
+  failures: number;
+  blockedUntil: number;
+}
 
 /**
  * StellarService — wraps @stellar/stellar-sdk for all server-side blockchain ops.
@@ -46,6 +54,52 @@ const MAX_RETRIES = 3;
  */
 class StellarService {
   private accountCache = new TtlCache<StellarAccountInfo>(ACCOUNT_CACHE_TTL_MS);
+
+  async getVerificationBackoff(userId: string): Promise<VerificationBackoff | null> {
+    try {
+      const value = await redis.get(`stellar:verification:failures:${userId}`);
+      if (!value) return null;
+
+      const backoff = JSON.parse(value) as VerificationBackoff;
+      return backoff.blockedUntil > Date.now() ? backoff : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async recordVerificationFailure(userId: string): Promise<VerificationBackoff> {
+    const key = `stellar:verification:failures:${userId}`;
+    let failures = 0;
+
+    try {
+      const currentValue = await redis.get(key);
+      if (currentValue) {
+        failures = (JSON.parse(currentValue) as VerificationBackoff).failures;
+      }
+    } catch {
+      logger.warn("Unable to read Stellar verification failure state");
+    }
+
+    failures += 1;
+    const backoff: VerificationBackoff = {
+      failures,
+      blockedUntil: Date.now() + Math.min(2 ** (failures - 1) * 1000, MAX_VERIFICATION_BACKOFF_MS),
+    };
+    try {
+      await redis.set(key, JSON.stringify(backoff), "EX", VERIFICATION_FAILURE_TTL_SECONDS);
+    } catch {
+      logger.warn("Unable to persist Stellar verification failure state");
+    }
+    return backoff;
+  }
+
+  async resetVerificationFailures(userId: string): Promise<void> {
+    try {
+      await redis.del(`stellar:verification:failures:${userId}`);
+    } catch {
+      logger.warn("Unable to reset Stellar verification failure state");
+    }
+  }
 
   /**
    * Fetch account info and balances from the Stellar network.
@@ -153,7 +207,7 @@ class StellarService {
     }
 
     const account = await this.getAccount(keypair.publicKey());
-    const txBuilder = new TransactionBuilder(account, {
+    const txBuilder = new TransactionBuilder(account as any, {
       fee: "100",
       networkPassphrase,
     });
@@ -365,7 +419,7 @@ class StellarService {
     assetCode: string,
     assetIssuer: string,
     limit?: string,
-  ): Operation.ChangeTrust {
+  ): ReturnType<typeof Operation.changeTrust> {
     if (!this.validatePublicKey(assetIssuer)) {
       throw new Error("Invalid asset issuer public key");
     }

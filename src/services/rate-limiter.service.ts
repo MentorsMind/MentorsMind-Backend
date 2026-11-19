@@ -53,10 +53,11 @@ function slidingWindowMemory(key: string, windowMs: number, max: number): Slidin
 // Periodically clean up stale keys to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of memoryStore.entries()) {
-    const windowStart = now - entry.windowMs;
-    entry.timestamps = entry.timestamps.filter((t) => t > windowStart);
-    if (entry.timestamps.length === 0) {
+  for (const entry of Array.from(memoryStore.entries())) {
+    const [key, entryValue] = entry;
+    const windowStart = now - entryValue.windowMs;
+    entryValue.timestamps = entryValue.timestamps.filter((t) => t > windowStart);
+    if (entryValue.timestamps.length === 0) {
       memoryStore.delete(key);
     }
   }
@@ -86,8 +87,9 @@ async function slidingWindowRedis(
 
   const results = await pipeline.exec();
   const current: number = results![2][1] as number;
-  const oldestScore: number = results![3][1]?.[1]
-    ? parseInt(results![3][1][1], 10)
+  const oldestReply = results![3][1] as any;
+  const oldestScore: number = oldestReply?.[1]
+    ? parseInt(oldestReply[1], 10)
     : now;
 
   const allowed = current <= max;

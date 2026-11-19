@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "src/controllers/gamification.controller.ts",
+    "src/services/gamification.service.ts",
+    "src/services/push.service.ts",
+    "src/routes/gamification.routes.ts",
+    "src/routes/leaderboard.routes.ts",
+    "src/routes/v1/index.ts",
+    "src/models/gamification.model.ts",
+    "tests/integration/tenant-isolation.test.ts",
+    "src/utils/tenant-context.utils.ts",
+    "src/middleware/tenant.middleware.ts",
+    "src/models/tenant.model.ts",
+    "src/types/tenant.types.ts"
+  ]
+}

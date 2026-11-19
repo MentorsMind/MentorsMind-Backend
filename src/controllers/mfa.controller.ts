@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 import { MfaDeviceType } from '../models/mfa-device.model';
+import { routeParam } from '../utils/route-params.utils';
 
 export const MfaController = {
   // ─── Legacy TOTP Setup (backward compatible) ────────────────────────────
@@ -322,16 +323,17 @@ export const MfaController = {
   async renameDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const { name } = req.body;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
       if (!name || typeof name !== 'string' || name.length > 100) {
         return res.status(400).json({ success: false, error: 'Valid name (max 100 chars) is required' });
       }
-      const ok = await MfaService.renameDevice(userId, id, name.trim());
+      const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+      const ok = await MfaService.renameDevice(userIdStr, id, name.trim());
       if (!ok) return res.status(404).json({ success: false, error: 'Device not found' });
       await AuditLogService.log({
-        userId,
+        userId: userIdStr,
         action: 'MFA_DEVICE_RENAMED',
         resourceType: 'mfa_device',
         resourceId: id,
@@ -347,12 +349,13 @@ export const MfaController = {
   async setPrimaryDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
-      const ok = await MfaService.setPrimaryDevice(userId, id);
+      const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+      const ok = await MfaService.setPrimaryDevice(userIdStr, id);
       if (!ok) return res.status(404).json({ success: false, error: 'Device not found' });
       await AuditLogService.log({
-        userId,
+        userId: userIdStr,
         action: 'MFA_DEVICE_PRIMARY_SET',
         resourceType: 'mfa_device',
         resourceId: id,
@@ -368,29 +371,30 @@ export const MfaController = {
   async removeDevice(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.userId;
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const { verification } = req.body;
       if (!userId) return res.status(401).json({ success: false, error: 'Unauthorized' });
       if (!verification?.token) {
         return res.status(400).json({ success: false, error: 'Verification token required' });
       }
+      const userIdStr = Array.isArray(userId) ? userId[0] : userId;
       const v = await MfaService.verifyChallenge({
-        userId,
+        userId: userIdStr,
         method: 'totp',
         payload: { token: verification.token },
       });
       let verified = v.valid;
       if (!verified) {
-        const bc = await MfaService.verifyAndConsumeBackupCode(userId, verification.token);
+        const bc = await MfaService.verifyAndConsumeBackupCode(userIdStr, verification.token);
         verified = bc.valid;
       }
       if (!verified) {
         return res.status(401).json({ success: false, error: 'Invalid verification token' });
       }
-      const ok = await MfaService.removeDevice(userId, id);
+      const ok = await MfaService.removeDevice(userIdStr, id);
       if (!ok) return res.status(404).json({ success: false, error: 'Device not found' });
       await AuditLogService.log({
-        userId,
+        userId: userIdStr,
         action: 'MFA_DEVICE_REMOVED',
         resourceType: 'mfa_device',
         resourceId: id,
@@ -525,7 +529,7 @@ export const MfaController = {
       const opts = await MfaService.webauthn.generateRegistrationOptions({
         userId,
         userName: user.email,
-        userDisplayName: user.full_name || user.email,
+        userDisplayName: (user as any).full_name || user.email,
         authenticatorAttachment,
         userVerification,
       });

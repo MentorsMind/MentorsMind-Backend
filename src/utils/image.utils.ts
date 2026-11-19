@@ -1,4 +1,4 @@
-import sharp = require("sharp");
+import sharp from "sharp";
 import { logger } from "./logger.utils";
 import { env } from "../config/env";
 

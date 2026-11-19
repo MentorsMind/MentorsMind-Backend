@@ -1,5 +1,4 @@
-// @ts-nocheck
-/**
+﻿/**
  * PaymentQuote Controller
  *
  * GET /api/v1/payments/assets        — list supported assets with XLM rates
@@ -7,7 +6,7 @@
  */
 
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { AssetExchangeService } from '../services/assetExchange.service';
 import { ResponseUtil } from '../utils/response.utils';
 import { createError } from '../middleware/errorHandler';

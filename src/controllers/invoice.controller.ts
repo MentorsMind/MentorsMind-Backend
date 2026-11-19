@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { InvoiceService } from "../services/invoice.service";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from "../utils/route-params.utils";
 
 export class InvoiceController {
-  static async createInvoice(req: Request, res: Response): Promise<void> {
-    const userId = (req as any).user?.id;
+  static async createInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
     const { type, lineItems, currency, dueDate } = req.body;
     const invoice = await InvoiceService.createInvoice(
       userId,
@@ -27,8 +29,8 @@ export class InvoiceController {
     res.json({ success: true, data: invoice });
   }
 
-  static async listInvoices(req: Request, res: Response): Promise<void> {
-    const userId = (req as any).user?.id;
+  static async listInvoices(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
     const status = req.query.status as any;
     const invoices = await InvoiceService.listInvoices(userId, status);
     res.json({ success: true, data: invoices });
@@ -42,9 +44,12 @@ export class InvoiceController {
     res.json({ success: true, message: "Invoice status updated" });
   }
 
-  static async bulkExport(req: Request, res: Response): Promise<void> {
-    const userId = (req as any).user?.id;
-    const { from, to } = req.query;
+  static async bulkExport(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user!.id;
+    const fromParam = req.query.from;
+    const toParam = req.query.to;
+    const from = Array.isArray(fromParam) ? fromParam[0] : fromParam;
+    const to = Array.isArray(toParam) ? toParam[0] : toParam;
     const invoices = await InvoiceService.bulkExport(
       userId,
       new Date(from as string),
@@ -59,9 +64,10 @@ export class InvoiceController {
    * Returns a presigned S3 URL (valid for 1 hour) for the invoice PDF.
    * Triggers PDF generation on-demand if the invoice has no PDF yet.
    */
-  static async downloadInvoice(req: Request, res: Response): Promise<void> {
-    const { invoiceId } = req.params;
-    const requestingUserId = (req as any).user?.id;
+  static async downloadInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const invoiceId = routeParam(req.params.invoiceId);
+    const requestingUserId = req.user?.id;
+    const userRole = req.user?.role;
 
     try {
       const invoice = await InvoiceService.getInvoice(invoiceId);
@@ -70,19 +76,18 @@ export class InvoiceController {
         return;
       }
 
-      // Users may only download their own invoices (admins bypass this)
-      const userRole = (req as any).user?.role;
       if (invoice.userId !== requestingUserId && userRole !== "admin") {
         res.status(403).json({ success: false, message: "Access denied" });
         return;
       }
 
       const downloadUrl = await InvoiceService.getDownloadUrl(invoiceId);
+      const downloadUrlStr = Array.isArray(downloadUrl) ? downloadUrl[0] : downloadUrl;
 
       res.json({
         success: true,
         data: {
-          downloadUrl,
+          downloadUrl: downloadUrlStr,
           expiresInSeconds: 3600,
           invoiceNumber: invoice.invoiceNumber,
         },
@@ -105,9 +110,10 @@ export class InvoiceController {
    * Generates the PDF (if not already done), emails it to the invoice owner,
    * and updates the invoice status to "sent".
    */
-  static async sendInvoice(req: Request, res: Response): Promise<void> {
-    const { invoiceId } = req.params;
-    const requestingUserId = (req as any).user?.id;
+  static async sendInvoice(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const invoiceId = routeParam(req.params.invoiceId);
+    const requestingUserId = req.user?.id;
+    const userRole = req.user?.role;
 
     try {
       const invoice = await InvoiceService.getInvoice(invoiceId);
@@ -116,8 +122,6 @@ export class InvoiceController {
         return;
       }
 
-      // Only the invoice owner or an admin may trigger a send
-      const userRole = (req as any).user?.role;
       if (invoice.userId !== requestingUserId && userRole !== "admin") {
         res.status(403).json({ success: false, message: "Access denied" });
         return;

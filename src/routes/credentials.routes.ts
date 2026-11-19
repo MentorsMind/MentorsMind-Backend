@@ -7,6 +7,11 @@ import { asyncHandler } from "../utils/asyncHandler.utils";
 const router = Router();
 
 router.get(
+  "/:credentialId/status",
+  asyncHandler(CredentialsController.getCredentialStatus),
+);
+
+router.get(
   "/:credentialId/verify",
   asyncHandler(CredentialsController.verifyCredential),
 );
@@ -23,6 +28,12 @@ router.post(
   "/",
   authorize("admin"),
   asyncHandler(CredentialsController.issueCredential),
+);
+
+router.post(
+  "/revoke-batch",
+  authorize("admin"),
+  asyncHandler(CredentialsController.revokeCredentials),
 );
 
 router.post(

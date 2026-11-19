@@ -1,17 +1,12 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { DisputeService } from "../services/disputes.service";
 import { DisputeModel } from "../models/dispute.model";
 import { routeParam } from "../utils/route-params.utils";
 import { RESOLUTION_TEMPLATES } from "../constants/resolution-templates.constant";
 import { z } from 'zod';
-import { AuditLogService } from '../services/audit-logger.service';
-
-const createDisputeSchema = z.object({
-  session_id: z.string().uuid(),
-  type: z.enum(['payment', 'service_quality', 'no_show', 'cancellation', 'other']),
-  reason: z.string().min(10).max(1000),
-  evidence: z.array(z.string()).optional()
-});
+import { AuditLoggerService } from '../services/audit-logger.service';
+import { LogLevel } from '../utils/log-formatter.utils';
 
 export class DisputesController {
   static async openDispute(req: Request, res: Response): Promise<void> {
@@ -25,29 +20,31 @@ export class DisputesController {
         return;
       }
 
-      const validatedData = createDisputeSchema.parse(req.body);
+      const { session_id, type, reason } = req.body;
       const filed_by_id = req.user.userId;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
       const dispute = await DisputeService.openDispute(
-        validatedData.session_id,
+        session_id,
         filed_by_id,
-        validatedData.type,
-        validatedData.reason,
+        type,
+        reason,
         ipAddress,
         userAgent
       );
 
       // Log dispute creation for audit
-      await AuditLogService.log({
+      await AuditLoggerService.logEvent({
+        level: LogLevel.INFO,
         action: 'DISPUTE_OPENED',
+        message: `Dispute ${dispute.id} opened for session ${session_id}`,
         userId: filed_by_id,
         entityType: 'dispute',
         entityId: dispute.id,
         metadata: {
-          sessionId: validatedData.session_id,
-          disputeType: validatedData.type
+          sessionId: session_id,
+          disputeType: type
         },
         ipAddress,
         userAgent
@@ -60,7 +57,7 @@ export class DisputesController {
 
   static async getDispute(req: Request, res: Response): Promise<void> {
     try {
-      const { id } = req.params;
+      const id = routeParam(req.params.id);
       const dispute = await DisputeModel.findById(id);
 
       if (!dispute) {
@@ -69,20 +66,21 @@ export class DisputesController {
       }
 
       const evidence = await DisputeModel.getEvidence(id);
-      res.status(200).json({ data: { ...dispute, evidence } });
+      const evidenceStr = Array.isArray(evidence) ? evidence[0] : evidence;
+      res.status(200).json({ data: { ...dispute, evidence: evidenceStr } });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   }
 
-  static async uploadEvidence(req: Request, res: Response): Promise<void> {
+  static async uploadEvidence(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { text_content, file_url } = req.body;
-      const submitterId = (req as any).user!.userId || (req as any).user!.id;
+      const submitterId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
-      const userRole = (req as any).user!.role;
+      const userRole = req.user!.role;
 
       const evidence = await DisputeService.uploadEvidence(
         id,
@@ -103,11 +101,11 @@ export class DisputesController {
     }
   }
 
-  static async resolveDispute(req: Request, res: Response): Promise<void> {
+  static async resolveDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { mentor_pct, notes } = req.body;
-      const adminId = (req as any).user!.userId || (req as any).user!.id;
+      const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
@@ -137,11 +135,11 @@ export class DisputesController {
     }
   }
 
-  static async mediateDispute(req: Request, res: Response): Promise<void> {
+  static async mediateDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
       const { notes } = req.body;
-      const adminId = (req as any).user!.userId || (req as any).user!.id;
+      const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
@@ -166,10 +164,10 @@ export class DisputesController {
     res.status(200).json({ data: RESOLUTION_TEMPLATES });
   }
 
-  static async listDisputes(req: Request, res: Response): Promise<void> {
+  static async listDisputes(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = (req as any).user!.userId || (req as any).user!.id;
-      const isAdmin = (req as any).user!.role === "admin";
+      const userId = req.user!.userId ?? req.user!.id;
+      const isAdmin = req.user!.role === "admin";
 
       let disputes;
       if (isAdmin) {

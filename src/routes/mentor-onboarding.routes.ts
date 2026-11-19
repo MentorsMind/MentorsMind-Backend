@@ -34,7 +34,10 @@ router.post(
   MentorOnboardingController.completeChecklistItem,
 );
 router.get('/analytics', MentorOnboardingController.analytics);
+router.get('/badges', MentorOnboardingController.badges);
 
 router.get('/admin/analytics', requireAdmin, MentorOnboardingController.adminAnalytics);
+router.get('/admin/funnel-analytics', requireAdmin, MentorOnboardingController.adminFunnelAnalytics);
+router.post('/admin/trigger-nudge', requireAdmin, MentorOnboardingController.triggerNudge);
 
 export default router;

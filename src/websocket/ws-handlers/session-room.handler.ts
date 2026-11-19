@@ -11,7 +11,7 @@ const NOTES_MAX_BYTES = 50_000;
 const NOTES_RATE_LIMIT = 10; // max events per second per client
 const notesSyncTimestamps = new Map<string, number[]>();
 
-const presenceService = new PresenceService(redisClient);
+const presenceService = new PresenceService(redisClient as any);
 
 // ─── Session room map ────────────────────────────────────────────────────────
 

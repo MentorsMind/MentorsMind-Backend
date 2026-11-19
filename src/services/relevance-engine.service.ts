@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Relevance Engine Service
  * Custom relevance scoring algorithms for search optimization
  * Issue #872
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 
 export interface RelevanceWeights {
   titleMatch: number;

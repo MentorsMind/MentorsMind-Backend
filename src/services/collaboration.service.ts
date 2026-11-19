@@ -2,30 +2,10 @@ import { SessionModel } from '../models/session.model';
 import {
   CollaborationSession,
   CollaborationState,
+  getDefaultCollaborationState,
 } from '../types/collaboration.types';
 
-const createDefaultCollaborationState = (): CollaborationState => ({
-  whiteboardData: {
-    strokes: [],
-    shapes: [],
-    backgroundColor: '#ffffff',
-    metadata: {},
-  },
-  sharedCode: {
-    language: 'javascript',
-    content: '',
-    cursorPositions: {},
-    annotations: [],
-  },
-  participants: [],
-  screenShare: {
-    active: false,
-    ownerId: null,
-    lastUpdatedAt: null,
-  },
-  lastUpdatedAt: null,
-  lastUpdatedBy: null,
-});
+const createDefaultCollaborationState = getDefaultCollaborationState;
 
 const mergeCollaborationState = (
   existing: CollaborationState,

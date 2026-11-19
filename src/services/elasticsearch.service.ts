@@ -1,6 +1,6 @@
-import { Client } from '@elastic/elasticsearch';
+﻿import { Client } from '@elastic/elasticsearch';
 import config from '../config';
-import { logger } from '../utils/logger';
+import { Logger, logger } from "../utils/logger.utils";
 
 interface SearchQuery {
   query: string;
@@ -63,7 +63,7 @@ interface ContentDocument {
   created_at: string;
 }
 
-class ElasticsearchService {
+export class ElasticsearchService {
   private client: Client | null = null;
   private isConnected = false;
 
@@ -77,6 +77,7 @@ class ElasticsearchService {
     try {
       const authConfig: any = {
         node: config.elasticsearch.url,
+        requestTimeout: config.elasticsearch.requestTimeoutMs,
       };
 
       if (config.elasticsearch.username && config.elasticsearch.password) {
@@ -424,6 +425,42 @@ class ElasticsearchService {
       return response.hits.hits.map((hit: any) => hit._source as MentorDocument);
     } catch (error) {
       logger.error('Get similar mentors failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Prefix search over the mentor `expertise` field, used for query
+   * autocomplete suggestions. Returns matching skill terms ranked by frequency.
+   */
+  async suggestSkills(prefix: string, limit: number = 10): Promise<string[]> {
+    this.ensureConnected();
+
+    try {
+      const response = await this.client!.search({
+        index: config.elasticsearch.indices.mentors,
+        size: 0,
+        query: {
+          prefix: { expertise: prefix.toLowerCase() },
+        },
+        aggregations: {
+          skills: {
+            terms: {
+              field: 'expertise',
+              include: `${prefix.toLowerCase()}.*`,
+              size: limit,
+            },
+          },
+        },
+      });
+
+      return (
+        (response.aggregations?.skills as any)?.buckets?.map(
+          (bucket: any) => bucket.key,
+        ) || []
+      );
+    } catch (error) {
+      logger.error('Suggest skills failed:', error);
       return [];
     }
   }

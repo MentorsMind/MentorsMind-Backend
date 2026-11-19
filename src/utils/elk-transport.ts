@@ -240,6 +240,32 @@ export class ELKTransport {
 // ---------------------------------------------------------------------------
 
 let _transport: ELKTransport | null = null;
+let _flushHandlersRegistered = false;
+
+function registerProcessFlushHandlers(transport: ELKTransport): void {
+  if (_flushHandlersRegistered) return;
+  _flushHandlersRegistered = true;
+
+  // Flush buffered entries on graceful shutdown so they are not lost on SIGTERM.
+  const gracefulFlush = () => {
+    transport.stop().catch(() => {}).finally(() => {
+      // Do not call process.exit() — let the caller's shutdown sequence handle it.
+    });
+  };
+
+  process.once("SIGTERM", gracefulFlush);
+  process.once("SIGINT", gracefulFlush);
+
+  // Best-effort flush before the process terminates on an unhandled error.
+  process.once("uncaughtException", (err) => {
+    transport.stop().catch(() => {}).finally(() => {
+      // Re-throw so Node.js still exits with a non-zero code and the original
+      // error is printed.  Any other uncaughtException handler registered
+      // before this one has already been called.
+      throw err;
+    });
+  });
+}
 
 export function getELKTransport(): ELKTransport | null {
   const enabled =
@@ -252,6 +278,7 @@ export function getELKTransport(): ELKTransport | null {
   if (!_transport) {
     _transport = new ELKTransport();
     _transport.start();
+    registerProcessFlushHandlers(_transport);
   }
   return _transport;
 }

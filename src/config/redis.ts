@@ -1,7 +1,7 @@
 import Redis, { Cluster } from "ioredis";
 import { env } from "./env";
 import { redisConfig } from "./redis.config";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 
 let redisClient: Redis | Cluster;
 
@@ -29,3 +29,4 @@ if (redisConfig.clusterEnabled && redisConfig.clusterNodes) {
 }
 
 export const redis = redisClient;
+export { redisClient };

@@ -1,5 +1,5 @@
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import pool from '../config/database';
 import { env } from '../config/env';
 import { RateLimiterService } from './rate-limiter.service';
@@ -231,9 +231,9 @@ export const SmsService = {
       }
       await client.query('COMMIT');
       return { valid: false, reason: 'Invalid code' };
-    } catch {
+    } catch (error) {
       await client.query('ROLLBACK');
-      throw;
+      throw error;
     } finally {
       client.release();
     }

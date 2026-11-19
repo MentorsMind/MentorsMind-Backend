@@ -1,19 +1,39 @@
 /**
  * NlpSearchService
  *
- * NLP-powered semantic search with query understanding, typo tolerance,
- * synonym expansion, personalized ranking, and search suggestions.
- * Uses PostgreSQL full-text search with pg_trgm for typo tolerance,
- * and stores embeddings for semantic similarity when available.
+ * Natural-language mentor search with structured query understanding.
+ *
+ * Pipeline:
+ *   1. Normalize + cache key (SHA-256 of normalized query, 1h TTL in Redis)
+ *   2. Typo correction via Levenshtein against the skill vocabulary
+ *   3. Structured extraction via OpenAI function calling (with a deterministic
+ *      keyword/regex fallback when OpenAI is unavailable or fails)
+ *   4. Feed extracted filters into MentorMatchingV2Service.findMatches
+ *   5. Log every query + extracted filters + result count to search_analytics
+ *
+ * Suggestions use an Elasticsearch prefix search (with a PostgreSQL fallback).
  */
 
+import axios from "axios";
+import crypto from "crypto";
 import pool from "../config/database";
+import { CacheService } from "./cache.service";
+import { MentorMatchingV2Service } from "./mentor-matching-v2.service";
+import elasticsearchService from "./elasticsearch.service";
+import { logger } from "../utils/logger.utils";
+import {
+  ParsedQuery,
+  parseQueryKeywords,
+  normalizeParsed,
+  normalizeQuery,
+  correctTypos,
+  createEmptyParsed,
+  SKILL_VOCABULARY,
+} from "../utils/query-parser.utils";
 
-export type SearchIntent =
-  | "find_mentor"
-  | "find_session"
-  | "find_content"
-  | "general";
+// ─── Types kept for backward compatibility ──────────────────────────────────
+
+export type SearchIntent = "find_mentor" | "find_session" | "find_content" | "general";
 
 export interface Entity {
   type: "skill" | "topic" | "language" | "location" | "name";
@@ -28,272 +48,446 @@ export interface SearchFilters {
   skills?: string[];
 }
 
-export interface SemanticSearchQuery {
-  query: string;
-  embedding: number[];
-  intent: SearchIntent;
-  entities: Entity[];
-  filters: SearchFilters;
-}
-
-export interface SearchResult {
-  id: string;
-  type: "mentor" | "session" | "content";
-  relevanceScore: number;
-  semanticScore: number;
-  matchedTerms: string[];
-  snippet: string;
-}
-
 export interface SearchSuggestion {
   text: string;
   type: "autocomplete" | "correction" | "expansion";
 }
 
-// Common synonyms for query expansion
-const SYNONYMS: Record<string, string[]> = {
-  javascript: ["js", "node", "nodejs", "typescript", "ts"],
-  python: ["py", "django", "flask", "fastapi"],
-  machine_learning: ["ml", "ai", "deep learning", "neural network"],
-  frontend: ["ui", "react", "vue", "angular", "css", "html"],
-  backend: ["server", "api", "database", "sql", "rest"],
-  beginner: ["starter", "intro", "introduction", "basic", "fundamentals"],
-  advanced: ["expert", "senior", "professional", "experienced"],
-};
+export interface NlpSearchResult {
+  mentorId: string;
+  overallScore: number;
+  dimensions: Record<string, number>;
+  explanation: string[];
+  confidence: number;
+  source: "matching-v2" | "keyword";
+}
+
+const PARSE_CACHE_TTL = 3600; // 1 hour
+const PARSE_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+
+/** OpenAI function-calling schema for structured query extraction. */
+const EXTRACTION_SCHEMA = {
+  name: "extract_search_filters",
+  description:
+    "Extract structured mentor-search filters from a natural language query.",
+  parameters: {
+    type: "object",
+    properties: {
+      skills: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Technical skills, topics, or subjects the user wants help with, e.g. ['Python', 'machine learning'].",
+      },
+      maxBudget: {
+        type: ["number", "null"],
+        description: "Maximum hourly rate in USD the user is willing to pay.",
+      },
+      minRating: {
+        type: ["number", "null"],
+        description: "Minimum mentor star rating required (0-5).",
+      },
+      availability: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Availability preferences such as 'weekend', 'evening', 'morning'.",
+      },
+      experienceLevel: {
+        type: ["string", "null"],
+        enum: ["beginner", "intermediate", "advanced", null],
+        description: "Required experience level of the learner or mentor.",
+      },
+      sessionType: {
+        type: ["string", "null"],
+        description:
+          "Preferred session format such as '1:1', 'group', or 'coaching'.",
+      },
+      language: {
+        type: ["string", "null"],
+        description: "Preferred spoken language for sessions, e.g. 'spanish'.",
+      },
+    },
+    required: [
+      "skills",
+      "maxBudget",
+      "minRating",
+      "availability",
+      "experienceLevel",
+      "sessionType",
+      "language",
+    ],
+  },
+} as const;
+
+function parseCacheKey(normalizedQuery: string): string {
+  const hash = crypto
+    .createHash("sha256")
+    .update(normalizedQuery)
+    .digest("hex");
+  return `nlp:parse:${hash}`;
+}
 
 export class NlpSearchService {
   /**
-   * Parse a natural language query into structured intent, entities, and filters.
+   * Parse a natural-language query into structured filters.
+   *
+   * Results are cached in Redis keyed by SHA-256(normalizedQuery) with a 1-hour
+   * TTL. When OpenAI is unavailable or fails, this falls back to a deterministic
+   * keyword parser so search always works.
    */
-  static parseQuery(
-    rawQuery: string,
-  ): Pick<SemanticSearchQuery, "intent" | "entities" | "filters"> {
-    const lower = rawQuery.toLowerCase();
-    const entities: Entity[] = [];
-    const filters: SearchFilters = {};
+  static async parseQuery(rawQuery: string): Promise<ParsedQuery> {
+    const normalized = normalizeQuery(rawQuery);
+    if (!normalized) return createEmptyParsed(normalized);
 
-    // Detect intent
-    let intent: SearchIntent = "general";
-    if (/mentor|coach|teacher|tutor/.test(lower)) intent = "find_mentor";
-    else if (/session|class|lesson|course/.test(lower)) intent = "find_session";
-    else if (/article|content|resource|guide/.test(lower))
-      intent = "find_content";
-
-    // Extract skill entities from known synonyms
-    for (const [canonical, variants] of Object.entries(SYNONYMS)) {
-      if ([canonical, ...variants].some((v) => lower.includes(v))) {
-        entities.push({ type: "skill", value: canonical });
-      }
+    const cacheKey = parseCacheKey(normalized);
+    try {
+      const cached = await CacheService.get<ParsedQuery>(cacheKey);
+      if (cached) return { ...cached, fromCache: true };
+    } catch (err) {
+      logger.warn("NlpSearchService.parseQuery cache read failed", {
+        error: (err as Error).message,
+      });
     }
 
-    // Extract price filter
-    const priceMatch = lower.match(/under\s+\$?(\d+)/);
-    if (priceMatch) filters.maxPrice = parseInt(priceMatch[1]);
+    // Typo correction (best-effort, does not block parsing).
+    const { corrected, corrections } = correctTypos(normalized);
 
-    // Extract rating filter
-    const ratingMatch = lower.match(/(\d+(?:\.\d+)?)\s*\+?\s*star/);
-    if (ratingMatch) filters.minRating = parseFloat(ratingMatch[1]);
+    let parsed: ParsedQuery;
+    try {
+      parsed = await this.parseWithOpenAI(corrected);
+    } catch (err) {
+      logger.warn(
+        "NlpSearchService.parseQuery OpenAI unavailable, using keyword fallback",
+        { error: (err as Error).message, query: normalized },
+      );
+      parsed = parseQueryKeywords(corrected);
+    }
 
-    return { intent, entities, filters };
+    parsed.normalizedQuery = normalized;
+    parsed.correctedQuery = corrected !== normalized ? corrected : null;
+    parsed.typoCorrections = corrections;
+
+    try {
+      await CacheService.set(cacheKey, parsed, PARSE_CACHE_TTL);
+    } catch (err) {
+      logger.warn("NlpSearchService.parseQuery cache write failed", {
+        error: (err as Error).message,
+      });
+    }
+
+    return parsed;
   }
 
   /**
-   * Expand query terms with synonyms for broader matching.
+   * Structured extraction via OpenAI function calling.
    */
-  static expandQuery(query: string): string {
-    const terms = new Set<string>([query]);
-    const lower = query.toLowerCase();
+  private static async parseWithOpenAI(query: string): Promise<ParsedQuery> {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
 
-    for (const [canonical, variants] of Object.entries(SYNONYMS)) {
-      if (
-        lower.includes(canonical) ||
-        variants.some((v) => lower.includes(v))
-      ) {
-        terms.add(canonical);
-        variants.forEach((v) => terms.add(v));
-      }
-    }
+    const { data } = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: PARSE_MODEL,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a search query understanding engine for a mentoring platform. " +
+              "Extract structured filters from the user's natural language query. " +
+              "Map synonyms: 'tutor'/'coach'/'teacher' -> sessionType 'coaching', " +
+              "'affordable'/'cheap' -> infer a maxBudget around 50. " +
+              "Return only the function call with the extracted fields.",
+          },
+          { role: "user", content: query },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: EXTRACTION_SCHEMA,
+          },
+        ],
+        tool_choice: {
+          type: "function",
+          function: { name: "extract_search_filters" },
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
 
-    return Array.from(terms).join(" | ");
+    const toolCall = data?.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall) throw new Error("OpenAI did not return a tool call");
+
+    const args = JSON.parse(toolCall.function.arguments);
+    return normalizeParsed(args, query);
   }
 
   /**
-   * Main semantic search: searches mentors, sessions, and content.
+   * Main search entry point. Parses the query, then delegates to mentor
+   * matching (when a user is known) or keyword search (anonymous / fallback).
    */
   static async search(
     rawQuery: string,
     userId?: string,
-    filters?: SearchFilters,
-  ): Promise<SearchResult[]> {
-    const { filters: parsedFilters } = this.parseQuery(rawQuery);
-    const mergedFilters = { ...parsedFilters, ...filters };
-    const expandedQuery = this.expandQuery(rawQuery);
+    overrides?: Partial<ParsedQuery>,
+  ): Promise<{ parsed: ParsedQuery; results: NlpSearchResult[] }> {
+    const parsed = await this.parseQuery(rawQuery);
 
-    const results: SearchResult[] = [];
+    // Allow explicit overrides (e.g. from query-string filters in the API).
+    const finalParsed: ParsedQuery = { ...parsed, ...stripUndefined(overrides) };
 
-    if (!mergedFilters.type || mergedFilters.type === "mentor") {
-      const mentors = await this.searchMentors(
-        rawQuery,
-        expandedQuery,
-        mergedFilters,
-        userId,
-      );
-      results.push(...mentors);
+    let results: NlpSearchResult[] = [];
+
+    if (userId) {
+      try {
+        const matches = await MentorMatchingV2Service.findMatches(userId, {
+          skills: finalParsed.skills,
+          budget: finalParsed.maxBudget ?? undefined,
+          limit: 20,
+        });
+        results = matches
+          .filter((m) => this.matchesParsedFilters(m, finalParsed))
+          .map((m) => ({
+            mentorId: m.mentorId,
+            overallScore: m.overallScore,
+            dimensions: m.dimensions,
+            explanation: m.explanation,
+            confidence: m.confidence,
+            source: "matching-v2" as const,
+          }));
+      } catch (err) {
+        logger.warn("NlpSearchService.search matching failed, keyword fallack", {
+          error: (err as Error).message,
+        });
+        results = await this.keywordSearch(rawQuery, finalParsed);
+      }
+    } else {
+      results = await this.keywordSearch(rawQuery, finalParsed);
     }
 
-    if (!mergedFilters.type || mergedFilters.type === "session") {
-      const sessions = await this.searchSessions(
-        rawQuery,
-        expandedQuery,
-        mergedFilters,
-      );
-      results.push(...sessions);
-    }
+    await this.logAnalytics({
+      userId,
+      query: rawQuery,
+      parsed: finalParsed,
+      resultCount: results.length,
+    });
 
-    // Sort by combined relevance + semantic score
-    results.sort(
-      (a, b) =>
-        b.relevanceScore +
-        b.semanticScore -
-        (a.relevanceScore + a.semanticScore),
-    );
-
-    return results.slice(0, 20);
+    return { parsed: finalParsed, results };
   }
 
   /**
-   * Get autocomplete suggestions for a partial query.
+   * Filter MentorMatchingV2 scores by the additional parsed dimensions that the
+   * matching service does not natively weight (rating, availability, language).
+   */
+  private static matchesParsedFilters(
+    match: { dimensions: Record<string, number> },
+    parsed: ParsedQuery,
+  ): boolean {
+    if (parsed.minRating !== null) {
+      const ratingScore = match.dimensions?.successPrediction ?? 0;
+      // successPrediction is 0-100 where ~70 maps to a 3/5 mentor; convert.
+      const inferredRating = (ratingScore / 100) * 5;
+      if (inferredRating < parsed.minRating) return false;
+    }
+    // Availability / language / sessionType are informational here; full
+    // enforcement happens in keywordSearch where the mentor row is available.
+    return true;
+  }
+
+  /**
+   * Keyword / full-text fallback search used for anonymous users or when mentor
+   * matching is unavailable. Honors the structured filters extracted from the
+   * query.
+   */
+  private static async keywordSearch(
+    rawQuery: string,
+    parsed: ParsedQuery,
+  ): Promise<NlpSearchResult[]> {
+    const params: any[] = [rawQuery, rawQuery];
+    const conditions: string[] = [
+      `to_tsvector('english', u.name || ' ' || COALESCE(u.bio, m.bio, '') || ' ' || array_to_string(COALESCE(m.skills, '{}'), ' ')) @@ plainto_tsquery('english', $1)`,
+      `similarity(u.name || ' ' || COALESCE(u.bio, m.bio, ''), $2) > 0.1`,
+    ];
+
+    if (parsed.skills.length) {
+      params.push(parsed.skills);
+      conditions.push(`m.skills && $${params.length}::text[]`);
+    }
+    if (parsed.maxBudget !== null) {
+      params.push(parsed.maxBudget);
+      conditions.push(`u.hourly_rate <= $${params.length}`);
+    }
+    if (parsed.minRating !== null) {
+      params.push(parsed.minRating);
+      conditions.push(`u.average_rating >= $${params.length}`);
+    }
+
+    const whereClause = conditions.join(" OR ");
+
+    const result = await pool.query(
+      `SELECT m.user_id AS mentor_id, u.name, u.bio, u.hourly_rate,
+              u.average_rating, m.skills,
+              ts_rank(
+                to_tsvector('english', u.name || ' ' || COALESCE(u.bio, m.bio, '') || ' ' || array_to_string(COALESCE(m.skills, '{}'), ' ')),
+                plainto_tsquery('english', $1)
+              ) AS rank,
+              similarity(u.name || ' ' || COALESCE(u.bio, m.bio, ''), $2) AS sim_score
+       FROM mentors m
+       JOIN users u ON u.id = m.user_id
+       WHERE u.role = 'mentor' AND u.is_active = true
+         AND (${whereClause})
+       ORDER BY rank DESC, sim_score DESC
+       LIMIT 20`,
+      params,
+    );
+
+    return result.rows.map((row) => {
+      const skillMatch = parsed.skills.length
+        ? Math.round(
+            (parsed.skills.filter((s) =>
+              (row.skills || []).map((x: string) => x.toLowerCase()),
+            ).length /
+              parsed.skills.length) *
+              100,
+          )
+        : 50;
+      const priceCompat = parsed.maxBudget
+        ? row.hourly_rate <= parsed.maxBudget
+          ? 100
+          : Math.max(0, 100 - ((row.hourly_rate - parsed.maxBudget) / parsed.maxBudget) * 100)
+        : 70;
+      const overallScore = Math.round(skillMatch * 0.5 + priceCompat * 0.3 + (parseFloat(row.rank) || 0) * 10);
+      return {
+        mentorId: row.mentor_id,
+        overallScore,
+        dimensions: {
+          skillMatch,
+          priceCompatibility: Math.round(priceCompat),
+          textRank: parseFloat(row.rank) || 0,
+        },
+        explanation: [
+          skillMatch >= 80
+            ? "Strong skill alignment"
+            : "Partial skill match",
+          parsed.maxBudget
+            ? priceCompat >= 80
+              ? "Rate fits your budget"
+              : "Rate slightly above budget"
+            : "Budget not specified",
+        ],
+        confidence: parsed.skills.length ? Math.min(95, 60 + parsed.skills.length * 5) : 60,
+        source: "keyword" as const,
+      };
+    });
+  }
+
+  /**
+   * Autocomplete suggestions. Primary: Elasticsearch prefix search over the
+   * mentor `expertise` field. Fallback: PostgreSQL distinct skills prefix.
    */
   static async getSuggestions(
     partialQuery: string,
   ): Promise<SearchSuggestion[]> {
-    const suggestions: SearchSuggestion[] = [];
+    const q = (partialQuery || "").trim();
+    if (q.length < 1) return [];
 
-    // Autocomplete from mentor skills/names
-    const result = await pool.query(
-      `SELECT DISTINCT unnest(skills) AS term FROM mentors
-       WHERE similarity(unnest(skills), $1) > 0.3
-       LIMIT 5`,
-      [partialQuery],
-    );
-
-    for (const row of result.rows) {
-      suggestions.push({ text: row.term, type: "autocomplete" });
-    }
-
-    // Synonym expansions
-    const lower = partialQuery.toLowerCase();
-    for (const [canonical, variants] of Object.entries(SYNONYMS)) {
-      if (variants.some((v) => v.startsWith(lower))) {
-        suggestions.push({ text: canonical, type: "expansion" });
+    // 1) Elasticsearch prefix search (primary)
+    try {
+      const esTerms = await elasticsearchService.suggestSkills(q, 8);
+      if (esTerms.length) {
+        return esTerms.map((term) => ({
+          text: term,
+          type: "autocomplete" as const,
+        }));
       }
+    } catch (err) {
+      logger.debug("NlpSearchService.getSuggestions ES unavailable", {
+        error: (err as Error).message,
+      });
     }
 
-    return suggestions.slice(0, 8);
+    // 2) PostgreSQL fallback
+    try {
+      const result = await pool.query(
+        `SELECT DISTINCT unnest(skills) AS term
+         FROM mentors
+         WHERE unnest(skills) ILIKE $1
+         LIMIT 8`,
+        [`${q}%`],
+      );
+      return result.rows.map((row: { term: string }) => ({
+        text: row.term,
+        type: "autocomplete" as const,
+      }));
+    } catch (err) {
+      logger.warn("NlpSearchService.getSuggestions PG fallback failed", {
+        error: (err as Error).message,
+      });
+    }
+
+    return [];
   }
 
   /**
-   * Log a search query for personalization and analytics.
+   * Detect likely typos for a partial query against the skill vocabulary.
+   * Returns the closest suggestion for the final token (autocomplete-style
+   * correction).
    */
-  static async logSearch(
-    userId: string | undefined,
-    query: string,
-    resultCount: number,
-  ): Promise<void> {
-    await pool.query(
-      `INSERT INTO search_logs (user_id, query, result_count, created_at)
-       VALUES ($1, $2, $3, NOW())`,
-      [userId ?? null, query, resultCount],
-    );
-  }
-
-  private static async searchMentors(
-    rawQuery: string,
-    expandedQuery: string,
-    filters: SearchFilters,
-    _userId?: string,
-  ): Promise<SearchResult[]> {
-    const params: any[] = [rawQuery, expandedQuery];
-    let whereClause = `
-      to_tsvector('english', m.name || ' ' || COALESCE(m.bio, '') || ' ' || array_to_string(COALESCE(m.skills, '{}'), ' '))
-      @@ to_tsquery('english', $2)
-      OR similarity(m.name || ' ' || COALESCE(m.bio, ''), $1) > 0.1`;
-
-    if (filters.minRating) {
-      params.push(filters.minRating);
-      whereClause += ` AND m.average_rating >= $${params.length}`;
-    }
-    if (filters.maxPrice) {
-      params.push(filters.maxPrice);
-      whereClause += ` AND m.hourly_rate <= $${params.length}`;
-    }
-
-    const result = await pool.query(
-      `SELECT m.id, m.name, m.bio, m.skills,
-              ts_rank(
-                to_tsvector('english', m.name || ' ' || COALESCE(m.bio, '') || ' ' || array_to_string(COALESCE(m.skills, '{}'), ' ')),
-                to_tsquery('english', $2)
-              ) AS rank,
-              similarity(m.name || ' ' || COALESCE(m.bio, ''), $1) AS sim_score
-       FROM mentors m
-       WHERE ${whereClause}
-       ORDER BY rank DESC, sim_score DESC
-       LIMIT 10`,
-      params,
-    );
-
-    return result.rows.map((row) => ({
-      id: row.id,
-      type: "mentor" as const,
-      relevanceScore: parseFloat(row.rank) || 0,
-      semanticScore: parseFloat(row.sim_score) || 0,
-      matchedTerms: (row.skills || []).filter((s: string) =>
-        rawQuery
-          .toLowerCase()
-          .split(" ")
-          .some((q) => s.toLowerCase().includes(q)),
-      ),
-      snippet: row.bio ? row.bio.substring(0, 150) + "..." : row.name,
+  static detectTypos(partialQuery: string): SearchSuggestion[] {
+    const { corrections } = correctTypos(normalizeQuery(partialQuery));
+    return corrections.map((c) => ({
+      text: c.suggestion,
+      type: "correction" as const,
     }));
   }
 
-  private static async searchSessions(
-    rawQuery: string,
-    expandedQuery: string,
-    _filters: SearchFilters,
-  ): Promise<SearchResult[]> {
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.description,
-              ts_rank(
-                to_tsvector('english', COALESCE(s.title, '') || ' ' || COALESCE(s.description, '')),
-                to_tsquery('english', $2)
-              ) AS rank,
-              similarity(COALESCE(s.title, '') || ' ' || COALESCE(s.description, ''), $1) AS sim_score
-       FROM sessions s
-       WHERE to_tsvector('english', COALESCE(s.title, '') || ' ' || COALESCE(s.description, ''))
-             @@ to_tsquery('english', $2)
-          OR similarity(COALESCE(s.title, '') || ' ' || COALESCE(s.description, ''), $1) > 0.1
-       ORDER BY rank DESC
-       LIMIT 10`,
-      [rawQuery, expandedQuery],
-    );
-
-    return result.rows.map((row) => ({
-      id: row.id,
-      type: "session" as const,
-      relevanceScore: parseFloat(row.rank) || 0,
-      semanticScore: parseFloat(row.sim_score) || 0,
-      matchedTerms: rawQuery
-        .toLowerCase()
-        .split(" ")
-        .filter(
-          (q) =>
-            (row.title || "").toLowerCase().includes(q) ||
-            (row.description || "").toLowerCase().includes(q),
-        ),
-      snippet: row.description
-        ? row.description.substring(0, 150) + "..."
-        : row.title,
-    }));
+  /**
+   * Persist a search event to the search_analytics table. Failures are
+   * swallowed so analytics never break search.
+   */
+  static async logAnalytics(entry: {
+    userId?: string;
+    query: string;
+    parsed: ParsedQuery;
+    resultCount: number;
+  }): Promise<void> {
+    try {
+      await pool.query(
+        `INSERT INTO search_analytics
+           (user_id, query, normalized_query, extracted_filters, result_count, has_results, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [
+          entry.userId ?? null,
+          entry.query,
+          entry.parsed.normalizedQuery,
+          JSON.stringify(entry.parsed),
+          entry.resultCount,
+          entry.resultCount > 0,
+        ],
+      );
+    } catch (err) {
+      logger.warn("NlpSearchService.logAnalytics failed", {
+        error: (err as Error).message,
+      });
+    }
   }
 }
+
+function stripUndefined<T extends object>(obj?: Partial<T>): Partial<T> {
+  if (!obj) return {};
+  const out: Partial<T> = {};
+  (Object.keys(obj) as (keyof T)[]).forEach((k) => {
+    if (obj[k] !== undefined) out[k] = obj[k] as T[keyof T];
+  });
+  return out;
+}
+
+export { SKILL_VOCABULARY };

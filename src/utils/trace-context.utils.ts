@@ -58,3 +58,30 @@ export async function runWithJobTraceContext<T>(
 
   return run();
 }
+
+/**
+ * Return the current request's correlation ID (issue #1308).
+ * Falls back to "unknown" outside a tracing context so outbound
+ * callers never crash.
+ */
+export function getCorrelationId(): string {
+  return traceStore.getStore()?.correlationId ?? "unknown";
+}
+
+export function getRequestId(): string {
+  return traceStore.getStore()?.requestId ?? "unknown";
+}
+
+/**
+ * Build outbound propagation headers carrying the current correlation context.
+ */
+export function buildTraceHeaders(
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    "X-Correlation-ID": getCorrelationId(),
+    "X-Request-ID": getRequestId(),
+    ...extra,
+  };
+}
+
