@@ -87,121 +87,121 @@ export const AuthService = {
     }
   },
 
-  async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null, req?: any): Promise<any> {
+  /**
+   * Verify credentials and return a pre-auth record. The caller is responsible
+   * for running adaptive authentication (if applicable) before calling
+   * completeLogin(), keeping HTTP-layer concerns out of this service.
+   */
+  async verifyCredentials(
+    input: LoginInput,
+    ipAddress?: string | null,
+    userAgent?: string | null,
+  ): Promise<{ userId: string; email: string; role: string; userTier: string; mfaEnabled: boolean; _hash: string; _plaintext: string }> {
     const { email, password } = input;
 
     const query = `
-      SELECT id, role, password_hash, mfa_enabled, user_tier 
-      FROM users 
+      SELECT id, role, status, password_hash, mfa_enabled, user_tier
+      FROM users
       WHERE email = $1 AND deleted_at IS NULL
     `;
     const { rows } = await pool.query(query, [email]);
 
     if (rows.length === 0) {
-      // Log failed attempt
       await this.logAuthAttempt(null, email, false, 'Invalid credentials', ipAddress, userAgent);
       throw new Error('Invalid email or password.');
     }
 
     const user = rows[0];
 
-    // Banned users receive a specific error and cannot log in at all
     if (user.status === 'banned') {
       throw createError(ErrorCode.AUTH_ACCOUNT_BANNED, 403);
     }
-
-    // Suspended users cannot log in
     if (user.status === 'suspended') {
       throw createError(ErrorCode.AUTH_ACCOUNT_SUSPENDED, 403);
     }
-
-    // Any other non-active status (inactive, pending_verification)
     if (user.status !== 'active') {
       throw createError(ErrorCode.AUTH_INVALID_CREDENTIALS, 401);
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
-
     if (!isMatch) {
       throw createError(ErrorCode.AUTH_INVALID_CREDENTIALS, 401);
     }
 
-    // Perform adaptive authentication if request object is available
-    if (req) {
-      try {
-        const { AdaptiveAuthService } = await import('./adaptive-auth.service');
-        const adaptiveResult = await AdaptiveAuthService.authenticateAdaptive(req, {
-          userId: user.id,
-          email,
-          isLoginAttempt: true
-        });
+    return {
+      userId: user.id,
+      email,
+      role: user.role,
+      userTier: user.user_tier,
+      mfaEnabled: user.mfa_enabled,
+      _hash: user.password_hash,
+      _plaintext: password,
+    };
+  },
 
-        if (adaptiveResult.decision === 'block') {
-          await this.logAuthAttempt(user.id, email, false, 'Blocked by adaptive auth', ipAddress, userAgent, adaptiveResult.riskScore);
-          throw new Error('Login blocked due to security policy. Please try again later or contact support.');
-        }
-
-        if (adaptiveResult.decision === 'challenge') {
-          await this.logAuthAttempt(user.id, email, false, 'Additional challenges required', ipAddress, userAgent, adaptiveResult.riskScore);
-          return {
-            challengesRequired: true,
-            challenges: adaptiveResult.challenges,
-            sessionId: adaptiveResult.sessionId,
-            riskLevel: adaptiveResult.riskLevel,
-            userId: user.id
-          };
-        }
-      } catch (error) {
-        // Don't fail login if adaptive auth service is unavailable
-        logger.warn('Adaptive auth service unavailable during login', { userId: user.id, error });
-      }
-    }
-
-    if (user.mfa_enabled) {
-      const mfaToken = jwt.sign(
-        { sub: user.id, mfaPending: true },
-        JWT_SECRET,
-        { expiresIn: '5m' }
-      );
-      await this.logAuthAttempt(user.id, email, false, 'MFA required', ipAddress, userAgent);
-      return { mfaRequired: true, mfaToken, userId: user.id };
-    }
-
+  /**
+   * Complete a login after credentials have been verified and adaptive auth
+   * (if enabled) has passed. Issues tokens and creates a session.
+   */
+  async completeLogin(
+    userId: string,
+    email: string,
+    role: string,
+    userTier: string,
+    passwordHash: string,
+    plaintextPassword: string,
+    ipAddress?: string | null,
+    userAgent?: string | null,
+  ): Promise<{ tokens: AuthTokens; userId: string; role: string }> {
     const fingerprint = userAgent ? `${ipAddress}:${userAgent}` : undefined;
-    const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier, fingerprint, {
+    const tokens = await TokenService.issueTokens(userId, email, role, userTier, fingerprint, {
       deviceName: userAgent ?? undefined,
       ipAddress: ipAddress ?? undefined,
     });
 
     const { SessionManagerService } = await import('./sessionManager.service');
     await SessionManagerService.createSession({
-      userId: user.id,
+      userId,
       refreshToken: tokens.refreshToken,
       ipAddress: ipAddress ?? null,
       userAgent: userAgent ?? null,
       userEmail: email,
     }).catch(() => { });
 
-    // Log successful authentication
-    await this.logAuthAttempt(user.id, email, true, 'Login successful', ipAddress, userAgent);
+    await this.logAuthAttempt(userId, email, true, 'Login successful', ipAddress, userAgent);
 
     const currentRounds = Number(env.BCRYPT_ROUNDS);
-    if (bcrypt.getRounds(user.password_hash) !== currentRounds) {
-      // Transparently upgrade older password hashes after returning the login response.
+    if (bcrypt.getRounds(passwordHash) !== currentRounds) {
       setImmediate(async () => {
         try {
-          const upgradedHash = await bcrypt.hash(password, currentRounds);
+          const upgradedHash = await bcrypt.hash(plaintextPassword, currentRounds);
           await pool.query(
             `UPDATE users SET password_hash = $1 WHERE id = $2`,
-            [upgradedHash, user.id]
+            [upgradedHash, userId]
           );
         } catch (error) {
-          logger.warn('Failed to upgrade password hash after login', { userId: user.id, error });
+          logger.warn('Failed to upgrade password hash after login', { userId, error });
         }
       });
     }
 
-    return { tokens, userId: user.id, role: user.role };
+    return { tokens, userId, role };
+  },
+
+  async login(input: LoginInput, ipAddress?: string | null, userAgent?: string | null): Promise<any> {
+    const pre = await this.verifyCredentials(input, ipAddress, userAgent);
+
+    if (pre.mfaEnabled) {
+      const mfaToken = jwt.sign(
+        { sub: pre.userId, mfaPending: true },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      await this.logAuthAttempt(pre.userId, pre.email, false, 'MFA required', ipAddress, userAgent);
+      return { mfaRequired: true, mfaToken, userId: pre.userId };
+    }
+
+    return this.completeLogin(pre.userId, pre.email, pre.role, pre.userTier, pre._hash, pre._plaintext, ipAddress, userAgent);
   },
 
   async refresh(refreshToken: string, fingerprint?: string): Promise<AuthTokens> {
@@ -242,11 +242,35 @@ export const AuthService = {
     return resetToken;
   },
 
+  async checkPasswordHistory(userId: string, newPassword: string): Promise<void> {
+    const historyCount = Number(env.PASSWORD_HISTORY_COUNT);
+    if (historyCount <= 0) return;
+
+    const { rows } = await pool.query<{ hash: string }>(
+      `SELECT hash FROM password_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [userId, historyCount],
+    );
+
+    for (const row of rows) {
+      const reused = await bcrypt.compare(newPassword, row.hash);
+      if (reused) {
+        throw createError('Password has been used recently. Please choose a different password.', 400);
+      }
+    }
+  },
+
+  async recordPasswordHistory(userId: string, passwordHash: string): Promise<void> {
+    await pool.query(
+      `INSERT INTO password_history (user_id, hash) VALUES ($1, $2)`,
+      [userId, passwordHash],
+    );
+  },
+
   async resetPassword(input: ResetPasswordInput): Promise<string> {
     const resetTokenHash = crypto.createHash('sha256').update(input.token).digest('hex');
 
     const query = `
-      SELECT id FROM users 
+      SELECT id FROM users
       WHERE reset_token = $1 AND reset_token_expires > NOW() AND status = 'active' AND deleted_at IS NULL
     `;
     const { rows } = await pool.query(query, [resetTokenHash]);
@@ -256,6 +280,9 @@ export const AuthService = {
     }
 
     const userId = rows[0].id;
+
+    await this.checkPasswordHistory(userId, input.newPassword);
+
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(input.newPassword, salt);
 
@@ -263,6 +290,8 @@ export const AuthService = {
       `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
       [passwordHash, userId]
     );
+
+    await this.recordPasswordHistory(userId, passwordHash);
 
     await TokenService.revokeAllUserSessions(userId);
 
