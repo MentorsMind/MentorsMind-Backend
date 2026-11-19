@@ -201,14 +201,18 @@ export const RiskEngineService = {
         }
       });
 
-      if (geoResponse.data.status === 'success') {
+      if (geoResponse.data && geoResponse.data.status === 'success') {
         const { country, countryCode, city, proxy, hosting } = geoResponse.data;
         
+        // Normalize proxy field - ip-api.com returns "1" as string or true as boolean
+        const proxyValue = proxy ? (String(proxy).toLowerCase() === 'true' || proxy === 1) : false;
+        const hostingValue = hosting ? (String(hosting).toLowerCase() === 'true' || hosting === 1) : false;
+
         return {
           newLocation: false, // This would need historical comparison
           country: countryCode || 'Unknown',
           city: city || undefined,
-          vpnDetected: proxy || hosting,
+          vpnDetected: proxyValue || hostingValue,
           highRiskCountry: HIGH_RISK_COUNTRIES.includes(countryCode),
           travelPattern: false // This would need temporal analysis
         };
@@ -230,15 +234,72 @@ export const RiskEngineService = {
    * Analyze network reputation and characteristics
    */
   async analyzeNetwork(ipAddress: string): Promise<RiskFactors['network']> {
-    // In production, integrate with threat intelligence feeds
     const isPrivateIP = this.isPrivateIP(ipAddress);
+    const isProxy = await this.detectProxy(ipAddress);
+    const isTor = await this.detectTorNetwork(ipAddress);
+    const ipReputation = isPrivateIP ? 'private' : await this.checkIpReputation(ipAddress);
     
     return {
-      ipReputation: 'clean', // Would integrate with threat feeds
-      isDataCenter: false, // Would check against datacenter IP ranges
-      isProxy: false, // Would check proxy detection services
-      torNetwork: false // Would check Tor exit node lists
+      ipReputation,
+      isDataCenter: this.isDataCenterIP(ipAddress),
+      isProxy,
+      torNetwork: isTor
     };
+  },
+
+  /**
+   * Detect if IP is from a known proxy service
+   */
+  async detectProxy(ipAddress: string): Promise<boolean> {
+    try {
+      const response = await axios.get(`https://api.proxyscanner.com/v2/check`, {
+        params: { ip: ipAddress },
+        timeout: 2000
+      });
+      return response.data.isProxy === true;
+    } catch (error) {
+      logger.warn('Proxy detection service failed', { ipAddress, error });
+      return false;
+    }
+  },
+
+  /**
+   * Detect if IP is from a Tor network exit node
+   */
+  async detectTorNetwork(ipAddress: string): Promise<boolean> {
+    try {
+      const response = await axios.get(`https://check.torproject.org/cgi-bin/TorIp`, {
+        params: { ip: ipAddress },
+        timeout: 3000
+      });
+      return response.data.isTor === '1';
+    } catch (error) {
+      logger.warn('Tor network detection failed', { ipAddress, error });
+      return false;
+    }
+  },
+
+  /**
+   * Check IP reputation against threat intelligence
+   */
+  async checkIpReputation(ipAddress: string): Promise<'clean' | 'suspicious' | 'malicious'> {
+    // In production, integrate with threat intelligence feeds (AlienVault, IBM X-Force, etc.)
+    // For now, return clean for non-private IPs
+    const isPrivateIP = this.isPrivateIP(ipAddress);
+    return isPrivateIP ? 'private' : 'clean';
+  },
+
+  /**
+   * Check if IP is from a data center
+   */
+  isDataCenterIP(ipAddress: string): boolean {
+    // Known data center IP ranges - simplified check
+    const dataCenterPatterns = [
+      /^10\./,
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+      /^192\.168\./
+    ];
+    return dataCenterPatterns.some(pattern => pattern.test(ipAddress));
   },
 
   /**
@@ -470,12 +531,12 @@ export const RiskEngineService = {
       const historicalLogins = await pool.query(`
         SELECT EXTRACT(hour FROM created_at) as login_hour
         FROM auth_attempts 
-        WHERE (user_id = $1 OR email = $1) 
+        WHERE (user_id = $1 OR email = $2) 
           AND success = true 
           AND created_at > NOW() - INTERVAL '30 days'
         ORDER BY created_at DESC 
         LIMIT 50
-      `, [identifier]);
+      `, [identifier, identifier]);
 
       if (historicalLogins.rows.length < 5) return false;
 
