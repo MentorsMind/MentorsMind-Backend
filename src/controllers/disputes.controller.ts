@@ -8,6 +8,56 @@ import { z } from 'zod';
 import { AuditLoggerService } from '../services/audit-logger.service';
 import { LogLevel } from '../utils/log-formatter.utils';
 
+// ─── Validation Schemas ───────────────────────────────────────────────────────
+
+const DisputeTypeEnum = z.enum(["payment", "quality", "conduct", "cancellation"]);
+
+const OpenDisputeSchema = z.object({
+  session_id: z
+    .string()
+    .uuid("Invalid session ID format")
+    .nonempty("Session ID is required"),
+  type: DisputeTypeEnum,
+  reason: z
+    .string()
+    .min(10, "Reason must be at least 10 characters")
+    .max(2000, "Reason must not exceed 2000 characters")
+    .nonempty("Reason is required"),
+});
+
+const UploadEvidenceSchema = z.object({
+  text_content: z
+    .string()
+    .max(5000, "Text evidence must not exceed 5000 characters")
+    .optional(),
+  file_url: z
+    .string()
+    .url("Invalid file URL")
+    .optional(),
+}).refine(
+  (data) => data.text_content || data.file_url,
+  "Either text_content or file_url must be provided"
+);
+
+const ResoluteDisputeSchema = z.object({
+  mentor_pct: z
+    .number()
+    .int("mentor_pct must be an integer")
+    .min(0, "mentor_pct must be between 0 and 100")
+    .max(100, "mentor_pct must be between 0 and 100"),
+  notes: z
+    .string()
+    .max(2000, "Resolution notes must not exceed 2000 characters")
+    .optional(),
+});
+
+const MediateDisputeSchema = z.object({
+  notes: z
+    .string()
+    .min(1, "Notes are required")
+    .max(2000, "Mediation notes must not exceed 2000 characters"),
+});
+
 export class DisputesController {
   static async openDispute(req: Request, res: Response): Promise<void> {
     try {
@@ -20,7 +70,21 @@ export class DisputesController {
         return;
       }
 
-      const { session_id, type, reason } = req.body;
+      // ── Validate input schema ──
+      const validationResult = OpenDisputeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        res.status(400).json({
+          error: "Invalid dispute data",
+          code: "VALIDATION_ERROR",
+          details: validationResult.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      const { session_id, type, reason } = validationResult.data;
       const filed_by_id = req.user.userId;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
@@ -76,7 +140,22 @@ export class DisputesController {
   static async uploadEvidence(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
-      const { text_content, file_url } = req.body;
+      
+      // ── Validate input schema ──
+      const validationResult = UploadEvidenceSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        res.status(400).json({
+          error: "Invalid evidence data",
+          code: "VALIDATION_ERROR",
+          details: validationResult.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      const { text_content, file_url } = validationResult.data;
       const submitterId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
@@ -104,15 +183,25 @@ export class DisputesController {
   static async resolveDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
-      const { mentor_pct, notes } = req.body;
+      
+      // ── Validate input schema ──
+      const validationResult = ResoluteDisputeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        res.status(400).json({
+          error: "Invalid resolution data",
+          code: "VALIDATION_ERROR",
+          details: validationResult.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      const { mentor_pct, notes } = validationResult.data;
       const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
-
-      if (mentor_pct === undefined || mentor_pct < 0 || mentor_pct > 100) {
-        res.status(400).json({ error: "Valid mentor_pct (0-100) is required" });
-        return;
-      }
 
       const dispute = await DisputeService.resolveDispute(
         id,
@@ -138,7 +227,22 @@ export class DisputesController {
   static async mediateDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const id = routeParam(req.params.id);
-      const { notes } = req.body;
+      
+      // ── Validate input schema ──
+      const validationResult = MediateDisputeSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        res.status(400).json({
+          error: "Invalid mediation data",
+          code: "VALIDATION_ERROR",
+          details: validationResult.error.issues.map(issue => ({
+            field: issue.path.join('.'),
+            message: issue.message,
+          })),
+        });
+        return;
+      }
+
+      const { notes } = validationResult.data;
       const adminId = req.user!.userId ?? req.user!.id;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";

@@ -74,7 +74,7 @@ export type SessionFlag =
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SESSION_CACHE_PREFIX = 'session:v1:';
-const SESSION_CACHE_TTL = 300; // 5 minutes
+const SESSION_CACHE_TTL = 60; // 1 minute (reduced from 5 minutes for better hijacking detection)
 
 // Anomaly score increments per flag
 const SCORE_WEIGHTS: Record<SessionFlag, number> = {
@@ -301,6 +301,9 @@ export const SessionService = {
         currentIp: params.ipAddress,
         storedIp: session.fingerprint.ipAddress,
       });
+      
+      // Invalidate cache on suspicious activity to force fresh DB lookup on next validation
+      await this.invalidateSessionCache(session.tokenHash);
     }
 
     // Auto-revoke on critical threshold
@@ -545,6 +548,80 @@ export const SessionService = {
     ).catch((err: any) => {
       logger.debug('SessionService: could not write anomaly', { error: err.message });
     });
+  },
+
+  /**
+   * Invalidate session cache immediately.
+   * Used when suspicious activity is detected and we need to force a fresh
+   * DB lookup on the next validation (bypassing the 1-minute cache).
+   * This enables faster response to session hijacking detection.
+   */
+  async invalidateSessionCache(tokenHash: string): Promise<void> {
+    const cacheKey = `${SESSION_CACHE_PREFIX}${tokenHash}`;
+    await redis.del(cacheKey);
+    logger.info('SessionService: session cache invalidated', { 
+      cacheKey,
+      reason: 'suspicious activity detected'
+    });
+  },
+
+  /**
+   * Invalidate all cache entries for a user.
+   * Used after account takeover or mass logout events.
+   */
+  async invalidateUserSessionCache(userId: string): Promise<number> {
+    // Find all cache keys for this user (requires DB lookup or pattern scanning)
+    // For now, we rely on the revokeAllUserSessions which also clears cache entries
+    // individually as sessions are revoked
+    const { rows } = await pool.query<{ token_hash: string }>(
+      `SELECT token_hash FROM user_sessions WHERE user_id = $1 AND revoked_at IS NULL`,
+      [userId],
+    ).catch(() => ({ rows: [] }));
+
+    let invalidatedCount = 0;
+    for (const row of rows) {
+      await redis.del(`${SESSION_CACHE_PREFIX}${row.token_hash}`);
+      invalidatedCount++;
+    }
+
+    if (invalidatedCount > 0) {
+      logger.info('SessionService: user session cache invalidated', {
+        userId,
+        count: invalidatedCount,
+      });
+    }
+
+    return invalidatedCount;
+  },
+
+  /**
+   * Record an anomaly event in the audit trail.
+   * Called when suspicious activity is detected.
+   */
+  async recordAnomaly(params: {
+    userId: string;
+    sessionId: string;
+    type: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    score: number;
+    description: string;
+    details?: Record<string, any>;
+  }): Promise<void> {
+    logger.warn('SessionService: anomaly recorded', {
+      userId: params.userId,
+      sessionId: params.sessionId,
+      type: params.type,
+      severity: params.severity,
+      score: params.score,
+      description: params.description,
+      details: params.details,
+    });
+
+    // TODO: Optionally persist to audit_logs table for long-term tracking
+    // await pool.query(
+    //   `INSERT INTO audit_logs (user_id, action, metadata, level) VALUES ($1, $2, $3, $4)`,
+    //   [params.userId, params.type, JSON.stringify(params.details), params.severity]
+    // );
   },
 };
 
