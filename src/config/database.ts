@@ -53,8 +53,8 @@ export const testConnection = async (): Promise<boolean> => {
 
 let monitorInterval: NodeJS.Timeout | null = null;
 
-export const startPoolMonitoring = (intervalMs = 60000) => {
-  if (monitorInterval) return;
+export const startPoolMonitoring = (intervalMs = 60000): (() => void) => {
+  if (monitorInterval) return stopPoolMonitoring;
   monitorInterval = setInterval(() => {
     const { totalCount, idleCount, waitingCount } = pool;
     logger.info(
@@ -62,6 +62,7 @@ export const startPoolMonitoring = (intervalMs = 60000) => {
       'Database pool utilization telemetry'
     );
   }, intervalMs);
+  return stopPoolMonitoring;
 };
 
 export const stopPoolMonitoring = () => {
