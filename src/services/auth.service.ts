@@ -153,6 +153,25 @@ export const AuthService = {
     ipAddress?: string | null,
     userAgent?: string | null,
   ): Promise<{ tokens: AuthTokens; userId: string; role: string }> {
+    // Enforce PASSWORD_EXPIRY_DAYS policy at login time
+    const expiryDays = Number(env.PASSWORD_EXPIRY_DAYS);
+    if (expiryDays > 0) {
+      const { rows: expiryRows } = await pool.query<{ password_expired: boolean; password_changed_at: Date | null }>(
+        `SELECT password_expired, password_changed_at FROM users WHERE id = $1`,
+        [userId],
+      );
+      if (expiryRows.length > 0) {
+        const { password_expired, password_changed_at } = expiryRows[0];
+        const expiredByFlag = password_expired === true;
+        const expiredByAge =
+          password_changed_at != null &&
+          Date.now() - new Date(password_changed_at).getTime() > expiryDays * 86_400_000;
+        if (expiredByFlag || expiredByAge) {
+          throw createError(ErrorCode.AUTH_PASSWORD_EXPIRED, 403);
+        }
+      }
+    }
+
     const fingerprint = userAgent ? `${ipAddress}:${userAgent}` : undefined;
     const tokens = await TokenService.issueTokens(userId, email, role, userTier, fingerprint, {
       deviceName: userAgent ?? undefined,
