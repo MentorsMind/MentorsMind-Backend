@@ -107,7 +107,7 @@ export const UploadService = {
    * Process and upload a user avatar to S3.
    *
    * @param userId        - Authenticated user's ID (used as part of the S3 key)
-   * @param fileBuffer    - Raw file bytes received from multer
+   * @param fileInput     - Temporary file path or raw bytes for the uploaded image
    * @param mimeType      - MIME type reported by multer (validated here as well)
    * @param sizeBytes     - File size in bytes (validated before sharp processing)
    * @param oldAvatarUrl  - Current avatar_url from the DB (if any); deleted from S3 when set
@@ -115,7 +115,7 @@ export const UploadService = {
    */
   async uploadAvatar(
     userId: string,
-    fileBuffer: Buffer,
+    fileInput: string | Buffer,
     mimeType: string,
     sizeBytes: number,
     oldAvatarUrl: string | null,
@@ -131,7 +131,7 @@ export const UploadService = {
     }
 
     // ── 3. Resize & compress with sharp (256×256 JPEG) ──────────────────────
-    const processedBuffer = await sharp(fileBuffer)
+    const processedBuffer = await sharp(fileInput)
       .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
         fit: 'cover',         // crop to fill the square, preserving aspect ratio
         position: 'center',

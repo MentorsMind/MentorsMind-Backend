@@ -1,5 +1,6 @@
 import path from "path";
 import crypto from "crypto";
+import { createReadStream } from "fs";
 import pool from "../config/database";
 import { SocketService } from "./socket.service";
 import { MessagingService } from "./messaging.service";
@@ -110,7 +111,8 @@ export const AttachmentService = {
    * Persist a file to S3.
    */
   async storeFile(
-    fileBuffer: Buffer,
+    filePath: string,
+    fileSize: number,
     originalName: string,
   ): Promise<{ storageKey: string; bucket: string }> {
     const ext = path.extname(originalName) || "";
@@ -121,7 +123,8 @@ export const AttachmentService = {
       new PutObjectCommand({
         Bucket: bucket,
         Key: storageKey,
-        Body: fileBuffer,
+        Body: createReadStream(filePath),
+        ContentLength: fileSize,
       }),
     );
 
@@ -148,22 +151,24 @@ export const AttachmentService = {
   async uploadAttachment(
     conversationId: string,
     uploaderId: string,
-    fileBuffer: Buffer,
+    filePath: string,
     originalName: string,
     mimeType: string,
+    fileSize: number,
   ): Promise<{ attachment: AttachmentRecord; message: any } | null> {
-    const validationError = this.validateFile(mimeType, fileBuffer.length);
+    const validationError = this.validateFile(mimeType, fileSize);
     if (validationError) throw new Error(validationError);
 
     const withinQuota = await this.checkAndUpdateQuota(
       uploaderId,
-      fileBuffer.length,
+      fileSize,
     );
     if (!withinQuota)
       throw new Error("Daily upload quota exceeded (50 MB/day)");
 
     const { storageKey, bucket } = await this.storeFile(
-      fileBuffer,
+      filePath,
+      fileSize,
       originalName,
     );
 
@@ -198,7 +203,7 @@ export const AttachmentService = {
         conversationId,
         uploaderId,
         originalName,
-        fileBuffer.length,
+        fileSize,
         mimeType,
         storageKey,
         bucket,

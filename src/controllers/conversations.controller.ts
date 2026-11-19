@@ -172,8 +172,8 @@ export const ConversationsController = {
     const userId = req.user!.id;
     const { id } = req.params as Record<string, string>;
 
-    const file = (req as any).file;
-    if (!file) {
+    const file = req.file;
+    if (!file?.path) {
       ResponseUtil.error(res, 'No file uploaded', 400);
       return;
     }
@@ -181,9 +181,10 @@ export const ConversationsController = {
     const result = await AttachmentService.uploadAttachment(
       id,
       userId,
-      file.buffer,
+      file.path,
       file.originalname,
       file.mimetype,
+      file.size,
     );
 
     if (!result) {

@@ -14,13 +14,16 @@ import {
 import { idParamSchema } from "../validators/schemas/common.schemas";
 import { RecommendationController } from "../controllers/recommendation.controller";
 import { MAX_AVATAR_SIZE_BYTES } from "../services/upload.service";
+import {
+  cleanupUploadedFile,
+  createFileUpload,
+} from "../middleware/file-upload.middleware";
 
 // ---------------------------------------------------------------------------
-// Multer — in-memory storage for avatar uploads
+// Multer — temporary disk storage for avatar uploads
 // 5 MB hard limit enforced here (UploadService also validates for defence-in-depth)
 // ---------------------------------------------------------------------------
-const avatarUpload = multer({
-  storage: multer.memoryStorage(),
+const avatarUpload = createFileUpload({
   limits: { fileSize: MAX_AVATAR_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp'];
@@ -270,6 +273,7 @@ router.get(
 router.post(
   "/avatar",
   avatarUpload.single('avatar'),
+  cleanupUploadedFile,
   asyncHandler(UsersController.uploadAvatar),
 );
 

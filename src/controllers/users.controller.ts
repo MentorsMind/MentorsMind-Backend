@@ -199,7 +199,7 @@ export const UsersController = {
     try {
       avatarUrl = await UploadService.uploadAvatar(
         userId,
-        req.file.buffer,
+        req.file.path,
         req.file.mimetype,
         req.file.size,
         currentUser.avatar_url,
