@@ -62,6 +62,8 @@ import { startPoolMonitor, stopPoolMonitor } from "./utils/pool-monitor.utils";
 import { JwksService } from "./services/jwks.service";
 import { registerBookingProjectionHandlers } from "./events/booking.projections";
 import { ProjectionService } from "./services/projection.service";
+import pool from "./config/database";
+import { redis } from "./config/redis";
 
 // Import queues for side effects
 import "./queues/bulk.queue";
@@ -204,7 +206,7 @@ async function shutdown(signal: string) {
   backupJob.stop();
   goalReminderJob.stop();
   keyRotationJob.stop();
-  await Promise.all([
+  await Promise.allSettled([
     emailWorker.close(),
     paymentWorker.close(),
     escrowReleaseWorker.close(),
@@ -220,10 +222,12 @@ async function shutdown(signal: string) {
     stopScheduler(),
     stopRetentionEnforcementWorker(),
     Promise.resolve(stopPoolMonitor()),
+    pool.end(),
+    redis.quit(),
   ]);
   server.close(() => {
     logger.info("HTTP server closed");
-    process.exit(0);
+    process.exitCode = 0;
   });
 }
 

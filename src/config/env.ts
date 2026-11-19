@@ -359,7 +359,7 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 // Additional security validations for production
-function performSecurityValidation(env: Record<string, any>) {
+export function performSecurityValidation(env: Record<string, any>) {
   const errors: string[] = [];
   const warnings: string[] = [];
   
@@ -419,7 +419,7 @@ function performSecurityValidation(env: Record<string, any>) {
   // Fail on errors
   if (errors.length > 0) {
     process.stderr.write(`\nSecurity validation errors:\n${errors.map(e => `  - ${e}`).join('\n')}\n\n`);
-    process.exit(1);
+    throw new Error("Production security validation failed");
   }
 }
 
@@ -440,7 +440,7 @@ function validateEnv() {
     process.stderr.write(
       `\nInvalid environment configuration:\n${formatted}\n\nCheck your .env file against .env.example\n\n`,
     );
-    process.exit(1);
+    throw new Error("Environment validation failed");
   }
 
   // Perform additional security validation

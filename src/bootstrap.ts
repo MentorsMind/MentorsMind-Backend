@@ -15,5 +15,5 @@ async function bootstrap() {
 
 bootstrap().catch((err) => {
   process.stderr.write(`Fatal bootstrap error: ${err}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });
