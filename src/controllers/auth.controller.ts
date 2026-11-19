@@ -57,40 +57,8 @@ export const AuthController = {
       const validatedData = loginSchema.parse(req).body;
       const { email } = validatedData;
 
-      // ── Check lockout status before attempting auth ──
-      const lockStatus = await LoginAttemptsService.getStatus(email);
-
-      if (lockStatus.locked) {
-        await AuditLogService.log({
-          userId: null,
-          action: "LOGIN_BLOCKED_LOCKOUT",
-          resourceType: "auth",
-          ipAddress,
-          userAgent,
-          metadata: {
-            email,
-            permanent: lockStatus.permanent,
-            attempts: lockStatus.attempts,
-          },
-        });
-
-        if (lockStatus.permanent) {
-          return res.status(429).json({
-            success: false,
-            error:
-              "Account permanently locked due to too many failed attempts. Contact support.",
-            captcha_required: true,
-          });
-        }
-
-        res.setHeader("Retry-After", String(lockStatus.retryAfter ?? 900));
-        return res.status(429).json({
-          success: false,
-          error: "Account temporarily locked. Too many failed login attempts.",
-          retry_after: lockStatus.retryAfter,
-          captcha_required: true,
-        });
-      }
+      // ── Lockout check performed by middleware (loginLockoutCheck) ──
+      // Middleware will return 429 if account is locked, so we never reach here if locked
 
       // ── Verify credentials (service: no HTTP concern) ──
       const pre = await AuthService.verifyCredentials(validatedData, ipAddress, userAgent);

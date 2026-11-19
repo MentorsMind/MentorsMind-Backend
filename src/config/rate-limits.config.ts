@@ -20,6 +20,12 @@ export interface RateLimitConfig {
   auth: RateLimitProfile;
   /** Authenticated API endpoints — per user */
   api: RateLimitProfile;
+  /** Free tier API requests — per user */
+  api_free: RateLimitProfile;
+  /** Pro tier API requests — per user */
+  api_pro: RateLimitProfile;
+  /** Premium tier API requests — per user */
+  api_premium: RateLimitProfile;
   /** Password reset / sensitive flows */
   sensitive: RateLimitProfile;
   /** Stellar / payment endpoints */
@@ -55,6 +61,28 @@ const rateLimitsConfig: RateLimitConfig = {
     max: 60,
     message: 'API rate limit exceeded, please slow down.',
     scope: 'api',
+  },
+
+  // ── Tiered API limits (per 15-minute window for consistency with mobile/web patterns) ──
+  api_free: {
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 100,
+    message: 'API rate limit exceeded for free tier. Upgrade your subscription for higher limits.',
+    scope: 'api_free',
+  },
+
+  api_pro: {
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 1000,
+    message: 'API rate limit exceeded for pro tier. Upgrade your subscription for higher limits.',
+    scope: 'api_pro',
+  },
+
+  api_premium: {
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 10000,
+    message: 'API rate limit exceeded for premium tier.',
+    scope: 'api_premium',
   },
 
   sensitive: {

@@ -127,18 +127,19 @@ export const apiLimiter = async (
     return next();
   }
 
-  // Tiered limits per 15-minute window (matches task spec)
-  const RATE_LIMITS: Record<string, { requests: number; windowMs: number }> = {
-    free: { requests: 100, windowMs: 15 * 60 * 1000 },
-    pro: { requests: 1000, windowMs: 15 * 60 * 1000 },
-    premium: { requests: 10000, windowMs: 15 * 60 * 1000 },
-  };
+  // Get rate limit profile based on tier from centralized config
+  let profile = rateLimitsConfig.api; // Default fallback
+  
+  if (tier === "free") {
+    profile = rateLimitsConfig.api_free;
+  } else if (tier === "pro") {
+    profile = rateLimitsConfig.api_pro;
+  } else if (tier === "premium") {
+    profile = rateLimitsConfig.api_premium;
+  }
 
-  const { requests: maxRequests, windowMs } =
-    RATE_LIMITS[tier] ?? RATE_LIMITS.free;
   const key = userKey(req);
-
-  const result = await RateLimiterService.check(key, windowMs, maxRequests);
+  const result = await RateLimiterService.check(key, profile.windowMs, profile.max);
 
   res.setHeader("X-RateLimit-Tier", tier);
   setRateLimitHeaders(res, {
@@ -163,7 +164,7 @@ export const apiLimiter = async (
     );
     res.status(429).json({
       status: "error",
-      message: `API rate limit exceeded for ${tier} tier. Upgrade your subscription for higher limits.`,
+      message: profile.message,
       tier,
       limit: result.limit,
       retryAfter: result.resetTime.toISOString(),
@@ -205,6 +206,7 @@ export { createLimiter };
 /**
  * Middleware that checks account lockout status before the login handler runs.
  * Reads the email from req.body and returns 429 if the account is locked.
+ * Attaches lockout status to req for controller to access if needed.
  * This runs independently of the sliding-window IP rate limiter.
  */
 export async function loginLockoutCheck(
@@ -219,6 +221,9 @@ export async function loginLockoutCheck(
   }
 
   const status = await LoginAttemptsService.getStatus(email);
+
+  // Attach status to request for controller access (avoids duplicate DB read)
+  (req as any).loginLockoutStatus = status;
 
   if (status.locked) {
     if (status.permanent) {
