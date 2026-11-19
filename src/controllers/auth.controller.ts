@@ -92,20 +92,53 @@ export const AuthController = {
         });
       }
 
-      // ── Attempt login ──
-      const result = await AuthService.login(
-        validatedData,
-        ipAddress,
-        userAgent,
-      );
+      // ── Verify credentials (service: no HTTP concern) ──
+      const pre = await AuthService.verifyCredentials(validatedData, ipAddress, userAgent);
 
-      if (result.mfaRequired) {
+      if (pre.mfaEnabled) {
+        const { AuthService: _a } = await import('../services/auth.service');
+        // Let the service handle MFA token generation (uses JWT_SECRET internally)
+        const mfaResult = await AuthService.login(validatedData, ipAddress, userAgent);
         return res.status(200).json({
           success: true,
           mfa_required: true,
-          mfa_token: result.mfaToken,
+          mfa_token: mfaResult.mfaToken,
         });
       }
+
+      // ── Adaptive authentication (controller: has access to req) ──
+      try {
+        const { AdaptiveAuthService } = await import('../services/adaptive-auth.service');
+        const adaptiveResult = await AdaptiveAuthService.authenticateAdaptive(req, {
+          userId: pre.userId,
+          email,
+          isLoginAttempt: true,
+        });
+
+        if (adaptiveResult.decision === 'block') {
+          await AuthService['logAuthAttempt'](pre.userId, email, false, 'Blocked by adaptive auth', ipAddress, userAgent, adaptiveResult.riskScore);
+          return res.status(403).json({ success: false, error: 'Login blocked due to security policy. Please try again later or contact support.' });
+        }
+
+        if (adaptiveResult.decision === 'challenge') {
+          await AuthService['logAuthAttempt'](pre.userId, email, false, 'Additional challenges required', ipAddress, userAgent, adaptiveResult.riskScore);
+          return res.status(200).json({
+            success: true,
+            challenges_required: true,
+            challenges: adaptiveResult.challenges,
+            session_id: adaptiveResult.sessionId,
+            risk_level: adaptiveResult.riskLevel,
+          });
+        }
+      } catch {
+        // Don't fail login if adaptive auth service is unavailable
+      }
+
+      // ── Complete login (issue tokens, create session) ──
+      const result = await AuthService.completeLogin(
+        pre.userId, pre.email, pre.role, pre.userTier,
+        pre._hash, pre._plaintext, ipAddress, userAgent,
+      );
 
       // Success — reset counter
       await LoginAttemptsService.resetAttempts(email);
