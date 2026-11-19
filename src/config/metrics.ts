@@ -47,6 +47,30 @@
 import * as promClient from "prom-client";
 const { Counter, Gauge, Histogram, Registry } = promClient;
 
+// ─── SLO-aligned bucket definitions ─────────────────────────────────────────
+//
+// All HTTP latency histograms MUST use explicit buckets derived from these
+// SLO targets so that Prometheus recording rules and alerting expressions
+// (e.g. histogram_quantile(0.99, ...)) produce accurate results.
+//
+// SLO targets:
+//   p50  < 100 ms   (interactive API responses)
+//   p95  < 250 ms
+//   p99  < 500 ms   (SLO boundary — alert fires when violated)
+//   p999 < 2 s      (worst-case tolerable latency)
+//
+// Using Prometheus default buckets (.005 → 10) would miss the 50 ms and
+// 100 ms boundaries that matter for the p50/p99 SLOs.
+
+/** Buckets for HTTP request duration, aligned with the p99 < 500 ms SLO. */
+export const HTTP_LATENCY_BUCKETS = [
+  0.005, 0.01, 0.025, 0.05,
+  0.1,   0.15, 0.2,   0.25,  // dense coverage around the p50 target
+  0.3,   0.4,  0.5,           // p99 SLO boundary at 0.5 s
+  0.75,  1,    1.5,   2,      // degraded range
+  2.5,   5,    10,
+] as const;
+
 // ─── Registry ──────────────────────────────────────────────────────────[...]
 
 /**
@@ -72,10 +96,9 @@ export const httpRequestsTotal = new Counter<string>({
 
 export const httpRequestDurationSeconds = new Histogram<string>({
   name: "http_request_duration_seconds",
-  help: "HTTP request duration in seconds",
+  help: "HTTP request duration in seconds (SLO: p99 < 500 ms)",
   labelNames: ["method", "path", "status_code"],
-  // Buckets: 5 ms → 10 s — covers fast API responses and slow Stellar calls
-  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+  buckets: [...HTTP_LATENCY_BUCKETS],
   registers: [metricsRegistry],
 });
 

@@ -34,6 +34,7 @@ export enum ErrorCode {
   AUTH_INVALID_RESET_TOKEN = 'AUTH_INVALID_RESET_TOKEN',
   AUTH_PASSWORD_MISMATCH = 'AUTH_PASSWORD_MISMATCH',
   AUTH_WEAK_PASSWORD = 'AUTH_WEAK_PASSWORD',
+  AUTH_PASSWORD_EXPIRED = 'AUTH_PASSWORD_EXPIRED',
 
   // ─── Authorization ──────────────────────────────────────────────────────────
   FORBIDDEN = 'FORBIDDEN',
@@ -385,6 +386,7 @@ export const ERROR_CATALOG = Object.fromEntries([
   entry(ErrorCode.AUTH_INVALID_RESET_TOKEN, 400, 'Invalid or expired reset token'),
   entry(ErrorCode.AUTH_PASSWORD_MISMATCH, 400, 'Passwords do not match'),
   entry(ErrorCode.AUTH_WEAK_PASSWORD, 400, 'Password is too weak'),
+  entry(ErrorCode.AUTH_PASSWORD_EXPIRED, 403, 'Your password has expired. Please reset it to continue.'),
 
   // ─── Authorization ──────────────────────────────────────────────────────────
   entry(ErrorCode.FORBIDDEN, 403, 'Access denied'),
