@@ -37,6 +37,7 @@ export interface ReviewHistory {
 export class CodeReviewService {
   private readonly openaiApiKey = process.env.OPENAI_API_KEY;
   private readonly reviewHistory: ReviewHistory[] = [];
+  private readonly plagiarismDatabase = new Map();
 
   async reviewCode(
     submissionId: string,
@@ -223,15 +224,19 @@ export class CodeReviewService {
   }
 
   private async findSimilarSubmissions(hash: string, normalizedCode: string): Promise<Array<{normalizedCode: string, hash: string}>> {
-    // In a real implementation, this would query a database of submissions
-    // For now, return empty array (no plagiarism database exists yet)
-    // TODO: Implement actual database storage and retrieval
-    return [];
+    // Search the plagiarism database for similar submissions (by hash)
+    const results: Array<{normalizedCode: string, hash: string}> = [];
+    for (const [storedHash, storedCode] of this.plagiarismDatabase) {
+      if (storedHash === hash) {
+        results.push({ normalizedCode: storedCode, hash: storedHash });
+      }
+    }
+    return results;
   }
 
   private async storeSubmissionSignature(hash: string, normalizedCode: string): Promise<void> {
-    // In a real implementation, this would store the submission signature in a database
-    // TODO: Implement actual database storage
+    // Store the submission signature in the plagiarism database
+    this.plagiarismDatabase.set(hash, normalizedCode);
     logger.debug(`Storing submission signature: hash=${hash}, length=${normalizedCode.length}`);
   }
 

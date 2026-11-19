@@ -253,11 +253,18 @@ export const ProgressTrackingService = {
         CacheService.del(CacheKeys.pathAnalytics(enrollment.learning_path_id)),
       ]);
 
+      // Generate certificate
+      const certificate = await this.generateCertificate(
+        enrollment.student_id,
+        milestoneId,
+        enrollment.learning_path_id,
+      );
+
       const result: MilestoneCompletion = {
         milestoneId,
         enrollmentId,
         completedAt: completedProgress.completed_at!.toISOString(),
-        certificateGenerated: false, // TODO: Implement certificate generation
+        certificateGenerated: certificate ? true : false,
         nextMilestone: nextMilestone
           ? MilestoneModel.transformToMilestone(nextMilestone)
           : undefined,
@@ -885,8 +892,36 @@ export const ProgressTrackingService = {
           }
         }
 
-        // TODO: Implement skill and assessment prerequisite validation
-      }
+        // Handle skill prerequisites
+        if (prereq.prerequisite_type === "skill" && prereq.prerequisite_id) {
+          const skillProgress = await MilestoneProgressModel.findByEnrollmentAndMilestone(
+            enrollment.id,
+            prereq.prerequisite_id,
+          );
+
+          if (!skillProgress || skillProgress.status !== "completed") {
+            return {
+              isValid: false,
+              message: `Skill prerequisite must be completed first`,
+            };
+          }
+        }
+
+        // Handle assessment prerequisites
+        if (prereq.prerequisite_type === "assessment" && prereq.prerequisite_id) {
+          const assessmentResult = await MilestoneProgressModel.findAssessmentResult(
+            enrollment.id,
+            prereq.prerequisite_id,
+          );
+
+          if (!assessmentResult || assessmentResult.score < prereq.minimum_score) {
+            return {
+              isValid: false,
+              message: `Assessment prerequisite not met. Minimum score: ${prereq.minimum_score}`,
+            };
+          }
+        }
+      }      }
 
       return { isValid: true, message: "All prerequisites met" };
     } catch (error) {
@@ -908,9 +943,20 @@ export const ProgressTrackingService = {
     metadata: Record<string, any>,
   ): Promise<void> {
     try {
-      // TODO: Implement achievement system
-      // This would create achievement records and potentially trigger notifications
+      // Implement achievement system
+      // Create achievement record and potentially trigger notifications
+      const achievement = {
+        id: `achievement-${Date.now()}-${studentId}`,
+        studentId,
+        type,
+        metadata,
+        createdAt: new Date(),
+      };
 
+      // Store achievement in database
+      await MilestoneProgressModel.storeAchievement(studentId, achievement);
+
+      // TODO: Trigger notifications based on achievement type
       logger.info("Achievement generated", {
         studentId,
         type,
@@ -926,6 +972,55 @@ export const ProgressTrackingService = {
   },
 
   /**
+   * Generate certificate for milestone completion
+   */
+  async generateCertificate(
+    studentId: string,
+    milestoneId: string,
+    pathId: string,
+  ): Promise<boolean> {
+    try {
+      // Check if certificate already generated
+      const existingCertificate = await MilestoneProgressModel.findCertificateByMilestone(
+        studentId,
+        milestoneId,
+      );
+      if (existingCertificate) {
+        return true;
+      }
+
+      // Generate certificate data
+      const certificateData = {
+        studentId,
+        milestoneId,
+        pathId,
+        issuedAt: new Date(),
+        completionDate: new Date(),
+        validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year valid
+      };
+
+      // Store certificate in database
+      await MilestoneProgressModel.storeCertificate(studentId, milestoneId, certificateData);
+
+      logger.info("Certificate generated", {
+        studentId,
+        milestoneId,
+        pathId,
+      });
+
+      return true;
+    } catch (error) {
+      logger.error("Failed to generate certificate", {
+        studentId,
+        milestoneId,
+        pathId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return false;
+    }
+  },
+
+  /**
    * Get student achievements for a learning path
    */
   async getStudentAchievements(
@@ -933,17 +1028,14 @@ export const ProgressTrackingService = {
     pathId: string,
   ): Promise<Achievement[]> {
     try {
-      // TODO: Implement achievement retrieval
+      // Implement achievement retrieval
       // This would fetch achievement records from database
-
-      return [];
-    } catch (error) {
-      logger.error("Failed to get student achievements", {
+      const achievements = await MilestoneProgressModel.findAchievementsByStudentAndPath(
         studentId,
         pathId,
-        error: error instanceof Error ? error.message : error,
-      });
-      return [];
+      );
+
+      return achievements || [];
     }
   },
 
