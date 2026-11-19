@@ -66,6 +66,12 @@ export const ReferralService = {
         
         code = this.generateReferralCode(data.userId);
         attempts++;
+        if (attempts < 5) {
+          const backoffMs = 50 * 2 ** (attempts - 1);
+          await new Promise(resolve =>
+            setTimeout(resolve, backoffMs + Math.random() * backoffMs)
+          );
+        }
       }
 
       if (attempts === 5) {
