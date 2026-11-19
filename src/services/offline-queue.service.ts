@@ -17,6 +17,12 @@
 import pool from '../config/database';
 import { logger } from '../utils/logger.utils';
 import { CacheService } from './cache.service';
+import {
+  VectorClock,
+  compareVectorClocks,
+  mergeVectorClocks,
+  incrementClock,
+} from '../utils/vector-clock.utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,6 +202,7 @@ async function detectConflict(
 ): Promise<Record<string, unknown> | null> {
   const { actionType, payload, clientTimestamp, userId } = action;
   const clientTs = new Date(clientTimestamp);
+  const clientClock = (payload.vectorClock as VectorClock) ?? {};
 
   try {
     switch (actionType) {
@@ -213,6 +220,7 @@ async function detectConflict(
             currentStatus: booking.status,
             serverUpdatedAt: booking.updated_at,
             message: `Booking is already ${booking.status} on the server.`,
+            resolutionOptions: ['client_wins', 'server_wins'],
           };
         }
         if (new Date(booking.updated_at) > clientTs) {
@@ -220,6 +228,7 @@ async function detectConflict(
             type: 'stale_data',
             serverUpdatedAt: booking.updated_at,
             message: 'Booking was modified on the server after you went offline.',
+            resolutionOptions: ['client_wins', 'server_wins'],
           };
         }
         return null;
@@ -227,15 +236,67 @@ async function detectConflict(
 
       case 'note:update': {
         const { rows } = await pool.query<any>(
-          `SELECT updated_at FROM session_notes WHERE id = $1`,
+          `SELECT updated_at, vector_clock, content FROM session_notes WHERE id = $1`,
           [payload.noteId],
         );
         if (!rows[0]) return null;
-        if (new Date(rows[0].updated_at) > clientTs) {
+
+        const serverClock = rows[0].vector_clock ?? {};
+        const comparison = compareVectorClocks(clientClock, serverClock);
+
+        if (comparison === 'concurrent') {
+          // Auto-merge logic for notes (append-only)
+          const existingContent = String(rows[0].content ?? '');
+          const incomingContent = String(payload.content ?? '');
+          const mergedContent = existingContent && !existingContent.includes(incomingContent)
+            ? `${existingContent}\n${incomingContent}`
+            : existingContent || incomingContent;
+
+          payload.content = mergedContent;
+          payload.vectorClock = incrementClock(mergeVectorClocks(clientClock, serverClock), 'server');
+          
+          logger.info('OfflineQueueService: CRDT auto-merge successful for note:update', { noteId: payload.noteId });
+          return null; // Merge resolved the conflict safely
+        }
+        return null;
+      }
+
+      case 'goal:update': {
+        const { rows } = await pool.query<any>(
+          `SELECT updated_at, vector_clock, tags FROM learner_goals WHERE id = $1`,
+          [payload.goalId],
+        );
+        if (!rows[0]) return null;
+
+        const serverClock = rows[0].vector_clock ?? {};
+        const comparison = compareVectorClocks(clientClock, serverClock);
+
+        if (comparison === 'concurrent') {
+          // Auto-merge tags if it's the only update
+          const updates = payload.updates as Record<string, unknown>;
+          
+          if (updates && Object.keys(updates).length === 1 && updates.tags) {
+            const existingTags = Array.isArray(rows[0].tags) ? rows[0].tags : [];
+            const incomingTags = Array.isArray(updates.tags) ? updates.tags : [];
+            const mergedTags = Array.from(new Set([...existingTags, ...incomingTags]));
+            
+            updates.tags = mergedTags;
+            payload.vectorClock = incrementClock(mergeVectorClocks(clientClock, serverClock), 'server');
+            
+            logger.info('OfflineQueueService: CRDT auto-merge successful for goal:update', { goalId: payload.goalId });
+            return null;
+          }
+
+          // Otherwise, it's a destructive conflict
           return {
-            type: 'note_modified',
+            type: 'goal_modified',
             serverUpdatedAt: rows[0].updated_at,
-            message: 'Note was modified on the server after you went offline.',
+            serverVectorClock: serverClock,
+            clientVectorClock: clientClock,
+            serverVersion: rows[0],
+            clientVersion: payload,
+            message: 'Goal was concurrently modified on the server and your device.',
+            resolutionOptions: ['client_wins', 'server_wins', 'merge'],
           };
         }
         return null;
@@ -252,6 +313,7 @@ async function detectConflict(
             type: 'profile_modified',
             serverUpdatedAt: rows[0].updated_at,
             message: 'Profile was updated on the server after you went offline.',
+            resolutionOptions: ['client_wins', 'server_wins'],
           };
         }
         return null;

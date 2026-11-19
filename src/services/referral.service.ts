@@ -297,35 +297,35 @@ export const ReferralService = {
   },
 
   /**
-   * Assign reward to referral
+   * Assign reward to referral with tier multipliers and payout processing
    */
   async assignReward(referralId: string, conversionType: string): Promise<void> {
     try {
-      // Get reward configuration
-      const { rows: configRows } = await pool.query(
-        'SELECT * FROM reward_configurations WHERE event_type = $1 AND is_active = true',
-        [conversionType]
-      );
-
-      if (configRows.length === 0) {
-        logger.warn("No reward configuration found", { conversionType });
+      const referral = await this.getReferralById(referralId);
+      if (!referral) {
+        logger.warn("Referral not found for reward assignment", { referralId });
         return;
       }
 
-      const config = configRows[0];
+      const { RewardsService } = await import("./rewards.service");
+      const eventTypeMap: Record<string, "signup" | "first_booking" | "first_payment" | "mentor_signup" | "milestone" | "custom"> = {
+        signup: "signup",
+        first_booking: "first_booking",
+        first_payment: "first_payment",
+        mentor_signup: "mentor_signup",
+      };
 
-      // Update referral with reward amount
-      await pool.query(
-        `UPDATE referrals 
-         SET reward_amount = $1, reward_currency = $2
-         WHERE id = $3`,
-        [config.referrer_reward, config.reward_currency, referralId]
-      );
-
-      logger.info("Reward assigned to referral", {
+      const eventType = eventTypeMap[conversionType] || "custom";
+      await RewardsService.distributeReward({
+        userId: referral.referrerId,
+        eventType,
         referralId,
-        amount: config.referrer_reward,
-        currency: config.reward_currency
+      });
+
+      logger.info("Reward assigned to referral with tier multipliers", {
+        referralId,
+        referrerId: referral.referrerId,
+        conversionType,
       });
     } catch (error) {
       logger.error("Failed to assign reward", {
@@ -414,7 +414,7 @@ export const ReferralService = {
         return cached;
       }
 
-      let whereClause = userId ? 'WHERE referrer_id = $1' : '';
+      const whereClause = userId ? 'WHERE referrer_id = $1' : '';
       const params = userId ? [userId] : [];
 
       const { rows: statsRows } = await pool.query(

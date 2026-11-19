@@ -1,3 +1,4 @@
+﻿import { CronJob } from 'cron';
 /**
  * Deprecation Maintenance Job
  *
@@ -65,9 +66,7 @@ class DeprecationMaintenanceJob {
    * Runs at 2 AM UTC daily
    */
   private startDailyMetricsJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 2 * * *", () => {
+    try {      const job = new CronJob("0 2 * * *", () => {
         this.logDeprecationMetrics();
       });
 
@@ -86,9 +85,7 @@ class DeprecationMaintenanceJob {
    * Runs every Monday at 9 AM UTC
    */
   private startWeeklyNotificationJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 9 * * 1", () => {
+    try {      const job = new CronJob("0 9 * * 1", () => {
         void this.sendUpcomingSunsetNotifications().catch((error) => {
           logWarning("Failed to send upcoming sunset notifications", {
             error: (error as Error).message,
@@ -111,9 +108,7 @@ class DeprecationMaintenanceJob {
    * Runs daily at 10 AM UTC
    */
   private startFinalWarningJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 10 * * *", () => {
+    try {      const job = new CronJob("0 10 * * *", () => {
         void this.sendFinalWarnings().catch((error) => {
           logWarning("Failed to send final warnings", {
             error: (error as Error).message,
@@ -136,9 +131,7 @@ class DeprecationMaintenanceJob {
    * Runs daily at 3 AM UTC
    */
   private startSunsetCleanupJob(): void {
-    try {
-      const { CronJob } = require("cron");
-      const job = new CronJob("0 3 * * *", () => {
+    try {      const job = new CronJob("0 3 * * *", () => {
         this.cleanupSunsetEndpoints();
       });
 
@@ -215,6 +208,7 @@ class DeprecationMaintenanceJob {
             entry,
           ): entry is {
             endpoint: string;
+            status: "active" | "deprecated" | "sunset";
             sunsetDate: Date;
             migrationGuide?: string;
           } => Boolean(entry),

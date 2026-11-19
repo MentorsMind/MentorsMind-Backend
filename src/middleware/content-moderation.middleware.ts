@@ -1,5 +1,5 @@
 import { Response, NextFunction } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { AuthenticatedRequest } from "./auth.middleware";
 import { AIModerationService, ContentType } from "../services/ai-moderation.service";
 import { ModerationService } from "../services/moderation.service";
 import { ResponseUtil } from "../utils/response.utils";

@@ -343,6 +343,15 @@ export const walletSchemas = {
     },
   },
 
+  WalletBalanceResponse: {
+    type: 'object',
+    properties: {
+      asset_code: { type: 'string', example: 'XLM' },
+      balance: { type: 'string', example: '100.0000000' },
+      stellar_public_key: { type: 'string', example: 'GABC1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890ABCDEFG' },
+    },
+  },
+
   LinkWalletRequest: {
     type: 'object',
     required: ['stellarAddress'],

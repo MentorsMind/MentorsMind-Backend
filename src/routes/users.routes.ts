@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { UsersController } from "../controllers/users.controller";
+import { UserStatsController } from "../controllers/user-stats.controller";
 import { DataExportController } from "../controllers/dataExport.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireOwnerOrAdmin } from "../middleware/rbac.middleware";
@@ -14,25 +15,18 @@ import {
 import { idParamSchema } from "../validators/schemas/common.schemas";
 import { RecommendationController } from "../controllers/recommendation.controller";
 import { MAX_AVATAR_SIZE_BYTES } from "../services/upload.service";
+import { createImageUploadMiddleware } from "../middleware/image-upload.middleware";
+import { noCacheMiddleware } from "../middleware/no-cache.middleware";
 
 // ---------------------------------------------------------------------------
 // Multer — in-memory storage for avatar uploads
 // 5 MB hard limit enforced here (UploadService also validates for defence-in-depth)
 // ---------------------------------------------------------------------------
-const avatarUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_AVATAR_SIZE_BYTES },
-  fileFilter: (_req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      // Pass error so multer rejects the upload early
-      cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
-    }
-  },
-});
-
+const avatarUpload = createImageUploadMiddleware(MAX_AVATAR_SIZE_BYTES, [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 const router = Router();
 
@@ -65,7 +59,54 @@ router.use(authenticate);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.get("/me", asyncHandler(UsersController.getMe));
+router.get("/me", noCacheMiddleware, asyncHandler(UsersController.getMe));
+
+/**
+ * @swagger
+ * /users/me/stats:
+ *   get:
+ *     summary: Get mentee dashboard summary stats
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Dashboard stats (single call, cached 5 minutes per user)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         totalSessions:
+ *                           type: integer
+ *                           example: 12
+ *                         upcomingSessions:
+ *                           type: integer
+ *                           example: 2
+ *                         averageRatingGiven:
+ *                           type: number
+ *                           nullable: true
+ *                           example: 4.5
+ *                         totalSpent:
+ *                           type: number
+ *                           nullable: true
+ *                           example: 350
+ *                         loyaltyTier:
+ *                           type: string
+ *                           example: silver
+ *                         streakDays:
+ *                           type: integer
+ *                           nullable: true
+ *                           example: 4
+ *       401:
+ *         description: Unauthorized
+ */
+router.get("/me/stats", asyncHandler(UserStatsController.getMeStats));
 
 /**
  * @swagger

@@ -3,8 +3,9 @@ import { seedUsers } from './users.seed';
 import { seedMentorProfiles } from './mentors.seed';
 import { seedSessions } from './sessions.seed';
 import { seedReviews } from './reviews.seed';
+import { seedAdaptiveQuestionBank } from './adaptive-testing.seed';
 
-const SEEDS = [seedUsers, seedMentorProfiles, seedSessions, seedReviews];
+const SEEDS = [seedUsers, seedMentorProfiles, seedSessions, seedReviews, seedAdaptiveQuestionBank];
 
 async function main() {
   const args = process.argv.slice(2);

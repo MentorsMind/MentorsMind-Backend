@@ -290,6 +290,13 @@ export const MessagingService = {
     );
 
     return rowCount ?? 0;
+  },
+
+  /**
+   * Batch mark specific messages as read.
+   */
+  async batchMarkAsRead(
+    conversationId: string,
     userId: string,
     messageIds: string[],
   ): Promise<number> {

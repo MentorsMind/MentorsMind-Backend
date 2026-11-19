@@ -5,7 +5,8 @@ import { TenantEmailTemplateVersionsModel } from "../models/tenant-email-templat
 import { TemplateEngineService } from "../services/template-engine.service";
 import pool from "../config/database";
 import { redis } from "../config/redis";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
+import { routeParam } from "../utils/route-params.utils";
 
 function extractVariablesFromContent(content: string): string[] {
   const matches = content.match(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g) || [];
@@ -131,7 +132,7 @@ export const TenantEmailTemplatesController = {
   async preview(req: Request, res: Response) {
     const tenantId =
       (req.body.tenant_id as string) || (req.query.tenant_id as string);
-    const templateName = req.params.name;
+    const templateName = routeParam(req.params.name);
     const sampleData = req.body.sample_data || {};
 
     if (!tenantId) return ResponseUtil.error(res, "tenant_id is required", 400);
@@ -144,7 +145,7 @@ export const TenantEmailTemplatesController = {
       if (!tpl) return ResponseUtil.notFound(res, "Template not found");
 
       const rendered = await TemplateEngineService.renderEmail(
-        { name: templateName, tenantId },
+        { name: templateName, tenantId: Array.isArray(tenantId) ? tenantId[0] : tenantId },
         sampleData,
       );
       return ResponseUtil.success(res, rendered);

@@ -1,8 +1,9 @@
-import * as StellarSdk from "@stellar/stellar-sdk";
+﻿import * as StellarSdk from "@stellar/stellar-sdk";
 import { env } from "./env";
 import config from "./index";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
 import { traceStore } from '../middleware/tracing.middleware';
+import hsmConfig from "./hsm.config";
 
 /**
  * Stellar Network Configuration
@@ -33,13 +34,33 @@ export const horizonUrls = {
 const tracingFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const context = traceStore.getStore();
   const headers = new Headers(init?.headers);
+  const configuredTimeout = Number.parseInt(env.STELLAR_REQUEST_TIMEOUT_MS ?? "10000", 10);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : 10000;
+  const controller = new AbortController();
+  const abortFromRequest = () => controller.abort(init?.signal?.reason);
+
+  if (init?.signal?.aborted) {
+    abortFromRequest();
+  } else {
+    init?.signal?.addEventListener("abort", abortFromRequest, { once: true });
+  }
+
+  const timeoutId = setTimeout(
+    () => controller.abort(new Error(`Stellar Horizon request timed out after ${timeoutMs}ms`)),
+    timeoutMs,
+  );
   
   if (context) {
     headers.set('X-Request-ID', context.requestId);
     headers.set('X-Correlation-ID', context.correlationId);
   }
 
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers, signal: controller.signal }).finally(() => {
+    clearTimeout(timeoutId);
+    init?.signal?.removeEventListener("abort", abortFromRequest);
+  });
 };
 
 export const server = new StellarSdk.Horizon.Server(horizonUrls.primary, { fetch: tracingFetch } as any);
@@ -60,6 +81,30 @@ export const getPlatformKeypair = (): StellarSdk.Keypair | null => {
     logger.warn("Platform secret key not configured");
     return null;
   }
+
+  // Prefer HSM-backed signing. When the HSM is enabled (aws_cloudhsm or
+  // pkcs11 provider), the private key must NOT be materialised in process
+  // memory from an env var. In that case we return null here — callers must
+  // use `HsmStellarSigner.signStellarTransaction` instead, which delegates
+  // the actual Ed25519 signature to the HSM token.
+  try {
+    if (hsmConfig.enabled) {
+      logger.info(
+        { provider: hsmConfig.provider },
+        "HSM is enabled — deferring Stellar signing to HSM-backed signer",
+      );
+      return null;
+    }
+  } catch {
+    // hsm config module unavailable — fall through to env-based keypair.
+  }
+
+  // Development fallback: only reachable when HSM is disabled AND we are in a
+  // development/test environment. The HsmStellarSigner enforces the env guard.
+  logger.warn(
+    "⚠️  HSM NOT ENABLED — constructing platform keypair from PLAINTEXT " +
+      "STEALLAR_FUNDING_SECRET. This is only acceptable in development.",
+  );
   return StellarSdk.Keypair.fromSecret(secretKey);
 };
 

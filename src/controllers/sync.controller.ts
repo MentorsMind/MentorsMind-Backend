@@ -1,6 +1,7 @@
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { OfflineSyncService, SyncChange, SyncEntityType } from '../services/offline-sync.service';
+import { OfflineQueueService } from '../services/offline-queue.service';
 import { asyncHandler } from '../utils/asyncHandler.utils';
 
 const VALID_ENTITY_TYPES: SyncEntityType[] = ['learning_goals', 'session_notes', 'booking_notes'];
@@ -64,5 +65,34 @@ export const SyncController = {
 
     res.setHeader('X-Sync-Cursor', String(result.cursor));
     res.json({ success: true, data: result });
+  }),
+
+  /**
+   * GET /api/v1/sync/conflicts
+   * Returns all unresolved offline conflicts for the current user.
+   */
+  getConflicts: asyncHandler(async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    const userId = req.user!.id;
+
+    // Fetch all actions that are currently in a 'conflict' state
+    const result = await OfflineQueueService.getActions(userId, { status: 'conflict' });
+
+    // Map them into a clean schema for the client
+    const conflicts = result.actions.map(action => ({
+      actionId: action.id,
+      actionType: action.actionType,
+      clientKey: action.clientKey,
+      clientTimestamp: action.clientTimestamp,
+      conflictData: action.conflictData,
+      payload: action.payload,
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        total: result.total,
+        conflicts,
+      }
+    });
   }),
 };

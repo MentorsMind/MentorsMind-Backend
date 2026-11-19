@@ -1,9 +1,10 @@
 import { db } from "../config/database";
 import { server } from "../config/stellar";
 import config from "../config";
-import { redisConfig } from "../config/redis.config";
+import { redis } from "../config/redis";
 import { CacheService } from "./cache.service";
 import { JwksService } from "./jwks.service";
+import { OracleService } from "./oracle.service";
 import { logger } from "../utils/logger.utils";
 import { CURRENT_VERSION } from "../config/api-versions.config";
 import { validateRequiredTables } from "../utils/table-validator.utils";
@@ -32,6 +33,7 @@ export interface DetailedHealthStatus {
     system?: HealthComponent;
     jwks?: HealthComponent;
     verificationContract?: HealthComponent;
+    oracle?: HealthComponent;
   };
   uptime: number;
   version: string;
@@ -49,6 +51,14 @@ export class HealthService {
 
   private static readonly HEALTHY_CACHE_TTL_MS = 5000;
   private static readonly UNHEALTHY_CACHE_TTL_MS = 1000;
+
+  /**
+   * GET /health/detailed
+   * Returns full detailed health status.
+   */
+  static async getDetailedHealth(): Promise<DetailedHealthStatus> {
+    return this.checkReadiness();
+  }
 
   /**
    * GET /health/live
@@ -149,6 +159,7 @@ export class HealthService {
       analyticsViewsCheck,
       jwksCheck,
       verificationContractCheck,
+      oracleCheck,
     ] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
@@ -158,15 +169,15 @@ export class HealthService {
       this.checkAnalyticsViews(),
       this.checkJwks(),
       this.checkVerificationContract(),
+      this.checkOracle(),
     ]);
 
-    // Critical components for readiness: all must not be 'unhealthy'
-    const criticalComponents = [dbCheck, redisCheck, horizonCheck];
-    const isUnhealthy = criticalComponents.some(
-      (c) => c.status === "unhealthy",
-    );
+    // DB check is critical for server liveness.
+    // If Redis or Horizon are unhealthy/degraded, overall status is 'degraded' (returns 200).
+    const isUnhealthy = dbCheck.status === "unhealthy";
     const isDegraded =
-      !isUnhealthy && criticalComponents.some((c) => c.status === "degraded");
+      !isUnhealthy &&
+      (redisCheck.status !== "healthy" || horizonCheck.status !== "healthy" || dbCheck.status === "degraded");
 
     const status: HealthStatus = isUnhealthy
       ? "unhealthy"
@@ -195,10 +206,46 @@ export class HealthService {
         system: this.getSystemInfo(),
         jwks: jwksCheck,
         verificationContract: verificationContractCheck,
+        oracle: oracleCheck,
       },
       uptime: process.uptime(),
       version: config.server.apiVersion || CURRENT_VERSION,
       timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Reports whether the Soroban oracle contract is available.
+   *
+   * - "healthy"  – oracle is configured and serving fresh prices.
+   * - "degraded" – oracle circuit-breaker triggered; service is using
+   *                last-known-good prices (up to 10 min old).  Ops should
+   *                investigate feeder availability or STALE_SECS threshold.
+   * - "healthy"  – oracle is not configured (optional component).
+   */
+  private static async checkOracle(): Promise<HealthComponent> {
+    if (!OracleService.isConfigured()) {
+      return {
+        status: "healthy",
+        details: { configured: false },
+      };
+    }
+
+    if (OracleService.isDegraded) {
+      return {
+        status: "degraded",
+        error: OracleService.degradedReason || "Oracle circuit-breaker open",
+        details: {
+          configured: true,
+          usingLastKnownGood: true,
+          lkgMaxStalenessMs: 10 * 60 * 1000,
+        },
+      };
+    }
+
+    return {
+      status: "healthy",
+      details: { configured: true, usingLastKnownGood: false },
     };
   }
 
@@ -338,23 +385,21 @@ export class HealthService {
   private static async checkRedis(): Promise<HealthComponent> {
     const start = Date.now();
 
-    if (!redisConfig.url) {
-      return { status: "degraded", error: "Redis URL not configured" };
-    }
-
-    if (!CacheService.isDistributed()) {
-      return { status: "degraded", error: "Redis shared client not connected" };
-    }
-
     try {
-      // Ping via the shared client — no new connection created
-      await CacheService.ping();
-      return { status: "healthy", responseTimeMs: Date.now() - start };
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Redis ping timeout")), 2000)
+      );
+
+      await Promise.race([redis.ping(), timeoutPromise]);
+      return {
+        status: "healthy",
+        responseTimeMs: Date.now() - start,
+      };
     } catch (err: any) {
       return {
         status: "unhealthy",
         responseTimeMs: Date.now() - start,
-        error: err.message,
+        error: err?.message || String(err),
       };
     }
   }

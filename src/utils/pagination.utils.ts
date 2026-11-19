@@ -18,11 +18,19 @@ export const PaginationUtil = {
   decodeCursor(cursor: string): CursorPayload | null {
     try {
       const json = Buffer.from(cursor, 'base64').toString('utf8');
-      const payload = JSON.parse(json) as CursorPayload;
-      if (!payload.id || !payload.created_at) {
+      const parsed: unknown = JSON.parse(json);
+      if (
+        parsed === null ||
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed) ||
+        typeof (parsed as any).id !== 'string' ||
+        (parsed as any).id.length === 0 ||
+        typeof (parsed as any).created_at !== 'string' ||
+        (parsed as any).created_at.length === 0
+      ) {
         return null;
       }
-      return payload;
+      return parsed as CursorPayload;
     } catch {
       return null;
     }

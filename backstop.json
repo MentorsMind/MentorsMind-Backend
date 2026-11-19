@@ -1,0 +1,49 @@
+{
+  "id": "mentorminds_visual_regression",
+  "viewports": [
+    { "label": "desktop", "width": 1440, "height": 1000 },
+    { "label": "mobile", "width": 390, "height": 844 }
+  ],
+  "onBeforeScript": "tests/visual/on-before.js",
+  "onReadyScript": "tests/visual/on-ready.js",
+  "scenarios": [
+    {
+      "label": "email-welcome",
+      "url": "http://127.0.0.1:4173/email/welcome",
+      "selectors": ["document"],
+      "delay": 250
+    },
+    {
+      "label": "email-booking-confirmed",
+      "url": "http://127.0.0.1:4173/email/booking-confirmed",
+      "selectors": ["document"],
+      "delay": 250
+    },
+    {
+      "label": "dashboard-health",
+      "url": "http://127.0.0.1:4173/dashboard",
+      "selectors": ["#dashboard"],
+      "delay": 250
+    },
+    {
+      "label": "api-documentation",
+      "url": "http://127.0.0.1:4173/api-docs",
+      "selectors": ["#api-docs"],
+      "delay": 250
+    }
+  ],
+  "paths": {
+    "bitmaps_reference": "tests/visual/baselines",
+    "bitmaps_test": "tests/visual/actual",
+    "engine_scripts": "tests/visual/scripts",
+    "html_report": "tests/visual/report",
+    "ci_report": "tests/visual/ci-report"
+  },
+  "report": ["browser", "CI"],
+  "engine": "puppeteer",
+  "engineOptions": { "args": ["--no-sandbox", "--disable-setuid-sandbox"] },
+  "asyncCaptureLimit": 2,
+  "asyncCompareLimit": 2,
+  "debug": false,
+  "debugWindow": false
+}

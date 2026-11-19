@@ -1,0 +1,126 @@
+name: Application Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "9"
+
+jobs:
+  sast:
+    name: SAST (CodeQL + Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:javascript-typescript"
+      - uses: semgrep/semgrep-action@v1
+        with:
+          publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+          publishDeployment: ${{ secrets.SEMGREP_APP_DEPLOYMENT_ID }}
+        env:
+          SEMGREP_RULES: "p/owasp-top-ten p/typescript p/nodejs"
+
+  dependencies:
+    name: Dependency Vulnerability Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies
+        run: |
+          pnpm audit --prod --audit-level=high --json > pnpm-audit.json || true
+          pnpm audit --prod --audit-level=high
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pnpm-audit-report
+          path: pnpm-audit.json
+          retention-days: 30
+
+  secrets:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  security-tests:
+    name: OWASP Regression Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run security:test
+
+  dast:
+    name: DAST (OWASP ZAP)
+    runs-on: ubuntu-latest
+    needs: security-tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Start isolated DAST target
+        env:
+          # src/config/env.ts loads .env.${NODE_ENV}. .env.test ships schema-valid
+          # 64-char secrets; the .env.development placeholders are shorter and fail
+          # the JWT_SECRET/ENCRYPTION_KEY minimum-length validation at import time.
+          NODE_ENV: test
+        run: |
+          pnpm exec ts-node --transpile-only security-tests/dast-target.ts > dast-target.log 2>&1 &
+          for attempt in {1..30}; do curl --fail --silent http://127.0.0.1:5050/health && exit 0; sleep 1; done
+          echo "DAST target did not become ready" >&2
+          cat dast-target.log
+          exit 1
+      - name: Run OWASP ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://127.0.0.1:5050
+          rules_file_name: ".zap/rules.tsv"
+          fail_action: true
+          artifact_name: zap-baseline-report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dast-target-log
+          path: dast-target.log
+          retention-days: 30

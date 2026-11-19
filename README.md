@@ -355,6 +355,8 @@ CI will fail if coverage drops below 70%.
 - SQL injection prevention
 - Rate limiting (coming soon)
 
+For information on reporting security vulnerabilities, supported versions, and our disclosure policy, please see our [Security Policy](SECURITY.md).
+
 ## 📚 Tech Stack
 
 - **Runtime**: Node.js 18+
@@ -461,3 +463,5 @@ The final `runner` image uses Debian slim and `npm ci --omit=dev`. If the image 
 - **Reward:** $2
 - **Source:** GitHub-Paid
 - **Date:** 2026-04-27
+
+<!-- Updated documentation reference -->

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Audit Log Model
  *
  * Handles persistence of audit log entries using the "legacy" schema
@@ -8,11 +8,12 @@
  * matching the approach in auditLog.service.ts for SOC 2 Type II compliance.
  */
 
-import crypto from "crypto";
-import { db } from "../config/database";
-import { logger } from "../utils/logger";
+import * as crypto from "crypto";
+import pool from "../config/database";
+import { Logger, logger } from "../utils/logger.utils";
+import { TenantContext } from "../utils/tenant-context.utils";
 
-// ── Hash helpers ─────────────────────────────────────────────────────────────
+// â”€â”€ Hash helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function getHmacSecret(): string {
   const secret = process.env.AUDIT_HMAC_SECRET;
@@ -51,7 +52,7 @@ function computeLegacyRecordHmac(fields: {
     .digest("hex");
 }
 
-// ── Interfaces ───────────────────────────────────────────────────────────────
+// â”€â”€ Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface AuditLogRecord {
   id: string; // UUID
@@ -59,6 +60,8 @@ export interface AuditLogRecord {
   action: string;
   message: string;
   user_id: string | null;
+  /** Owning tenant UUID (NULL = system/shared entry). */
+  tenant_id: string | null;
   entity_type: string | null;
   entity_id: string | null;
   metadata: Record<string, any>;
@@ -70,7 +73,7 @@ export interface AuditLogRecord {
   hash_algorithm: string | null;
 }
 
-// ── Model ────────────────────────────────────────────────────────────────────
+// â”€â”€ Model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Audit Log Model for interacting directly with the PostgreSQL database.
@@ -83,12 +86,24 @@ export const AuditLogModel = {
    * Uses a serializable read to minimise race conditions on concurrent inserts.
    */
   async create(
-    log: Omit<AuditLogRecord, "id" | "created_at" | "record_hash" | "previous_hash" | "hash_algorithm">,
+    log: Omit<
+      AuditLogRecord,
+      | "id"
+      | "created_at"
+      | "record_hash"
+      | "previous_hash"
+      | "hash_algorithm"
+      | "tenant_id"
+    > & { tenant_id?: string | null },
   ): Promise<AuditLogRecord | null> {
     const createdAt = new Date();
     const createdAtIso = createdAt.toISOString();
 
-    const client = await db.connect();
+    // Explicit tenant wins; otherwise fall back to TenantContext so callers
+    // inside a tenant-scoped request are tagged automatically.
+    const tenantId = log.tenant_id ?? TenantContext.getTenantId() ?? null;
+
+    const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
@@ -111,7 +126,7 @@ export const AuditLogModel = {
         previousHash,
       });
 
-      // Determine columns present in the table — the table may use either
+      // Determine columns present in the table â€” the table may use either
       // the legacy schema (level/message/entity_type/entity_id) or the new
       // schema (resource_type/resource_id/old_value/new_value). We check which
       // columns exist and insert into whichever set is available.
@@ -123,9 +138,10 @@ export const AuditLogModel = {
         INSERT INTO audit_logs (
           level, action, message, user_id, entity_type, entity_id,
           metadata, ip_address, user_agent,
-          created_at, previous_hash, record_hash, hash_algorithm
+          created_at, previous_hash, record_hash, hash_algorithm,
+          tenant_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *;
       `;
 
@@ -143,6 +159,7 @@ export const AuditLogModel = {
         previousHash,
         recordHash,
         "hmac-sha256",
+        tenantId,
       ];
 
       const { rows } = await client.query<AuditLogRecord>(query, values);
@@ -167,7 +184,7 @@ export const AuditLogModel = {
    */
   async deleteOlderThanYears(years: number): Promise<number> {
     try {
-      const { rowCount } = await db.query(
+      const { rowCount } = await pool.query(
         `DELETE FROM audit_logs WHERE created_at < NOW() - ($1::int * INTERVAL '1 year') RETURNING id;`,
         [years],
       );
@@ -186,3 +203,4 @@ export const AuditLogModel = {
     }
   },
 };
+

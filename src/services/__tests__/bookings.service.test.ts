@@ -12,9 +12,17 @@ import { QueueService } from '../queue.service';
 import { LoyaltyService } from '../loyalty.service';
 import { SessionSummaryModel } from '../../models/session-summary.model';
 
+const mockClient = {
+  query: jest.fn(),
+  release: jest.fn(),
+};
+
 jest.mock('../../models/booking.model');
 jest.mock('../../config/database', () => ({
-  db: { query: jest.fn() }
+  db: {
+    query: jest.fn(),
+    connect: jest.fn(),
+  }
 }));
 jest.mock('../cache.service');
 jest.mock('../socket.service');
@@ -40,6 +48,13 @@ describe('BookingsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (SorobanEscrowService.isConfigured as jest.Mock).mockReturnValue(true);
+    (db.connect as jest.Mock).mockResolvedValue(mockClient);
+    mockClient.query.mockImplementation(async (sql: string, params?: any[]) => {
+      if (typeof sql === 'string' && sql.includes('pg_try_advisory_xact_lock')) {
+        return { rows: [{ locked: true }] };
+      }
+      return (db.query as jest.Mock)(sql, params);
+    });
   });
 
   describe('createBooking', () => {
@@ -69,6 +84,27 @@ describe('BookingsService', () => {
         currency: 'XLM',
         usdEquivalent: '10.00'
       }));
+    });
+
+    it('throws 409 conflict if advisory lock cannot be acquired', async () => {
+      mockClient.query.mockImplementation(async (sql: string) => {
+        if (typeof sql === 'string' && sql.includes('pg_try_advisory_xact_lock')) {
+          return { rows: [{ locked: false }] };
+        }
+        return { rows: [] };
+      });
+
+      await expect(
+        BookingsService.createBooking({
+          menteeId: 'mentee-1',
+          mentorId: 'mentor-1',
+          scheduledAt: futureDate,
+          durationMinutes: 60,
+          topic: 'Test',
+        }),
+      ).rejects.toMatchObject({
+        statusCode: 409,
+      });
     });
 
     it('throws if mentee is suspended', async () => {
@@ -128,6 +164,25 @@ describe('BookingsService', () => {
       const result = await BookingsService.getUserBookings('user-1');
       expect(result.total).toBe(1);
       expect(CacheService.set).toHaveBeenCalled();
+    });
+
+    it('bypasses the unfiltered cache for status-filtered bookings', async () => {
+      const result = { bookings: [{ id: 'b-no-show', status: 'no_show' }], total: 1 };
+      (CacheService.get as jest.Mock).mockResolvedValue({
+        bookings: [{ id: 'b-confirmed', status: 'confirmed' }],
+        total: 1,
+      });
+      (BookingModel.findByUserId as jest.Mock).mockResolvedValue(result);
+
+      await expect(
+        BookingsService.getUserBookings('user-1', { status: 'no_show' }),
+      ).resolves.toEqual(result);
+
+      expect(CacheService.get).not.toHaveBeenCalled();
+      expect(BookingModel.findByUserId).toHaveBeenCalledWith('user-1', {
+        status: 'no_show',
+      });
+      expect(CacheService.set).not.toHaveBeenCalled();
     });
   });
 

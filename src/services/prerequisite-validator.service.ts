@@ -117,6 +117,69 @@ export const PrerequisiteValidatorService = {
   },
 
   /**
+   * Run Kahn's algorithm to detect cycles in prerequisite graph
+   * Returns a cycle path array if a cycle is detected, or null if valid DAG
+   */
+  detectCyclesKahn(prerequisites: Prerequisite[]): string[] | null {
+    // Build adjacency list and in-degree map
+    const adjList = new Map<string, string[]>();
+    const inDegree = new Map<string, number>();
+    const allNodes = new Set<string>();
+
+    for (const prereq of prerequisites) {
+      if (prereq.prerequisiteType !== 'milestone' || !prereq.prerequisiteId) continue;
+      
+      const from = prereq.prerequisiteId;
+      const to = prereq.milestoneId;
+
+      allNodes.add(from);
+      allNodes.add(to);
+
+      if (!adjList.has(from)) adjList.set(from, []);
+      if (!adjList.has(to)) adjList.set(to, []);
+      
+      if (!inDegree.has(from)) inDegree.set(from, 0);
+      if (!inDegree.has(to)) inDegree.set(to, 0);
+
+      adjList.get(from)!.push(to);
+      inDegree.set(to, inDegree.get(to)! + 1);
+    }
+
+    const queue: string[] = [];
+    for (const [node, degree] of inDegree.entries()) {
+      if (degree === 0) {
+        queue.push(node);
+      }
+    }
+
+    let visitedCount = 0;
+    while (queue.length > 0) {
+      const node = queue.shift()!;
+      visitedCount++;
+
+      for (const neighbor of adjList.get(node) || []) {
+        inDegree.set(neighbor, inDegree.get(neighbor)! - 1);
+        if (inDegree.get(neighbor) === 0) {
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    // If visited count != total nodes, there's a cycle
+    if (visitedCount !== allNodes.size) {
+      // Find nodes involved in cycle
+      const cycleNodes = Array.from(inDegree.entries())
+        .filter(([_, degree]) => degree > 0)
+        .map(([node]) => node);
+      
+      // Simple representation of the cycle
+      return cycleNodes;
+    }
+
+    return null;
+  },
+
+  /**
    * Check access to a milestone (simpler version of validation)
    */
   async checkAccess(studentId: string, milestoneId: string): Promise<boolean> {

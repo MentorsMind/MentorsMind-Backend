@@ -2,6 +2,7 @@ import pool from "../config/database";
 import { CacheService } from "./cache.service";
 import { logger } from "../utils/logger.utils";
 import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 import {
   MentorCertification,
   CertificationType,
@@ -83,13 +84,13 @@ export const CertificationService = {
       );
 
       if (mentorRows.length === 0 || mentorRows[0].role !== 'mentor') {
-        throw createError("Mentor not found", 404);
+        throw createError(ErrorCode.MENTOR_NOT_FOUND, 404);
       }
 
       // Verify certification type exists
       const certType = await this.getCertificationTypeById(data.certificationTypeId);
       if (!certType) {
-        throw createError("Certification type not found", 404);
+        throw createError(ErrorCode.CERTIFICATION_TYPE_NOT_FOUND, 404);
       }
 
       // Check if certification already exists
@@ -99,7 +100,7 @@ export const CertificationService = {
       );
 
       if (existingRows.length > 0) {
-        throw createError("Certification already exists for this mentor", 409);
+        throw createError(ErrorCode.CERTIFICATION_ALREADY_EXISTS, 409);
       }
 
       // Calculate expiration date if applicable
@@ -227,7 +228,7 @@ export const CertificationService = {
     try {
       const existing = await this.getCertificationById(certificationId);
       if (!existing) {
-        throw createError("Certification not found", 404);
+        throw createError(ErrorCode.CERTIFICATION_NOT_FOUND, 404);
       }
 
       const setClauses: string[] = [];
@@ -452,6 +453,57 @@ export const CertificationService = {
     } catch (error) {
       logger.error("Failed to get pending certifications", {
         error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Get verified badges for a mentor
+   */
+  async getMentorBadges(mentorId: string): Promise<CertificationBadge[]> {
+    try {
+      const summary = await this.getMentorCertificationSummary(mentorId);
+      return summary.badges;
+    } catch (error) {
+      logger.error("Failed to get mentor badges", {
+        mentorId,
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  },
+
+  /**
+   * Award/verify a certification badge directly to a mentor
+   */
+  async awardBadge(
+    mentorId: string,
+    certificationTypeId: string,
+    verifiedBy?: string,
+    score?: number
+  ): Promise<MentorCertification> {
+    try {
+      let cert = await this.getCertificationById(certificationTypeId);
+      if (!cert) {
+        // Try creating or finding existing certification
+        const existing = await this.getMentorCertifications(mentorId, true);
+        const match = existing.find(c => c.certificationTypeId === certificationTypeId);
+        if (match) {
+          return this.updateCertification(match.id, { status: 'verified', score }, verifiedBy);
+        }
+        cert = await this.createCertification({
+          mentorId,
+          certificationTypeId,
+          verificationMethod: 'manual',
+        });
+      }
+      return this.updateCertification(cert.id, { status: 'verified', score }, verifiedBy);
+    } catch (error) {
+      logger.error("Failed to award badge", {
+        mentorId,
+        certificationTypeId,
+        error: error instanceof Error ? error.message : error,
       });
       throw error;
     }

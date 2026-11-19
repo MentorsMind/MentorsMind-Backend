@@ -6,6 +6,7 @@
  */
 
 import dependencyUpdateManager from '../../utils/dependency-update.utils';
+import { logger } from '../../utils/logger.utils';
 import dependencyReviewManager from '../../utils/dependency-review.utils';
 
 type Request = any;
@@ -152,7 +153,7 @@ router.post = (path: string, handler: Function) => {
 
         // Run in background
         dependencyReviewManager.runAudit().catch((error) => {
-          console.error('Audit failed:', error);
+          logger.error('Audit failed:', error);
         });
       } catch (error) {
         res.status(400).json({

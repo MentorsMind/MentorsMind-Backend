@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { VestingService } from '../services/vesting.service';
 import { logger } from '../utils/logger.utils';
+import { routeParam } from '../utils/route-params.utils';
 import {
   CreateVestingScheduleRequest,
   VestingType,
@@ -142,7 +143,7 @@ export async function getVestingScheduleById(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const scheduleId = parseInt(req.params.id);
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -184,7 +185,9 @@ export async function revokeVestingSchedule(
       return;
     }
 
-    const scheduleId = parseInt(req.params.id);
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -193,11 +196,11 @@ export async function revokeVestingSchedule(
 
     const reason = req.body.reason || 'Revoked by admin';
 
-    await VestingService.revoke(scheduleId, userId, reason);
+    await VestingService.revoke(scheduleId, userIdStr, reason);
 
     logger.info('Vesting schedule revoked', {
       scheduleId,
-      revokedBy: userId,
+      revokedBy: userIdStr,
       reason,
     });
 
@@ -239,7 +242,7 @@ export async function getMyVestingSchedules(
     const schedules = await VestingService.getSchedulesByUserId(userId);
 
     // Also get schedules by wallet address if available
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
     let walletSchedules: any[] = [];
 
     if (walletAddress) {
@@ -281,7 +284,7 @@ export async function claimVesting(
 ): Promise<void> {
   try {
     const userId = req.user?.id;
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
 
     if (!userId || !walletAddress) {
       res.status(401).json({
@@ -290,18 +293,20 @@ export async function claimVesting(
       return;
     }
 
-    const scheduleId = parseInt(req.params.id);
+    const walletAddressStr = Array.isArray(walletAddress) ? walletAddress[0] : walletAddress;
+
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
       return;
     }
 
-    const claim = await VestingService.claim(scheduleId, walletAddress);
+    const claim = await VestingService.claim(scheduleId, walletAddressStr);
 
     logger.info('Vesting tokens claimed', {
       scheduleId,
-      beneficiary: walletAddress,
+      beneficiary: walletAddressStr,
       amount: claim.amountClaimed,
     });
 
@@ -352,7 +357,9 @@ export async function getVestingClaimHistory(
       return;
     }
 
-    const scheduleId = parseInt(req.params.id);
+    const userIdStr = Array.isArray(userId) ? userId[0] : userId;
+
+    const scheduleId = parseInt(routeParam(req.params.id));
 
     if (isNaN(scheduleId)) {
       res.status(400).json({ error: 'Invalid schedule ID' });
@@ -368,7 +375,7 @@ export async function getVestingClaimHistory(
     }
 
     // Check if user is the beneficiary or has admin access
-    const walletAddress = req.user?.wallet_address;
+    const walletAddress = (req.user as any)?.wallet_address;
     const isAdmin = req.user?.role === 'admin' || req.user?.role === 'super_admin';
 
     if (
@@ -411,7 +418,9 @@ export async function getVestingSchedulesByAddress(
       return;
     }
 
-    const schedules = await VestingService.getSchedulesByBeneficiary(address);
+    const addressStr = Array.isArray(address) ? address[0] : address;
+
+    const schedules = await VestingService.getSchedulesByBeneficiary(addressStr);
 
     res.json({
       success: true,

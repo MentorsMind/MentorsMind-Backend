@@ -2,8 +2,9 @@ import crypto from "crypto";
 import { pool } from "../config/database";
 import { JwksService } from "./jwks.service";
 import { server, networkPassphrase, getPlatformKeypair } from "../config/stellar";
-import { logger } from "../utils/logger";
-import { TransactionBuilder, Memo } from "@stellar/stellar-sdk";
+import { signStellarTransaction } from "./hsmStellarSigner.service";
+import { Logger, logger } from "../utils/logger.utils";
+import { TransactionBuilder, Memo, Account } from "@stellar/stellar-sdk";
 
 const PLATFORM_DID = process.env.PLATFORM_DID || "did:web:api.mentorminds.com";
 const PLATFORM_HOST = process.env.PLATFORM_HOST || "api.mentorminds.com";
@@ -61,6 +62,21 @@ export interface CredentialRecord {
   revokedReason: string | null;
   issuedAt: Date;
   expiresAt: Date | null;
+}
+
+export interface StatusList2021Credential {
+  "@context": string[];
+  id: string;
+  type: string[];
+  issuer: string;
+  issuanceDate: string;
+  credentialSubject: {
+    id: string;
+    type: "StatusList2021";
+    statusPurpose: "revocation";
+    encodedList: string;
+  };
+  proof: CredentialProof;
 }
 
 function transformRow(row: any): CredentialRecord {
@@ -206,6 +222,58 @@ class DIDService {
     return credential;
   }
 
+  async getCredentialStatus(
+    credentialId: string,
+  ): Promise<StatusList2021Credential | null> {
+    const result = await pool.query(
+      `SELECT * FROM verifiable_credentials WHERE credential_id = $1`,
+      [credentialId],
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const record = transformRow(result.rows[0]);
+    const statusListCredential: StatusList2021Credential = {
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://w3id.org/vc/status-list/2021/v1",
+      ],
+      id: `${PLATFORM_DID}#status-list-${record.credentialId}`,
+      type: ["VerifiableCredential", "StatusList2021Credential"],
+      issuer: PLATFORM_DID,
+      issuanceDate: new Date().toISOString(),
+      credentialSubject: {
+        id: `${PLATFORM_DID}#status-list-${record.credentialId}`,
+        type: "StatusList2021",
+        statusPurpose: "revocation",
+        encodedList: this.encodeStatusList(record.revoked),
+      },
+      proof: {
+        type: "RsaSignature2018",
+        created: new Date().toISOString(),
+        verificationMethod: `${PLATFORM_DID}#key-1`,
+        proofPurpose: "assertionMethod",
+        jws: "",
+      },
+    };
+
+    const currentKey = await JwksService.getCurrentKey();
+    if (!currentKey) {
+      throw new Error("No signing key available for status list registry");
+    }
+
+    const signingInput = this.getSigningInput(statusListCredential);
+    const signature = crypto
+      .createSign("RSA-SHA256")
+      .update(signingInput)
+      .sign(currentKey.privateKeyPem, "base64");
+    statusListCredential.proof.jws = `eyJhbGciOiJSUzI1NiJ9.${Buffer.from(signingInput).toString("base64url")}.${signature}`;
+
+    return statusListCredential;
+  }
+
   async verifyCredential(
     credentialId: string,
   ): Promise<{
@@ -284,6 +352,30 @@ class DIDService {
     return true;
   }
 
+  async revokeCredentials(
+    credentialIds: string[],
+    reason?: string,
+  ): Promise<number> {
+    if (!credentialIds.length) return 0;
+
+    const result = await pool.query(
+      `UPDATE verifiable_credentials
+       SET revoked = TRUE,
+           revoked_at = NOW(),
+           revoked_reason = COALESCE($1, revoked_reason),
+           updated_at = NOW()
+       WHERE credential_id = ANY($2::text[]) AND revoked = FALSE
+       RETURNING id`,
+      [reason ?? null, credentialIds],
+    );
+
+    logger.info("Batch credentials revoked", {
+      count: result.rowCount ?? 0,
+      reason,
+    });
+    return result.rowCount ?? 0;
+  }
+
   async getCredentialBySubject(
     subjectDid: string,
     type?: CredentialType,
@@ -302,8 +394,13 @@ class DIDService {
     return result.rows.map(transformRow);
   }
 
-  private getSigningInput(credential: VerifiableCredential): string {
-    const { proof, ...unsigned } = credential;
+  private encodeStatusList(revoked: boolean): string {
+    const byte = revoked ? 0x80 : 0x00;
+    return Buffer.from([byte]).toString("base64url");
+  }
+
+  private getSigningInput(credential: VerifiableCredential | StatusList2021Credential): string {
+    const { proof, ...unsigned } = credential as any;
     return JSON.stringify(unsigned);
   }
 
@@ -331,10 +428,36 @@ class DIDService {
   ): Promise<{ txHash: string; ledger: number }> {
     const keypair = getPlatformKeypair();
     if (!keypair) {
-      throw new Error("Platform Stellar keypair not configured");
+      // HSM is enabled — defer signing to the HSM-backed signer (issue #982).
+      logger.info("Platform Stellar keypair deferred to HSM-backed signer", {
+        anchor: hash.substring(0, 8),
+      });
+      const publicKey = (await import("./hsmStellarSigner.service"))
+        .getPlatformPublicKey();
+      if (!publicKey) {
+        throw new Error("Platform Stellar key not configured");
+      }
+      const account = (await server.accounts().accountId(publicKey).call()) as unknown as Account;
+      const txBuilder = new TransactionBuilder(account, {
+        fee: "100",
+        networkPassphrase,
+      });
+      const memoHash = hash.substring(0, 28);
+      txBuilder.addMemo(Memo.text(memoHash));
+      txBuilder.setTimeout(60);
+      const tx = txBuilder.build();
+      const signed = await signStellarTransaction(tx, {
+        operation: "stellar_anchor_did",
+        userId: "system",
+      });
+      if (!signed) {
+        throw new Error("HSM signing returned no signed transaction");
+      }
+      const result = await server.submitTransaction(signed);
+      return { txHash: result.hash, ledger: result.ledger };
     }
 
-    const account = await server.accounts().accountId(keypair.publicKey()).call();
+    const account = (await server.accounts().accountId(keypair.publicKey()).call()) as unknown as Account;
     const txBuilder = new TransactionBuilder(account, {
       fee: "100",
       networkPassphrase,

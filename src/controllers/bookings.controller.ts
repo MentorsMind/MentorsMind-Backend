@@ -1,5 +1,7 @@
-import { Request, Response } from "express";
+﻿import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
+import { BookingModel } from "../models/booking.model";
 import { UsersService } from "../services/users.service";
 import { MeetingService } from "../services/meeting.service";
 import { NotificationService } from "../services/notification.service";
@@ -7,7 +9,7 @@ import { BookingsService } from "../services/bookings.service";
 import { EventStoreService } from "../services/event-store.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
-import { logger } from "../utils/logger";
+import { Logger, logger } from "../utils/logger.utils";
 
 /**
  * Bookings Controller - Handles session booking operations with meeting URL generation
@@ -17,9 +19,9 @@ export const BookingsController = {
    * Create a new booking
    * POST /api/v1/bookings
    */
-  createBooking: asyncHandler(async (req: Request, res: Response) => {
+  createBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { mentorId, scheduledAt, durationMinutes, topic, notes } = req.body;
-    const menteeId = (req as any).user?.id || (req as any).user?.userId;
+    const menteeId = req.user?.id ?? req.user?.userId;
 
     if (!menteeId) {
       return ResponseUtil.unauthorized(res, "Authentication required");
@@ -46,11 +48,27 @@ export const BookingsController = {
   confirmBooking: asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
 
-    if (Array.isArray(id)) {
+    if (!id || Array.isArray(id)) {
       return ResponseUtil.error(res, "Invalid session ID", 400);
     }
 
-    // Find the session
+    const userId = (req as AuthenticatedRequest).user?.id ?? (req as AuthenticatedRequest).user?.userId;
+
+    // Check if this ID refers to a booking in the bookings table
+    const booking = await BookingModel.findById(id);
+    if (booking) {
+      if (!userId) {
+        return ResponseUtil.unauthorized(res, "Authentication required");
+      }
+      const confirmed = await BookingsService.confirmBooking(id, userId);
+      return ResponseUtil.success(
+        res,
+        { booking: confirmed, session: confirmed },
+        "Booking confirmed successfully",
+      );
+    }
+
+    // Find the session in sessions table
     const session = await SessionModel.findById(id);
 
     if (!session) {
@@ -64,8 +82,8 @@ export const BookingsController = {
 
     // Get mentor and mentee details
     const [mentor, mentee] = await Promise.all([
-      UsersService.findById(session.mentor_id),
-      UsersService.findById(session.mentee_id),
+      (UsersService as any).findById(session.mentor_id),
+      (UsersService as any).findById(session.mentee_id),
     ]);
 
     if (!mentor || !mentee) {
@@ -196,15 +214,17 @@ export const BookingsController = {
    * List user's sessions
    * GET /api/v1/bookings
    */
-  listBookings: asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id || (req as any).user?.userId;
+  listBookings: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.user?.id ?? req.user?.userId;
 
     if (!userId) {
       return ResponseUtil.error(res, "Unauthorized", 401);
     }
 
-    const { upcoming, cursor, limit } = req.query as any;
-    
+    const { upcoming, cursor, limit: limitQuery, page: pageQuery, status } = req.query as any;
+    const page = pageQuery ? parseInt(pageQuery, 10) : 1;
+    const limit = limitQuery ? parseInt(limitQuery, 10) : 20;
+
     // We only support cursor pagination for the main list for now as per standardization requirements
     if (upcoming === "true") {
       const sessions = await SessionModel.findUpcomingByUserId(userId);
@@ -217,24 +237,37 @@ export const BookingsController = {
       return ResponseUtil.success(res, { data: sessionsData });
     }
 
-    const result = await SessionModel.findByUserIdPaginated(userId, { 
-      cursor, 
-      limit: limit ? parseInt(limit, 10) : 20 
+    const { bookings, total } = await BookingsService.listBookings(userId, {
+      status,
+      cursor,
+      page,
+      limit,
     });
 
-    const sessionsData = result.sessions.map((session) => ({
+    const sessionsData = bookings.map((session: any) => ({
       ...session,
       meeting_url: session.status === "confirmed" ? session.meeting_url : null,
       meeting_provider: session.status === "confirmed" ? session.meeting_provider : null,
       meeting_expires_at: session.status === "confirmed" ? session.meeting_expires_at : null,
     }));
 
-    ResponseUtil.success(res, { 
-      data: sessionsData,
-      next_cursor: result.next_cursor,
-      has_more: result.has_more,
-      total: result.total
-    });
+    const totalPages = Math.ceil(total / limit) || 1;
+    const meta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    ResponseUtil.success(
+      res,
+      sessionsData,
+      "Bookings retrieved successfully",
+      200,
+      meta,
+    );
   }),
 
   /**
@@ -306,6 +339,91 @@ export const BookingsController = {
         offset,
       },
       "Booking event history retrieved",
+    );
+  }),
+
+  /**
+   * POST /api/v1/bookings/:id/no-show/dispute
+   * File a dispute against a recorded no-show within the dispute window.
+   */
+  disputeNoShow: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?.id ?? req.user?.userId;
+    const { reason } = req.body;
+
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!reason || typeof reason !== "string" || !reason.trim()) {
+      return ResponseUtil.error(res, "Dispute reason is required", 400);
+    }
+
+    const booking = await BookingsService.disputeNoShow(id, userId, reason.trim());
+    return ResponseUtil.success(
+      res,
+      { booking },
+      "No-show dispute submitted and pending review",
+    );
+  }),
+
+  /**
+   * POST /api/v1/bookings/:id/no-show/dispute/resolve
+   * Admin resolves a pending no-show dispute (approved | dismissed).
+   */
+  resolveNoShowDispute: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const adminUserId = req.user?.id ?? req.user?.userId;
+    const { decision, note } = req.body;
+
+    if (!adminUserId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+    if (!["approved", "dismissed"].includes(decision)) {
+      return ResponseUtil.error(res, "Decision must be 'approved' or 'dismissed'", 400);
+    }
+
+    const booking = await BookingsService.resolveNoShowDispute(
+      id,
+      adminUserId,
+      decision as "approved" | "dismissed",
+      typeof note === "string" && note.trim() ? note.trim() : undefined,
+    );
+    return ResponseUtil.success(
+      res,
+      { booking },
+      "No-show dispute resolved",
+    );
+  }),
+
+  /**
+   * Complete a booking
+   * PATCH /api/v1/bookings/:id/complete
+   * POST /api/v1/bookings/:id/complete
+   */
+  completeBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?.id ?? req.user?.userId;
+
+    if (!userId) {
+      return ResponseUtil.unauthorized(res, "Authentication required");
+    }
+
+    if (!id || Array.isArray(id)) {
+      return ResponseUtil.error(res, "Invalid booking ID", 400);
+    }
+
+    const booking = await BookingsService.completeBooking(id, userId);
+
+    return ResponseUtil.success(
+      res,
+      { booking, session: booking },
+      "Booking marked as completed successfully",
     );
   }),
 };

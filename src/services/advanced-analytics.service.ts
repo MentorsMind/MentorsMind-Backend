@@ -1,6 +1,6 @@
-import pool from "../config/database";
+﻿import pool from "../config/database";
 import { CacheService } from "./cache.service";
-import { logger } from "../utils/logger";
+import { logger } from "../utils/logger.utils";
 import { AnalyticsService } from "./analytics.service";
 
 // Enhanced interfaces for advanced analytics
@@ -81,6 +81,77 @@ export interface CurrencyBreakdown {
   amount: number;
   percentage: number;
   transactionCount: number;
+}
+
+// â”€â”€â”€ Real-Time & Custom Reporting Interfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+export interface EngagementMetrics {
+  activeUsers: number;
+  activeSessions: number;
+  sessionsStartingSoon: number;
+  recentMessages: number;
+  recentReviews: number;
+  averageRating: number;
+  windowMinutes: number;
+  computedAt: string;
+}
+
+export interface RevenueStream {
+  totalAmount: number;
+  transactionCount: number;
+  completedCount: number;
+  pendingCount: number;
+  averageAmount: number;
+  platformFees: number;
+  windowMinutes: number;
+  computedAt: string;
+}
+
+export interface CustomReportConfig {
+  userId: string;
+  metrics: string[];
+  dateRange: { start: string; end: string };
+  filters?: Record<string, unknown>;
+  groupBy?: "day" | "week" | "month";
+}
+
+export interface CustomReportResult {
+  reportId: string;
+  userId: string;
+  config: CustomReportConfig;
+  data: Record<string, unknown>[];
+  summary: ReportSummary;
+  generatedAt: string;
+}
+
+export interface ReportSummary {
+  totalMetrics: number;
+  totalDataPoints: number;
+  generatedAt: string;
+}
+
+export interface ComparativeAnalytics {
+  metricType: string;
+  currentPeriod: { period: string; total: number; dataPoints: number };
+  previousPeriod: { period: string; total: number; dataPoints: number };
+  changePercentage: number;
+  trend: "up" | "down" | "stable";
+  generatedAt: string;
+}
+
+export interface EngagementFunnel {
+  signups: number;
+  bookedSession: number;
+  completedSession: number;
+  highSatisfaction: number;
+  returnedAfter30Days: number;
+  conversionRates: {
+    signupToBooking: number;
+    bookingToCompletion: number;
+    completionToSatisfaction: number;
+    retention30Days: number;
+  };
+  dateRange: { start: string; end: string };
 }
 
 export class AdvancedAnalyticsError extends Error {
@@ -581,4 +652,301 @@ export const AdvancedAnalyticsService = {
   parsePeriod(period: string): number {
     return AnalyticsService.parsePeriod(period);
   },
+
+  // â”€â”€â”€ Real-Time Metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /**
+   * Get real-time engagement metrics (bypasses cache).
+   */
+  async getEngagementMetrics(
+    userId: string,
+    windowMinutes: number = 15,
+  ): Promise<EngagementMetrics> {
+    const cacheKey = `analytics:engagement:${userId}:w${windowMinutes}`;
+
+    try {
+      const cached = await CacheService.get<EngagementMetrics>(cacheKey);
+      if (cached) return cached;
+    } catch {
+      // Continue without cache
+    }
+
+    const query = `
+      WITH active_users AS (
+        SELECT COUNT(DISTINCT user_id) as active_count
+        FROM user_sessions
+        WHERE last_active_at >= NOW() - INTERVAL '1 minute' * $1
+      ),
+      active_bookings AS (
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+          COUNT(*) FILTER (WHERE status = 'confirmed' AND scheduled_at <= NOW() + INTERVAL '15 minutes') as starting_soon
+        FROM bookings
+        WHERE scheduled_at >= NOW() - INTERVAL '1 hour'
+      ),
+      recent_messages AS (
+        SELECT COUNT(*) as message_count
+        FROM messages
+        WHERE created_at >= NOW() - INTERVAL '1 minute' * $1
+      ),
+      recent_reviews AS (
+        SELECT
+          COUNT(*) as review_count,
+          COALESCE(AVG(rating), 0) as avg_rating
+        FROM session_feedback
+        WHERE created_at >= NOW() - INTERVAL '1 minute' * $1
+      )
+      SELECT
+        au.active_count as active_users,
+        ab.in_progress as active_sessions,
+        ab.starting_soon as sessions_starting_soon,
+        rm.message_count,
+        rr.review_count,
+        rr.avg_rating
+      FROM active_users au
+      CROSS JOIN active_bookings ab
+      CROSS JOIN recent_messages rm
+      CROSS JOIN recent_reviews rr
+    `;
+
+    const { rows } = await pool.query(query, [windowMinutes]);
+    const row = rows[0] || {};
+
+    const metrics: EngagementMetrics = {
+      activeUsers: parseInt(row.active_users || "0"),
+      activeSessions: parseInt(row.active_sessions || "0"),
+      sessionsStartingSoon: parseInt(row.sessions_starting_soon || "0"),
+      recentMessages: parseInt(row.message_count || "0"),
+      recentReviews: parseInt(row.review_count || "0"),
+      averageRating: parseFloat(row.avg_rating || "0"),
+      windowMinutes,
+      computedAt: new Date().toISOString(),
+    };
+
+    try {
+      await CacheService.set(cacheKey, metrics, 60); // 1 minute cache
+    } catch {
+      // Non-critical
+    }
+
+    return metrics;
+  },
+
+  /**
+   * Get real-time revenue stream (bypasses cache).
+   */
+  async getRealTimeRevenueStream(
+    windowMinutes: number = 15,
+  ): Promise<RevenueStream> {
+    const query = `
+      SELECT
+        SUM(amount::numeric) as total_amount,
+        COUNT(*) as transaction_count,
+        COUNT(*) FILTER (WHERE status = 'completed') as completed_count,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_count,
+        AVG(amount::numeric) FILTER (WHERE status = 'completed') as avg_amount,
+        SUM(platform_fee::numeric) as platform_fees
+      FROM payments
+      WHERE created_at >= NOW() - INTERVAL '1 minute' * $1
+    `;
+
+    const { rows } = await pool.query(query, [windowMinutes]);
+    const row = rows[0] || {};
+
+    return {
+      totalAmount: parseFloat(row.total_amount || "0"),
+      transactionCount: parseInt(row.transaction_count || "0"),
+      completedCount: parseInt(row.completed_count || "0"),
+      pendingCount: parseInt(row.pending_count || "0"),
+      averageAmount: parseFloat(row.avg_amount || "0"),
+      platformFees: parseFloat(row.platform_fees || "0"),
+      windowMinutes,
+      computedAt: new Date().toISOString(),
+    };
+  },
+
+  // â”€â”€â”€ Custom Reporting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  /**
+   * Generate a custom analytics report.
+   */
+  async generateCustomReport(
+    config: CustomReportConfig,
+  ): Promise<CustomReportResult> {
+    const { userId, metrics, dateRange, filters, groupBy } = config;
+
+    const startDate = new Date(dateRange.start);
+    const endDate = new Date(dateRange.end);
+
+    const reportData: Record<string, unknown>[] = [];
+
+    for (const metric of metrics) {
+      const data = await this.getMetricsByDateRange(
+        metric,
+        startDate,
+        endDate,
+        filters,
+      );
+      reportData.push({ metric, data });
+    }
+
+    const summary = this.generateReportSummary(reportData);
+
+    return {
+      reportId: crypto.randomUUID(),
+      userId,
+      config,
+      data: reportData,
+      summary,
+      generatedAt: new Date().toISOString(),
+    };
+  },
+
+  /**
+   * Export analytics data to CSV format.
+   */
+  async exportToCSV(
+    metricType: string,
+    startDate: Date,
+    endDate: Date,
+    filters?: Record<string, unknown>,
+  ): Promise<string> {
+    const data = await this.getMetricsByDateRange(
+      metricType,
+      startDate,
+      endDate,
+      filters,
+    );
+
+    if (data.length === 0) return "";
+
+    const headers = Object.keys(data[0]);
+    const csvRows = [headers.join(",")];
+
+    for (const row of data) {
+      const values = headers.map((h) => {
+        const val = row[h];
+        return typeof val === "string" && val.includes(",")
+          ? `"${val}"`
+          : String(val ?? "");
+      });
+      csvRows.push(values.join(","));
+    }
+
+    return csvRows.join("\n");
+  },
+
+  /**
+   * Get comparative analytics between two time periods.
+   */
+  async getComparativeAnalytics(
+    metricType: string,
+    currentPeriod: string,
+    previousPeriod: string,
+  ): Promise<ComparativeAnalytics> {
+    const currentDays = AnalyticsService.parsePeriod(currentPeriod);
+    const previousDays = AnalyticsService.parsePeriod(previousPeriod);
+
+    const now = new Date();
+    const currentStart = new Date(now);
+    currentStart.setDate(currentStart.getDate() - currentDays);
+    const previousStart = new Date(currentStart);
+    previousStart.setDate(previousStart.getDate() - previousDays);
+
+    const [currentData, previousData] = await Promise.all([
+      this.getMetricsByDateRange(metricType, currentStart, now),
+      this.getMetricsByDateRange(metricType, previousStart, currentStart),
+    ]);
+
+    const currentTotal = currentData.reduce(
+      (sum, d) => sum + (parseFloat(d.total_amount || "0") || 0),
+      0,
+    );
+    const previousTotal = previousData.reduce(
+      (sum, d) => sum + (parseFloat(d.total_amount || "0") || 0),
+      0,
+    );
+
+    const changePercentage =
+      previousTotal > 0
+        ? ((currentTotal - previousTotal) / previousTotal) * 100
+        : 0;
+
+    return {
+      metricType,
+      currentPeriod: { period: currentPeriod, total: currentTotal, dataPoints: currentData.length },
+      previousPeriod: { period: previousPeriod, total: previousTotal, dataPoints: previousData.length },
+      changePercentage: Math.round(changePercentage * 100) / 100,
+      trend: changePercentage > 0 ? "up" : changePercentage < 0 ? "down" : "stable",
+      generatedAt: new Date().toISOString(),
+    };
+  },
+
+  /**
+   * Get user engagement funnel.
+   */
+  async getEngagementFunnel(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<EngagementFunnel> {
+    const query = `
+      WITH funnel AS (
+        SELECT
+          COUNT(DISTINCT CASE WHEN u.created_at BETWEEN $1 AND $2 THEN u.id END) as signups,
+          COUNT(DISTINCT CASE WHEN b.id IS NOT NULL AND b.created_at BETWEEN $1 AND $2 THEN b.learner_id END) as booked_session,
+          COUNT(DISTINCT CASE WHEN b.status = 'completed' AND b.completed_at BETWEEN $1 AND $2 THEN b.learner_id END) as completed_session,
+          COUNT(DISTINCT CASE WHEN sf.rating >= 4 AND sf.created_at BETWEEN $1 AND $2 THEN sf.user_id END) as high_satisfaction,
+          COUNT(DISTINCT CASE WHEN b2.id IS NOT NULL AND b2.created_at BETWEEN $2 AND $2 + INTERVAL '30 days' THEN b2.learner_id END) as returned_after_30d
+        FROM users u
+        LEFT JOIN bookings b ON b.learner_id = u.id
+        LEFT JOIN session_feedback sf ON sf.booking_id = b.id
+        LEFT JOIN bookings b2 ON b2.learner_id = u.id
+        WHERE u.created_at BETWEEN $1 AND $2
+          AND u.deleted_at IS NULL
+      )
+      SELECT * FROM funnel
+    `;
+
+    const { rows } = await pool.query(query, [startDate, endDate]);
+    const row = rows[0] || {};
+
+    const signups = parseInt(row.signups || "0");
+    const booked = parseInt(row.booked_session || "0");
+    const completed = parseInt(row.completed_session || "0");
+    const satisfied = parseInt(row.high_satisfaction || "0");
+    const returned = parseInt(row.returned_after_30d || "0");
+
+    return {
+      signups,
+      bookedSession: booked,
+      completedSession: completed,
+      highSatisfaction: satisfied,
+      returnedAfter30Days: returned,
+      conversionRates: {
+        signupToBooking: signups > 0 ? (booked / signups) * 100 : 0,
+        bookingToCompletion: booked > 0 ? (completed / booked) * 100 : 0,
+        completionToSatisfaction: completed > 0 ? (satisfied / completed) * 100 : 0,
+        retention30Days: signups > 0 ? (returned / signups) * 100 : 0,
+      },
+      dateRange: { start: startDate.toISOString(), end: endDate.toISOString() },
+    };
+  },
+
+  // â”€â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+  generateReportSummary(
+    reportData: Record<string, unknown>[],
+  ): ReportSummary {
+    const totalDataPoints = reportData.reduce(
+      (sum, d) => sum + ((d.data as unknown[])?.length || 0),
+      0,
+    );
+
+    return {
+      totalMetrics: reportData.length,
+      totalDataPoints,
+      generatedAt: new Date().toISOString(),
+    };
+  },
 };
+

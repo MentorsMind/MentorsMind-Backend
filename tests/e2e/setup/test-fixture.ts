@@ -49,6 +49,8 @@ export interface AuthTokens {
 // ─── Tables to truncate between suites ───────────────────────────────────────
 // Listed in dependency order (children before parents) to avoid FK violations.
 const TRUNCATE_TABLES = [
+  'review_responses',
+  'reviews',
   'escrows',
   'disputes',
   'bookings',
@@ -146,7 +148,7 @@ export class TestFixture {
    */
   async resetTransactionalData(): Promise<void> {
     await this.pool.query(`
-      TRUNCATE TABLE escrows, disputes, bookings, transactions, refresh_tokens, audit_logs, notifications
+      TRUNCATE TABLE review_responses, reviews, escrows, disputes, bookings, transactions, refresh_tokens, audit_logs, notifications
       RESTART IDENTITY CASCADE
     `);
     await this.redis.flushdb();
@@ -224,6 +226,17 @@ export class TestFixture {
       // mentor_profiles table might not exist in all migration versions — skip gracefully
     });
 
+    // Update mentor user record with mentor profile columns
+    await pool.query(
+      `UPDATE users
+       SET hourly_rate = 50.00,
+           bio = 'E2E test mentor',
+           expertise = ARRAY['TypeScript', 'Stellar'],
+           years_of_experience = 5
+       WHERE id = $1`,
+      [mentorId],
+    );
+
     return {
       admin: {
         id: adminId,
@@ -277,45 +290,70 @@ export class TestFixture {
   /**
    * Helper: issue a POST request with JSON body and Bearer auth.
    */
-  post(url: string, body: unknown, token?: string): supertest.Test {
+  post(url: string, body: unknown, token?: string, headers?: Record<string, string>): supertest.Test {
     const req = this.request.post(`/api/v1${url}`).send(body as object);
     if (token) req.set('Authorization', `Bearer ${token}`);
+    if (headers) {
+      for (const [key, val] of Object.entries(headers)) {
+        req.set(key, val);
+      }
+    }
     return req;
   }
 
   /**
    * Helper: issue a GET request with Bearer auth.
    */
-  get(url: string, token?: string): supertest.Test {
+  get(url: string, token?: string, headers?: Record<string, string>): supertest.Test {
     const req = this.request.get(`/api/v1${url}`);
     if (token) req.set('Authorization', `Bearer ${token}`);
+    if (headers) {
+      for (const [key, val] of Object.entries(headers)) {
+        req.set(key, val);
+      }
+    }
     return req;
   }
 
   /**
    * Helper: issue a PATCH request with JSON body and Bearer auth.
    */
-  patch(url: string, body: unknown, token?: string): supertest.Test {
+  patch(url: string, body: unknown, token?: string, headers?: Record<string, string>): supertest.Test {
     const req = this.request.patch(`/api/v1${url}`).send(body as object);
     if (token) req.set('Authorization', `Bearer ${token}`);
+    if (headers) {
+      for (const [key, val] of Object.entries(headers)) {
+        req.set(key, val);
+      }
+    }
     return req;
   }
 
   /**
    * Helper: issue a PUT request with JSON body and Bearer auth.
    */
-  put(url: string, body: unknown, token?: string): supertest.Test {
+  put(url: string, body: unknown, token?: string, headers?: Record<string, string>): supertest.Test {
     const req = this.request.put(`/api/v1${url}`).send(body as object);
     if (token) req.set('Authorization', `Bearer ${token}`);
+    if (headers) {
+      for (const [key, val] of Object.entries(headers)) {
+        req.set(key, val);
+      }
+    }
     return req;
   }
 
   /**
    * Helper: issue a DELETE request with Bearer auth.
    */
-  delete(url: string, token?: string): supertest.Test {
+  delete(url: string, token?: string, headers?: Record<string, string>): supertest.Test {
     const req = this.request.delete(`/api/v1${url}`);
     if (token) req.set('Authorization', `Bearer ${token}`);
+    if (headers) {
+      for (const [key, val] of Object.entries(headers)) {
+        req.set(key, val);
+      }
+    }
     return req;
   }
 

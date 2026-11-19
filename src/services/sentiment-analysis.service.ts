@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { Logger, logger } from "../utils/logger.utils";
 
 export interface SentimentScore {
   positive: number;

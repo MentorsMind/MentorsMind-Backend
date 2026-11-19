@@ -1,6 +1,7 @@
 import i18next from 'i18next';
 import Backend from 'i18next-fs-backend';
-import path from 'path';
+import * as path from 'path';
+import { logger } from '../utils/logger.utils';
 
 export const supportedLanguages = ['en', 'es', 'fr', 'de', 'zh', 'ja'] as const;
 export type SupportedLanguage = typeof supportedLanguages[number];
@@ -76,14 +77,31 @@ export function detectLanguage(acceptLanguage?: string): SupportedLanguage {
   }
 
   // Parse Accept-Language header (e.g., "en-US,en;q=0.9,es;q=0.8")
+  let hadMalformedEntry = false;
   const languages = acceptLanguage
     .split(',')
     .map(lang => {
       const [code, q] = lang.trim().split(';q=');
-      const quality = q ? parseFloat(q) : 1.0;
+      let quality = 1.0;
+      if (q !== undefined) {
+        const parsed = parseFloat(q);
+        if (isNaN(parsed) || parsed < 0 || parsed > 1) {
+          hadMalformedEntry = true;
+          quality = 0; // treat malformed quality as lowest priority
+        } else {
+          quality = parsed;
+        }
+      }
       return { code: code.split('-')[0], quality };
     })
     .sort((a, b) => b.quality - a.quality);
+
+  if (hadMalformedEntry) {
+    logger.warn('Malformed Accept-Language header received; falling back to default language', {
+      acceptLanguage,
+      defaultLanguage,
+    });
+  }
 
   // Find first supported language
   for (const { code } of languages) {

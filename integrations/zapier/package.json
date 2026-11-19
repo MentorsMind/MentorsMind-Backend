@@ -10,6 +10,7 @@
     "zapier-platform-core": "^11.0.0"
   },
   "scripts": {
-    "test": "zapier test || true"
+    "test": "node --test test/*.test.js",
+    "test:zapier": "zapier test || true"
   }
 }

@@ -4,6 +4,26 @@ All notable changes to the MentorMinds Backend API are documented here.
 This mirrors `GET /api/v1/docs/changelog`, which serves this history
 programmatically for the API documentation portal (issue #784).
 
+## Unreleased — current state
+
+- **Recommendation scoring tests (#1111)**: added unit tests covering the
+  `RecommendationService.getRecommendedMentors` scoring algorithm — the
+  skill-match, Bayesian-smoothed rating, availability, price-fit and
+  collaborative weighting, total-score ranking, cache hit/miss behaviour and
+  result limiting.
+- **Redis cache tracing (#1112)**: `CacheService` now emits OpenTelemetry
+  spans (`cache.get`, `cache.set`, `cache.del`, `cache.lpush`, `cache.ltrim`,
+  `cache.expire`, `cache.lrange`, `cache.keys`, `cache.ping`) around Redis
+  operations so cache latency and failures are visible in traces. The spans
+  carry `cache.operation`, `cache.backend` and `cache.key` attributes.
+- **Changelog (#1113)**: initial changelog entry documenting the current state
+  of the API (additive to the pre-existing version history below).
+- **Request timeout middleware (#1114)**: a `requestTimeoutMiddleware` was
+  added as the first request-scoped middleware. Requests that exceed
+  `REQUEST_TIMEOUT_MS` (default 30000) are answered with `408 Request Timeout`
+  and the connection is destroyed so hung handlers can no longer hold sockets
+  indefinitely.
+
 ## 1.4.0 — 2026-07-25
 
 - **Notifications worker (#782)**: `notifications.worker.ts` now tracks

@@ -11,8 +11,8 @@
  *  - Virus-scan job enqueued via the existing VIRUS_SCAN queue
  */
 
-import sharp from 'sharp';
 import { StorageService } from './storage.service';
+import { ImageOptimizationService } from './image-optimization.service';
 import { virusScanQueue } from '../queues/virus-scan.queue';
 import { logger } from '../utils/logger.utils';
 import { env } from '../config/env';
@@ -130,21 +130,20 @@ export const UploadService = {
       throw new FileTooLargeError(sizeBytes);
     }
 
-    // ── 3. Resize & compress with sharp (256×256 JPEG) ──────────────────────
-    const processedBuffer = await sharp(fileBuffer)
-      .resize(AVATAR_WIDTH, AVATAR_HEIGHT, {
-        fit: 'cover',         // crop to fill the square, preserving aspect ratio
-        position: 'center',
-      })
-      .jpeg({ quality: 85, progressive: true })
-      .toBuffer();
+    // ── 3. Optimize image with WebP conversion ───────────────────────────────
+    const processedBuffer = await ImageOptimizationService.optimizeImage(fileBuffer, {
+      width: AVATAR_WIDTH,
+      height: AVATAR_HEIGHT,
+      format: 'webp',
+      quality: 80,
+    });
 
     // ── 4. Generate a unique S3 key ─────────────────────────────────────────
     const timestamp = Date.now();
-    const s3Key = `avatars/${userId}/${timestamp}.jpg`;
+    const s3Key = `avatars/${userId}/${timestamp}.webp`;
 
     // ── 5. Upload to S3 ─────────────────────────────────────────────────────
-    await StorageService.uploadFile(s3Key, processedBuffer, 'image/jpeg', {
+    await StorageService.uploadFile(s3Key, processedBuffer, 'image/webp', {
       userId,
       uploadedAt: new Date().toISOString(),
     });

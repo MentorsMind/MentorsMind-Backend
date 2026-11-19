@@ -1,0 +1,33 @@
+{
+  "admin": {
+    "email": "admin@e2e.test",
+    "password": "AdminPass123!",
+    "firstName": "E2E",
+    "lastName": "Admin",
+    "role": "admin"
+  },
+  "mentor": {
+    "email": "mentor@e2e.test",
+    "password": "MentorPass123!",
+    "firstName": "E2E",
+    "lastName": "Mentor",
+    "role": "mentor",
+    "bio": "Expert Stellar Developer and Mentor",
+    "hourlyRate": 50.00,
+    "yearsOfExperience": 5
+  },
+  "mentee": {
+    "email": "mentee@e2e.test",
+    "password": "MenteePass123!",
+    "firstName": "E2E",
+    "lastName": "Mentee",
+    "role": "mentee"
+  },
+  "newMentee": {
+    "email": "new-mentee@e2e.test",
+    "password": "SecurePass123!",
+    "firstName": "New",
+    "lastName": "User",
+    "role": "mentee"
+  }
+}

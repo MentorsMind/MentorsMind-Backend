@@ -1,5 +1,4 @@
-// @ts-nocheck
-/**
+﻿/**
  * Escrow Validation Schemas
  * Zod schemas for escrow-related endpoints.
  */

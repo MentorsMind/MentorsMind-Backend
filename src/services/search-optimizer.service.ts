@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Search Optimization Service
  * Handles Elasticsearch performance optimization and query tuning
  * Issue #872
  */
 
-import { Logger } from '../utils/logger';
+import { Logger } from "../utils/logger.utils";
 import { ElasticsearchTuningConfig, defaultElasticsearchConfig } from '../config/elasticsearch-tuning';
 
 export class SearchOptimizerService {

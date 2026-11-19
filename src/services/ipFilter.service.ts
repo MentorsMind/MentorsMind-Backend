@@ -17,6 +17,9 @@ export interface IpRule {
 const CACHE_KEY = 'ip_filter:rules';
 const CACHE_TTL = 30; // 30 seconds as per requirement
 
+let localBlocklistSet = new Set<string>();
+let localBlocklistLoadedAt = 0;
+
 export class IpFilterService {
   /**
    * Get all active IP rules, cached for performance.
@@ -26,6 +29,16 @@ export class IpFilterService {
       const { rows } = await pool.query<IpRule>(
         'SELECT * FROM ip_rules ORDER BY created_at DESC'
       );
+      
+      const exactIps = rows.filter(r => r.rule_type === 'block' && r.context === 'global' && !r.ip_range.includes('/')).map(r => r.ip_range);
+      
+      if (CacheService.isDistributed()) {
+        await CacheService.del('ip_filter:blockset');
+        if (exactIps.length > 0) {
+          await CacheService.sadd('ip_filter:blockset', exactIps, CACHE_TTL);
+        }
+      }
+
       return rows;
     });
   }
@@ -111,9 +124,25 @@ export class IpFilterService {
    */
   static async isIpBlocked(ip: string): Promise<boolean> {
     const rules = await this.getRules();
-    const globalBlocklist = rules.filter(r => r.rule_type === 'block' && r.context === 'global');
     
-    return this.matchIp(ip, globalBlocklist.map(r => r.ip_range));
+    if (CacheService.isDistributed()) {
+      const isExactBlocked = await CacheService.sismember('ip_filter:blockset', ip);
+      if (isExactBlocked) return true;
+    } else {
+      if (Date.now() - localBlocklistLoadedAt > CACHE_TTL * 1000) {
+        const exactIps = rules.filter(r => r.rule_type === 'block' && r.context === 'global' && !r.ip_range.includes('/')).map(r => r.ip_range);
+        localBlocklistSet = new Set(exactIps);
+        localBlocklistLoadedAt = Date.now();
+      }
+      if (localBlocklistSet.has(ip)) return true;
+    }
+
+    const cidrRanges = rules.filter(r => r.rule_type === 'block' && r.context === 'global' && r.ip_range.includes('/')).map(r => r.ip_range);
+    
+    if (cidrRanges.length > 0) {
+      return this.matchIp(ip, cidrRanges);
+    }
+    return false;
   }
 
   /**

@@ -1,11 +1,12 @@
-import { Request, Response } from 'express';
+﻿import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import passport, { EmailRequiredError } from '../config/passport';
 import { env } from '../config/env';
 import { TokenService } from '../services/token.service';
 import { AuditLogService, extractIpAddress } from '../services/auditLog.service';
 import { OAuthService } from '../services/oauth.service';
 import oauthConfig from '../config/oauth.config';
-import { logger } from '../utils/logger';
+import { Logger, logger } from "../utils/logger.utils";
 import pool from '../config/database';
 
 export const OAuthController = {
@@ -265,9 +266,9 @@ export const OAuthController = {
      * DELETE /api/v1/auth/oauth/:provider
      * Unlink OAuth provider from user account
      */
-    async unlinkProvider(req: Request, res: Response): Promise<any> {
+    async unlinkProvider(req: AuthenticatedRequest, res: Response): Promise<any> {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = req.user?.userId;
             const provider = req.params.provider as string;
 
             if (!userId) {
@@ -280,7 +281,7 @@ export const OAuthController = {
 
             // Check if user has a password (can't unlink if it's the only auth method)
             const userQuery = `SELECT password_hash FROM users WHERE id = $1`;
-            const userResult = await require('../config/database').query(userQuery, [userId]);
+            const userResult = await pool.query(userQuery, [userId]);
 
             if (userResult.rows.length === 0) {
                 return res.status(404).json({ success: false, error: 'User not found' });
@@ -290,7 +291,7 @@ export const OAuthController = {
 
             // Check if user has other OAuth accounts
             const oauthQuery = `SELECT COUNT(*) as count FROM oauth_accounts WHERE user_id = $1`;
-            const oauthResult = await require('../config/database').query(oauthQuery, [userId]);
+            const oauthResult = await pool.query(oauthQuery, [userId]);
             const oauthCount = parseInt(oauthResult.rows[0].count);
 
             // If user has no password and only one OAuth account, prevent unlinking
@@ -303,7 +304,7 @@ export const OAuthController = {
 
             // Delete OAuth account
             const deleteQuery = `DELETE FROM oauth_accounts WHERE user_id = $1 AND provider = $2`;
-            const deleteResult = await require('../config/database').query(deleteQuery, [userId, provider]);
+            const deleteResult = await pool.query(deleteQuery, [userId, provider]);
 
             if (deleteResult.rowCount === 0) {
                 return res.status(404).json({ success: false, error: 'OAuth account not found' });
@@ -334,9 +335,9 @@ export const OAuthController = {
      * GET /api/v1/auth/oauth/providers
      * Get list of linked OAuth providers for current user
      */
-    async getLinkedProviders(req: Request, res: Response): Promise<any> {
+    async getLinkedProviders(req: AuthenticatedRequest, res: Response): Promise<any> {
         try {
-            const userId = (req as any).user?.userId;
+            const userId = req.user?.userId;
 
             if (!userId) {
                 return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -348,7 +349,7 @@ export const OAuthController = {
         WHERE user_id = $1
         ORDER BY created_at DESC
       `;
-            const result = await require('../config/database').query(query, [userId]);
+            const result = await pool.query(query, [userId]);
 
             return res.status(200).json({
                 success: true,

@@ -30,7 +30,12 @@ export const i18nMiddleware = (req: Request, res: Response, next: NextFunction):
   
   // Add language to response headers
   res.setHeader('Content-Language', language);
-  
+
+  // Tell caches (CDN, reverse proxy) to store separate copies per language
+  // so a response localized for one Accept-Language isn't served to a
+  // client requesting a different one.
+  res.setHeader('Vary', 'Accept-Language');
+
   next();
 };
 

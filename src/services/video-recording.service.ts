@@ -1,5 +1,5 @@
-import recordingConfig from '../config/recording.config';
-import { logger } from '../utils/logger';
+﻿import recordingConfig from '../config/recording.config';
+import { Logger, logger } from "../utils/logger.utils";
 
 interface RecordingStream {
   streamId: string;

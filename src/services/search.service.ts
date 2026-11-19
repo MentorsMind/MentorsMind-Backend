@@ -205,8 +205,11 @@ export class SearchService {
    * Get autocomplete suggestions for mentor names with caching.
    */
   static async autocomplete(query: string, limit: number = 10): Promise<string[]> {
-    // Normalise query for cache key
+    // Early return for empty or too-short queries
     const normalised = query.toLowerCase().trim();
+    if (normalised.length < 2) {
+      return [];
+    }
     const cacheKey = `mm:search:autocomplete:${normalised}:${limit}`;
 
     const cached = await CacheService.get<string[]>(cacheKey);
@@ -316,7 +319,7 @@ export class SearchService {
         total += mentorResult.meta?.total ?? mentors.length;
       } catch (err) {
         // Non-fatal: continue with other types
-        console.error('[globalSearch] mentor search failed:', err);
+        logger.error('[globalSearch] mentor search failed:', err);
       }
     }
 
@@ -353,15 +356,14 @@ export class SearchService {
         results.push(...sessions);
         total += parseInt(sessionRows.rows[0]?.total_count ?? '0', 10);
       } catch (err) {
-        console.error('[globalSearch] session search failed:', err);
+        logger.error('[globalSearch] session search failed:', err);
       }
     }
 
     // ----- Messages -----
     if (types.includes('message')) {
       try {
-        const messagingService = new MessagingService();
-        const messageResult = await messagingService.searchMessages(userId, query, page, limit);
+        const messageResult = await MessagingService.searchMessages(userId, query, page, limit);
         const messages = (messageResult.results as any[]).map((m: any) => ({
           ...m,
           type: 'message' as GlobalSearchResultType,
@@ -369,7 +371,7 @@ export class SearchService {
         results.push(...messages);
         total += messageResult.total;
       } catch (err) {
-        console.error('[globalSearch] message search failed:', err);
+        logger.error('[globalSearch] message search failed:', err);
       }
     }
 

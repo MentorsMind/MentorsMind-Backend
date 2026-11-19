@@ -3,6 +3,7 @@ import { authenticate } from '../middleware/auth.middleware';
 import { createLimiter } from '../middleware/rate-limit.middleware';
 import { CollaborativeLearningService } from '../services/collaborative-learning.service';
 import { logger } from '../utils/logger.utils';
+import { routeParam } from '../utils/route-params.utils';
 
 const router = Router();
 
@@ -59,7 +60,7 @@ router.post('/forums', async (req: Request, res: Response) => {
  */
 router.post('/forums/:forumId/messages', async (req: Request, res: Response) => {
   try {
-    const { forumId } = req.params;
+    const forumId = routeParam(req.params.forumId);
     const userId = (req as any).user.id;
     const { content, parentMessageId } = req.body;
 
@@ -86,7 +87,7 @@ router.post('/forums/:forumId/messages', async (req: Request, res: Response) => 
  */
 router.get('/forums/:forumId/messages', async (req: Request, res: Response) => {
   try {
-    const { forumId } = req.params;
+    const forumId = routeParam(req.params.forumId);
     const userId = (req as any).user.id;
     const page = parseInt(req.query.page as string, 10) || 1;
     const limit = Math.min(parseInt(req.query.limit as string, 10) || 20, 100);
@@ -142,7 +143,7 @@ router.post('/study-groups', async (req: Request, res: Response) => {
  */
 router.post('/study-groups/:groupId/join', async (req: Request, res: Response) => {
   try {
-    const { groupId } = req.params;
+    const groupId = routeParam(req.params.groupId);
     const userId = (req as any).user.id;
 
     const member = await CollaborativeLearningService.joinStudyGroup(groupId, userId);
@@ -201,7 +202,7 @@ router.post(
  */
 router.post('/peer-reviews/:reviewId/vote', async (req: Request, res: Response) => {
   try {
-    const { reviewId } = req.params;
+    const reviewId = routeParam(req.params.reviewId);
     const voterId = (req as any).user.id;
 
     const result = await CollaborativeLearningService.votePeerReview(reviewId, voterId);

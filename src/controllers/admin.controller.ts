@@ -1,5 +1,7 @@
 import { Response } from "express";
-import { AuthenticatedRequest } from "../types/api.types";
+import { Queue } from "bullmq";
+import { QUEUE_NAMES, redisConnection } from "../queues/queue.config";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { AdminService } from "../services/admin.service";
 import { ResponseUtil } from "../utils/response.utils";
 import {
@@ -9,10 +11,12 @@ import {
 import { LoginAttemptsService } from "../services/loginAttempts.service";
 import { IpFilterService } from "../services/ipFilter.service";
 import pool from "../config/database";
-import { keyRotationJob } from "../jobs/keyRotation.job";
+import keyRotationJob from "../jobs/keyRotation.job";
 import { AuditLogArchivalJob } from "../jobs/auditLog.job";
 import { accountDeletionService } from "../services/accountDeletion.service";
 import { WebhookService } from "../services/webhook.service";
+import { PaymentReconciliationService } from "../services/payment-reconciliation.service";
+import { routeParam } from "../utils/route-params.utils";
 
 export const AdminController = {
   /** GET /admin/stats */
@@ -264,6 +268,44 @@ export const AdminController = {
     );
   },
 
+  /** GET /admin/payments/reconciliation */
+  async listPaymentReconciliations(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const status = (req.query.status as string | undefined) ?? undefined;
+
+    const result = await PaymentReconciliationService.listDiscrepancies({
+      limit,
+      offset,
+      status: status as any,
+    });
+
+    ResponseUtil.success(
+      res,
+      result.rows,
+      "Payment reconciliation discrepancies retrieved successfully",
+      200,
+      {
+        total: result.total,
+        limit,
+        offset,
+      } as any,
+    );
+  },
+
+  /** PATCH /admin/payments/reconciliation/:id/review */
+  async reviewPaymentReconciliation(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const { status, notes } = req.body ?? {};
+    const updated = await PaymentReconciliationService.reviewDiscrepancy(
+      routeParam(req.params.id),
+      req.user!.id,
+      status,
+      notes,
+    );
+
+    ResponseUtil.success(res, updated, "Payment discrepancy reviewed successfully");
+  },
+
   /** POST /admin/disputes/:id/resolve */
   async resolveDispute(
     req: AuthenticatedRequest,
@@ -340,7 +382,7 @@ export const AdminController = {
     _req: AuthenticatedRequest,
     res: Response,
   ): Promise<void> {
-    const result = await keyRotationJob.run();
+    const result = await (keyRotationJob as any).run();
     ResponseUtil.success(res, result, "Encryption key rotation job completed");
   },
 
@@ -675,8 +717,6 @@ export const AdminController = {
     res: Response,
   ): Promise<void> {
     try {
-      const { Queue } = require("bullmq");
-      const { QUEUE_NAMES, redisConnection } = require("../queues/queue.config");
       const stellarQueue = new Queue(QUEUE_NAMES.STELLAR_TX, { connection: redisConnection });
       
       const failedJobs = await stellarQueue.getFailed();

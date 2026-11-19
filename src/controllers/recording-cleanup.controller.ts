@@ -8,7 +8,7 @@
  */
 
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../types/api.types';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { ResponseUtil } from '../utils/response.utils';
 import { db } from '../config/database';
 import { recordingCleanupQueue } from '../queues/recordingCleanup.queue';
@@ -42,10 +42,12 @@ export const RecordingCleanupController = {
    * Falls back to the last 5 runs if the caller passes ?limit=5.
    */
   async getCleanupReport(req: AuthenticatedRequest, res: Response): Promise<void> {
-    const limit = Math.min(parseInt(req.query.limit as string) || 1, 20);
+    const limitParam = req.query.limit;
+    const limitValue = Array.isArray(limitParam) ? limitParam[0] : limitParam;
+    const limit = Math.min(parseInt(limitValue as string) || 1, 20);
 
     // Aggregate stats per job_run_id, ordered by most recent first
-    const { rows } = await db.query<CleanupReportRow>(
+    const { rows } = (await db.query(
       `SELECT
           job_run_id,
           MIN(detected_at)                                          AS detected_at,
@@ -76,7 +78,7 @@ export const RecordingCleanupController = {
        ORDER BY MIN(detected_at) DESC
        LIMIT $1`,
       [limit],
-    );
+    )) as { rows: CleanupReportRow[] };
 
     if (rows.length === 0) {
       ResponseUtil.success(
@@ -153,14 +155,14 @@ export const RecordingCleanupController = {
       return;
     }
 
-    const { rows } = await db.query<{ id: string; deletion_status: string; s3_key: string }>(
+    const { rows } = (await db.query(
       `UPDATE recording_cleanup_log
        SET deletion_status = 'recovered', recovered_at = NOW()
        WHERE id = $1
          AND deletion_status = 'pending_deletion'
        RETURNING id, deletion_status, s3_key`,
       [logId],
-    );
+    )) as { rows: { id: string; deletion_status: string; s3_key: string }[] };
 
     if (rows.length === 0) {
       ResponseUtil.notFound(

@@ -14,7 +14,9 @@
 
 export enum ErrorCode {
   // ─── Authentication ─────────────────────────────────────────────────────────
+  UNAUTHORIZED = 'UNAUTHORIZED',
   AUTH_UNAUTHORIZED = 'AUTH_UNAUTHORIZED',
+  AUTH_REQUIRED = 'AUTH_REQUIRED',
   AUTH_AUTHENTICATION_REQUIRED = 'AUTH_AUTHENTICATION_REQUIRED',
   AUTH_INVALID_CREDENTIALS = 'AUTH_INVALID_CREDENTIALS',
   AUTH_EMAIL_ALREADY_REGISTERED = 'AUTH_EMAIL_ALREADY_REGISTERED',
@@ -32,9 +34,12 @@ export enum ErrorCode {
   AUTH_INVALID_RESET_TOKEN = 'AUTH_INVALID_RESET_TOKEN',
   AUTH_PASSWORD_MISMATCH = 'AUTH_PASSWORD_MISMATCH',
   AUTH_WEAK_PASSWORD = 'AUTH_WEAK_PASSWORD',
+  AUTH_PASSWORD_EXPIRED = 'AUTH_PASSWORD_EXPIRED',
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  FORBIDDEN = 'FORBIDDEN',
   AUTHZ_FORBIDDEN = 'AUTHZ_FORBIDDEN',
+  AUTH_FORBIDDEN = 'AUTH_FORBIDDEN',
   AUTHZ_ACCESS_DENIED = 'AUTHZ_ACCESS_DENIED',
   AUTHZ_INSUFFICIENT_PERMISSIONS = 'AUTHZ_INSUFFICIENT_PERMISSIONS',
   AUTHZ_ADMIN_ONLY = 'AUTHZ_ADMIN_ONLY',
@@ -59,6 +64,7 @@ export enum ErrorCode {
   BOOKING_SESSION_NOT_ENDED = 'BOOKING_SESSION_NOT_ENDED',
   BOOKING_ALREADY_CANCELLED = 'BOOKING_ALREADY_CANCELLED',
   BOOKING_RESCHEDULE_NOT_ALLOWED = 'BOOKING_RESCHEDULE_NOT_ALLOWED',
+  BOOKING_INVALID_TIME = 'BOOKING_INVALID_TIME',
   BOOKING_UPDATE_FAILED = 'BOOKING_UPDATE_FAILED',
   BOOKING_CONFIRM_FAILED = 'BOOKING_CONFIRM_FAILED',
   BOOKING_COMPLETION_FAILED = 'BOOKING_COMPLETION_FAILED',
@@ -120,6 +126,7 @@ export enum ErrorCode {
   // ─── Validation ─────────────────────────────────────────────────────────────
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   VALIDATION_REQUIRED_FIELD = 'VALIDATION_REQUIRED_FIELD',
+  VALIDATION_MISSING_REQUIRED = 'VALIDATION_MISSING_REQUIRED',
   VALIDATION_INVALID_FORMAT = 'VALIDATION_INVALID_FORMAT',
   VALIDATION_OUT_OF_RANGE = 'VALIDATION_OUT_OF_RANGE',
   VALIDATION_PROGRESS_OUT_OF_RANGE = 'VALIDATION_PROGRESS_OUT_OF_RANGE',
@@ -148,6 +155,7 @@ export enum ErrorCode {
   NOT_FOUND = 'NOT_FOUND',
   CONFLICT = 'CONFLICT',
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
+  INTERNAL_ERROR = 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
   CIRCUIT_BREAKER_OPEN = 'CIRCUIT_BREAKER_OPEN',
   DATABASE_CONNECTION_FAILED = 'DATABASE_CONNECTION_FAILED',
@@ -172,6 +180,7 @@ export enum ErrorCode {
   LEARNING_PATH_UNPUBLISH_FAILED = 'LEARNING_PATH_UNPUBLISH_FAILED',
   LEARNING_PATH_NOT_ENROLLED = 'LEARNING_PATH_NOT_ENROLLED',
   LEARNING_PATH_NOT_COMPLETED = 'LEARNING_PATH_NOT_COMPLETED',
+  LEARNING_PATH_INVALID_STATUS = 'LEARNING_PATH_INVALID_STATUS',
   PATH_ID_REQUIRED = 'PATH_ID_REQUIRED',
   MILESTONE_ID_REQUIRED = 'MILESTONE_ID_REQUIRED',
 
@@ -181,6 +190,7 @@ export enum ErrorCode {
   ENROLLMENT_ALREADY_UNENROLLED = 'ENROLLMENT_ALREADY_UNENROLLED',
   ENROLLMENT_STATUS_TRANSITION_INVALID = 'ENROLLMENT_STATUS_TRANSITION_INVALID',
   ENROLLMENT_UPDATE_FAILED = 'ENROLLMENT_UPDATE_FAILED',
+  ENROLLMENT_INACTIVE = 'ENROLLMENT_INACTIVE',
   STUDENT_NOT_FOUND = 'STUDENT_NOT_FOUND',
   STUDENT_ACCOUNT_INACTIVE = 'STUDENT_ACCOUNT_INACTIVE',
   ENROLLMENT_ACCESS_DENIED = 'ENROLLMENT_ACCESS_DENIED',
@@ -193,6 +203,8 @@ export enum ErrorCode {
   MILESTONE_STEP_PREREQUISITES_NOT_MET = 'MILESTONE_STEP_PREREQUISITES_NOT_MET',
   MILESTONE_STEP_INVALID = 'MILESTONE_STEP_INVALID',
   MILESTONE_ACCESS_DENIED = 'MILESTONE_ACCESS_DENIED',
+  MILESTONE_COMPLETION_CRITERIA_NOT_MET = 'MILESTONE_COMPLETION_CRITERIA_NOT_MET',
+  MILESTONE_SKIP_REQUIRES_MENTOR_APPROVAL = 'MILESTONE_SKIP_REQUIRES_MENTOR_APPROVAL',
   PREREQUISITE_NOT_FOUND = 'PREREQUISITE_NOT_FOUND',
   PREREQUISITE_OVERRIDE_NOT_FOUND = 'PREREQUISITE_OVERRIDE_NOT_FOUND',
   PREREQUISITE_OVERRIDE_EXISTS = 'PREREQUISITE_OVERRIDE_EXISTS',
@@ -252,6 +264,9 @@ export enum ErrorCode {
   ONBOARDING_ALREADY_COMPLETED = 'ONBOARDING_ALREADY_COMPLETED',
   ONBOARDING_NOT_PAUSED = 'ONBOARDING_NOT_PAUSED',
   ONBOARDING_RATE_LIMITED = 'ONBOARDING_RATE_LIMITED',
+  ONBOARDING_STEP_INVALID = 'ONBOARDING_STEP_INVALID',
+  ONBOARDING_STEP_ALREADY_COMPLETED = 'ONBOARDING_STEP_ALREADY_COMPLETED',
+  ONBOARDING_STEP_PREREQUISITES_NOT_MET = 'ONBOARDING_STEP_PREREQUISITES_NOT_MET',
   CHECKLIST_ITEM_NOT_FOUND = 'CHECKLIST_ITEM_NOT_FOUND',
 
   // ─── Skill Tests ────────────────────────────────────────────────────────────
@@ -269,6 +284,33 @@ export enum ErrorCode {
   SESSION_MILESTONE_ALREADY_LINKED = 'SESSION_MILESTONE_ALREADY_LINKED',
   SESSION_NOT_AUTHORIZED = 'SESSION_NOT_AUTHORIZED',
 
+  // ─── Session Templates ─────────────────────────────────────────────────────
+  SESSION_TEMPLATE_NOT_FOUND = 'SESSION_TEMPLATE_NOT_FOUND',
+  SESSION_TEMPLATE_UPDATE_FAILED = 'SESSION_TEMPLATE_UPDATE_FAILED',
+  SESSION_TEMPLATE_DELETE_FAILED = 'SESSION_TEMPLATE_DELETE_FAILED',
+  SESSION_TEMPLATE_HAS_USAGE = 'SESSION_TEMPLATE_HAS_USAGE',
+  SESSION_TEMPLATE_CREATION_FAILED = 'SESSION_TEMPLATE_CREATION_FAILED',
+  SESSION_TEMPLATE_CLONE_FAILED = 'SESSION_TEMPLATE_CLONE_FAILED',
+
+  // ─── Session Quality ───────────────────────────────────────────────────────
+  SESSION_QUALITY_ASSESSMENT_FAILED = 'SESSION_QUALITY_ASSESSMENT_FAILED',
+  SESSION_QUALITY_NOT_FOUND = 'SESSION_QUALITY_NOT_FOUND',
+  SESSION_QUALITY_INVALID_INPUT = 'SESSION_QUALITY_INVALID_INPUT',
+
+  // ─── Dispute Resolution ────────────────────────────────────────────────────
+  DISPUTE_EVIDENCE_UPLOAD_FAILED = 'DISPUTE_EVIDENCE_UPLOAD_FAILED',
+  DISPUTE_EVIDENCE_NOT_FOUND = 'DISPUTE_EVIDENCE_NOT_FOUND',
+  DISPUTE_MEDIATION_FAILED = 'DISPUTE_MEDIATION_FAILED',
+  DISPUTE_RESOLUTION_FAILED = 'DISPUTE_RESOLUTION_FAILED',
+  DISPUTE_ALREADY_RESOLVED = 'DISPUTE_ALREADY_RESOLVED',
+  DISPUTE_EVIDENCE_LIMIT_EXCEEDED = 'DISPUTE_EVIDENCE_LIMIT_EXCEEDED',
+
+  // ─── Internationalization ───────────────────────────────────────────────────
+  I18N_TRANSLATION_NOT_FOUND = 'I18N_TRANSLATION_NOT_FOUND',
+  I18N_LANGUAGE_NOT_SUPPORTED = 'I18N_LANGUAGE_NOT_SUPPORTED',
+  I18N_TRANSLATION_UPDATE_FAILED = 'I18N_TRANSLATION_UPDATE_FAILED',
+  I18N_RTL_SUPPORT_ERROR = 'I18N_RTL_SUPPORT_ERROR',
+
   // ─── Background Checks ──────────────────────────────────────────────────────
   BACKGROUND_CHECK_NOT_FOUND = 'BACKGROUND_CHECK_NOT_FOUND',
   BACKGROUND_CHECK_ALREADY_IN_PROGRESS = 'BACKGROUND_CHECK_ALREADY_IN_PROGRESS',
@@ -281,11 +323,17 @@ export enum ErrorCode {
 
   // ─── Oracle / iCal / MFA / Misc domain ──────────────────────────────────────
   ORACLE_NOT_CONFIGURED = 'ORACLE_NOT_CONFIGURED',
+  ORACLE_UNAVAILABLE = 'ORACLE_UNAVAILABLE',
+  ORACLE_STALE_PRICE = 'ORACLE_STALE_PRICE',
   ICAL_TOKEN_INVALID = 'ICAL_TOKEN_INVALID',
   ICAL_RATE_LIMIT_EXCEEDED = 'ICAL_RATE_LIMIT_EXCEEDED',
   MFA_PHONE_NUMBER_REQUIRED = 'MFA_PHONE_NUMBER_REQUIRED',
   INVALID_CURSOR = 'INVALID_CURSOR',
   ASSET_UNSUPPORTED = 'ASSET_UNSUPPORTED',
+  ASSET_INVALID_SEND_AMOUNT = 'ASSET_INVALID_SEND_AMOUNT',
+  QUOTE_EXPIRED_OR_NOT_FOUND = 'QUOTE_EXPIRED_OR_NOT_FOUND',
+  QUOTE_EXPIRED = 'QUOTE_EXPIRED',
+  QUOTE_RATE_MOVED = 'QUOTE_RATE_MOVED',
   SDEX_LIQUIDITY_UNAVAILABLE = 'SDEX_LIQUIDITY_UNAVAILABLE',
   PAYOUT_MINIMUM_NOT_MET = 'PAYOUT_MINIMUM_NOT_MET',
   GOAL_NOT_FOUND = 'GOAL_NOT_FOUND',
@@ -316,9 +364,11 @@ function entry(code: ErrorCode, httpStatus: number, message: string): [ErrorCode
  * Keyed by ErrorCode — every value carries its default English message,
  * default HTTP status, and i18n key.
  */
-export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEntries([
+export const ERROR_CATALOG = Object.fromEntries([
   // ─── Authentication ─────────────────────────────────────────────────────────
+  entry(ErrorCode.UNAUTHORIZED, 401, 'Unauthorized access'),
   entry(ErrorCode.AUTH_UNAUTHORIZED, 401, 'Unauthorized access'),
+  entry(ErrorCode.AUTH_REQUIRED, 401, 'Authentication required'),
   entry(ErrorCode.AUTH_AUTHENTICATION_REQUIRED, 401, 'Authentication required'),
   entry(ErrorCode.AUTH_INVALID_CREDENTIALS, 401, 'Invalid email or password'),
   entry(ErrorCode.AUTH_EMAIL_ALREADY_REGISTERED, 409, 'Email is already registered'),
@@ -336,9 +386,12 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.AUTH_INVALID_RESET_TOKEN, 400, 'Invalid or expired reset token'),
   entry(ErrorCode.AUTH_PASSWORD_MISMATCH, 400, 'Passwords do not match'),
   entry(ErrorCode.AUTH_WEAK_PASSWORD, 400, 'Password is too weak'),
+  entry(ErrorCode.AUTH_PASSWORD_EXPIRED, 403, 'Your password has expired. Please reset it to continue.'),
 
   // ─── Authorization ──────────────────────────────────────────────────────────
+  entry(ErrorCode.FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_FORBIDDEN, 403, 'Access denied'),
+  entry(ErrorCode.AUTH_FORBIDDEN, 403, 'Access denied'),
   entry(ErrorCode.AUTHZ_ACCESS_DENIED, 403, 'You do not have access to this resource'),
   entry(ErrorCode.AUTHZ_INSUFFICIENT_PERMISSIONS, 403, "You don't have permission to perform this action"),
   entry(ErrorCode.AUTHZ_ADMIN_ONLY, 403, 'This action requires administrator privileges'),
@@ -363,6 +416,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.BOOKING_SESSION_NOT_ENDED, 400, 'Cannot complete booking before session ends'),
   entry(ErrorCode.BOOKING_ALREADY_CANCELLED, 400, 'Cannot cancel booking in current status'),
   entry(ErrorCode.BOOKING_RESCHEDULE_NOT_ALLOWED, 400, 'Cannot reschedule booking in current status'),
+  entry(ErrorCode.BOOKING_INVALID_TIME, 400, 'New scheduled time must be at least 30 minutes in the future'),
   entry(ErrorCode.BOOKING_UPDATE_FAILED, 500, 'Failed to update booking'),
   entry(ErrorCode.BOOKING_CONFIRM_FAILED, 500, 'Failed to confirm booking'),
   entry(ErrorCode.BOOKING_COMPLETION_FAILED, 500, 'Failed to complete booking'),
@@ -424,6 +478,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   // ─── Validation ─────────────────────────────────────────────────────────────
   entry(ErrorCode.VALIDATION_ERROR, 400, 'Validation failed'),
   entry(ErrorCode.VALIDATION_REQUIRED_FIELD, 400, '{{field}} is required'),
+  entry(ErrorCode.VALIDATION_MISSING_REQUIRED, 400, 'Required field is missing'),
   entry(ErrorCode.VALIDATION_INVALID_FORMAT, 400, '{{field}} has invalid format'),
   entry(ErrorCode.VALIDATION_OUT_OF_RANGE, 400, '{{field}} is out of range'),
   entry(ErrorCode.VALIDATION_PROGRESS_OUT_OF_RANGE, 400, 'Progress must be a number between 0 and 100'),
@@ -452,6 +507,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.NOT_FOUND, 404, 'Resource not found'),
   entry(ErrorCode.CONFLICT, 409, 'Resource conflict'),
   entry(ErrorCode.INTERNAL_SERVER_ERROR, 500, 'Internal server error'),
+  entry(ErrorCode.INTERNAL_ERROR, 500, 'Internal error'),
   entry(ErrorCode.SERVICE_UNAVAILABLE, 503, 'Service temporarily unavailable'),
   entry(ErrorCode.CIRCUIT_BREAKER_OPEN, 503, 'Database circuit breaker is open'),
   entry(ErrorCode.DATABASE_CONNECTION_FAILED, 503, 'Database connection failed'),
@@ -476,6 +532,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.LEARNING_PATH_UNPUBLISH_FAILED, 500, 'Failed to unpublish learning path'),
   entry(ErrorCode.LEARNING_PATH_NOT_ENROLLED, 403, 'Not enrolled in this learning path'),
   entry(ErrorCode.LEARNING_PATH_NOT_COMPLETED, 404, 'Learning path not completed or enrollment not found'),
+  entry(ErrorCode.LEARNING_PATH_INVALID_STATUS, 400, 'Invalid learning path status'),
   entry(ErrorCode.PATH_ID_REQUIRED, 400, 'Path ID is required'),
   entry(ErrorCode.MILESTONE_ID_REQUIRED, 400, 'Milestone ID is required'),
 
@@ -485,6 +542,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.ENROLLMENT_ALREADY_UNENROLLED, 400, 'Student is already unenrolled'),
   entry(ErrorCode.ENROLLMENT_STATUS_TRANSITION_INVALID, 400, 'Enrollment status transition is not allowed'),
   entry(ErrorCode.ENROLLMENT_UPDATE_FAILED, 500, 'Failed to update enrollment status'),
+  entry(ErrorCode.ENROLLMENT_INACTIVE, 400, 'Cannot complete milestone for inactive enrollment'),
   entry(ErrorCode.STUDENT_NOT_FOUND, 404, 'Student not found'),
   entry(ErrorCode.STUDENT_ACCOUNT_INACTIVE, 403, 'Student account is not active'),
   entry(ErrorCode.ENROLLMENT_ACCESS_DENIED, 403, 'Access denied to this enrollment'),
@@ -497,6 +555,8 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.MILESTONE_STEP_PREREQUISITES_NOT_MET, 422, 'Step prerequisites not met'),
   entry(ErrorCode.MILESTONE_STEP_INVALID, 400, 'Invalid step ID'),
   entry(ErrorCode.MILESTONE_ACCESS_DENIED, 403, 'Access denied to this milestone'),
+  entry(ErrorCode.MILESTONE_COMPLETION_CRITERIA_NOT_MET, 400, 'Completion criteria not met'),
+  entry(ErrorCode.MILESTONE_SKIP_REQUIRES_MENTOR_APPROVAL, 400, 'Cannot skip required milestone without mentor approval'),
   entry(ErrorCode.PREREQUISITE_NOT_FOUND, 404, 'Prerequisite not found'),
   entry(ErrorCode.PREREQUISITE_OVERRIDE_NOT_FOUND, 404, 'Override not found'),
   entry(ErrorCode.PREREQUISITE_OVERRIDE_EXISTS, 409, 'Override already exists for this prerequisite'),
@@ -556,6 +616,9 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.ONBOARDING_ALREADY_COMPLETED, 400, 'Onboarding already completed'),
   entry(ErrorCode.ONBOARDING_NOT_PAUSED, 400, 'Onboarding is not paused'),
   entry(ErrorCode.ONBOARDING_RATE_LIMITED, 429, 'Too many onboarding completion attempts. Please try again later.'),
+  entry(ErrorCode.ONBOARDING_STEP_INVALID, 400, 'Invalid step ID'),
+  entry(ErrorCode.ONBOARDING_STEP_ALREADY_COMPLETED, 400, 'Step already completed'),
+  entry(ErrorCode.ONBOARDING_STEP_PREREQUISITES_NOT_MET, 422, 'Step prerequisites not met'),
   entry(ErrorCode.CHECKLIST_ITEM_NOT_FOUND, 404, 'Checklist item not found'),
 
   // ─── Skill Tests ────────────────────────────────────────────────────────────
@@ -573,6 +636,33 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.SESSION_MILESTONE_ALREADY_LINKED, 409, 'Session is already linked to a milestone'),
   entry(ErrorCode.SESSION_NOT_AUTHORIZED, 403, 'Not authorized for this session'),
 
+  // ─── Session Templates ─────────────────────────────────────────────────────
+  entry(ErrorCode.SESSION_TEMPLATE_NOT_FOUND, 404, 'Session template not found'),
+  entry(ErrorCode.SESSION_TEMPLATE_UPDATE_FAILED, 500, 'Failed to update session template'),
+  entry(ErrorCode.SESSION_TEMPLATE_DELETE_FAILED, 500, 'Failed to delete session template'),
+  entry(ErrorCode.SESSION_TEMPLATE_HAS_USAGE, 400, 'Cannot delete template with existing usage'),
+  entry(ErrorCode.SESSION_TEMPLATE_CREATION_FAILED, 500, 'Failed to create session template'),
+  entry(ErrorCode.SESSION_TEMPLATE_CLONE_FAILED, 500, 'Failed to clone session template'),
+
+  // ─── Session Quality ───────────────────────────────────────────────────────
+  entry(ErrorCode.SESSION_QUALITY_ASSESSMENT_FAILED, 500, 'Failed to assess session quality'),
+  entry(ErrorCode.SESSION_QUALITY_NOT_FOUND, 404, 'Session quality assessment not found'),
+  entry(ErrorCode.SESSION_QUALITY_INVALID_INPUT, 400, 'Invalid input for quality assessment'),
+
+  // ─── Dispute Resolution ────────────────────────────────────────────────────
+  entry(ErrorCode.DISPUTE_EVIDENCE_UPLOAD_FAILED, 500, 'Failed to upload dispute evidence'),
+  entry(ErrorCode.DISPUTE_EVIDENCE_NOT_FOUND, 404, 'Dispute evidence not found'),
+  entry(ErrorCode.DISPUTE_MEDIATION_FAILED, 500, 'Failed to initiate mediation'),
+  entry(ErrorCode.DISPUTE_RESOLUTION_FAILED, 500, 'Failed to resolve dispute'),
+  entry(ErrorCode.DISPUTE_ALREADY_RESOLVED, 409, 'Dispute has already been resolved'),
+  entry(ErrorCode.DISPUTE_EVIDENCE_LIMIT_EXCEEDED, 400, 'Evidence limit exceeded for this dispute'),
+
+  // ─── Internationalization ───────────────────────────────────────────────────
+  entry(ErrorCode.I18N_TRANSLATION_NOT_FOUND, 404, 'Translation not found'),
+  entry(ErrorCode.I18N_LANGUAGE_NOT_SUPPORTED, 400, 'Language not supported'),
+  entry(ErrorCode.I18N_TRANSLATION_UPDATE_FAILED, 500, 'Failed to update translation'),
+  entry(ErrorCode.I18N_RTL_SUPPORT_ERROR, 500, 'RTL language support error'),
+
   // ─── Background Checks ──────────────────────────────────────────────────────
   entry(ErrorCode.BACKGROUND_CHECK_NOT_FOUND, 404, 'Background check not found'),
   entry(ErrorCode.BACKGROUND_CHECK_ALREADY_IN_PROGRESS, 409, 'Background check already in progress'),
@@ -585,11 +675,17 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
 
   // ─── Oracle / iCal / MFA / Misc domain ──────────────────────────────────────
   entry(ErrorCode.ORACLE_NOT_CONFIGURED, 503, 'Oracle contract is not configured'),
+  entry(ErrorCode.ORACLE_UNAVAILABLE, 503, 'Oracle contract unavailable — stale prices or insufficient feeders'),
+  entry(ErrorCode.ORACLE_STALE_PRICE, 503, 'Oracle price cache exceeded maximum staleness (10 min); no valid fallback available'),
   entry(ErrorCode.ICAL_TOKEN_INVALID, 404, 'Invalid or expired calendar token'),
   entry(ErrorCode.ICAL_RATE_LIMIT_EXCEEDED, 429, 'Rate limit exceeded for calendar feed'),
   entry(ErrorCode.MFA_PHONE_NUMBER_REQUIRED, 400, 'Phone number required for SMS MFA'),
   entry(ErrorCode.INVALID_CURSOR, 400, 'Invalid pagination cursor'),
   entry(ErrorCode.ASSET_UNSUPPORTED, 400, 'Unsupported asset'),
+  entry(ErrorCode.ASSET_INVALID_SEND_AMOUNT, 400, 'Invalid send amount'),
+  entry(ErrorCode.QUOTE_EXPIRED_OR_NOT_FOUND, 400, 'Quote expired or not found'),
+  entry(ErrorCode.QUOTE_EXPIRED, 400, 'Quote has expired'),
+  entry(ErrorCode.QUOTE_RATE_MOVED, 409, 'Rate moved beyond acceptable range since quote'),
   entry(ErrorCode.SDEX_LIQUIDITY_UNAVAILABLE, 503, 'No liquidity found on SDEX for the requested pair'),
   entry(ErrorCode.PAYOUT_MINIMUM_NOT_MET, 400, 'Minimum payout amount not met'),
   entry(ErrorCode.GOAL_NOT_FOUND, 404, 'Goal not found'),
@@ -597,7 +693,7 @@ export const ERROR_CATALOG: Record<ErrorCode, ErrorCatalogEntry> = Object.fromEn
   entry(ErrorCode.WEBHOOK_PAYLOAD_INVALID, 400, 'Webhook payload missing provider reference'),
   entry(ErrorCode.SUBMISSION_NOT_FOUND, 404, 'Submission not found'),
   entry(ErrorCode.SUBMISSION_ANSWERS_REQUIRED, 400, 'Response text is required'),
-]);
+]) as Record<ErrorCode, ErrorCatalogEntry>;
 
 /** All error codes as a readonly string union type (SDK-friendly). */
 export const ERROR_CODES = Object.values(ErrorCode) as ErrorCode[];

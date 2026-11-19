@@ -188,6 +188,34 @@ router.get(
 
 /**
  * @swagger
+ * /api/v1/learning-paths/{pathId}/prerequisites:
+ *   post:
+ *     summary: Add prerequisite to learning path
+ *     tags: [Learning Paths]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: pathId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *     responses:
+ *       201:
+ *         description: Prerequisite added successfully
+ *       422:
+ *         description: Cycle detected
+ */
+router.post(
+  "/:pathId/prerequisites",
+  validatePathId,
+  validateRequest,
+  LearningPathController.addPrerequisite,
+);
+
+/**
+ * @swagger
  * /api/v1/learning-paths/{pathId}:
  *   put:
  *     summary: Update learning path

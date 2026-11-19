@@ -56,6 +56,19 @@ const config: Config = {
   forceExit: true,
   // Detect open handles in non-CI environments for debugging
   detectOpenHandles: process.env.CI !== 'true',
+  // Generate HTML test execution report
+  reporters: [
+    'default',
+    [
+      'jest-html-reporter',
+      {
+        pageTitle: 'MentorsMind E2E Test Report',
+        outputPath: './reports/e2e-report.html',
+        includeFailureMsg: true,
+        includeConsoleLog: true,
+      },
+    ],
+  ],
 };
 
 export default config;

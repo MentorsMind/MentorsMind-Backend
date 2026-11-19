@@ -60,6 +60,8 @@ export interface PaymentRecord {
   asset_code: string | null;
   asset_issuer: string | null;
   asset_type: string | null;
+  payment_rail: string | null;
+  external_reference: string | null;
   stellar_tx_hash: string | null;
   from_address: string | null;
   to_address: string | null;
@@ -122,23 +124,29 @@ export const PaymentsService = {
     const assetIssuer = assetDef.issuer ?? null;
     const assetType = assetDef.code === "XLM" ? "native" : "credit_alphanum4";
 
-    // Validate quote if provided (enforces 2% rate-drift guard)
+    // Validate quote if provided (enforces 2% rate-drift guard AND 30s expiry)
     let quotedRate: string | null = null;
     let isPathPayment = false;
     if (quoteId) {
       const quote = await AssetExchangeService.validateQuote(quoteId);
       quotedRate = quote.rate;
       isPathPayment = quote.pathPaymentRequired;
+
+      // Enforce 30-second quote expiry
+      if (Date.now() > new Date(quote.expiresAt).getTime()) {
+        throw createError(ErrorCode.PAYMENT_QUOTE_EXPIRED, 400);
+      }
     }
 
     const { rows } = await pool.query<PaymentRecord>(
       `INSERT INTO transactions
          (user_id, booking_id, type, status, amount, currency,
           asset_code, asset_issuer, asset_type,
+          payment_rail, external_reference,
           from_address, to_address, platform_fee, description,
           quote_id, quoted_rate, path_payment,
           initiated_at, created_at, updated_at)
-       VALUES ($1, $2, 'payment', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+       VALUES ($1, $2, 'payment', 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                NOW(), NOW(), NOW())
        RETURNING *`,
       [
@@ -149,6 +157,8 @@ export const PaymentsService = {
         assetCode,
         assetIssuer,
         assetType,
+        null,
+        null,
         fromAddress ?? null,
         toAddress ?? null,
         platformFee,
@@ -178,7 +188,7 @@ export const PaymentsService = {
        WHERE t.id = $1 AND t.user_id = $2`,
       [paymentId, userId],
     );
-    if (!rows[0]) throw createError("Payment not found", 404);
+    if (!rows[0]) throw createError(ErrorCode.PAYMENT_NOT_FOUND, 404);
     return rows[0];
   },
 
@@ -200,6 +210,90 @@ export const PaymentsService = {
     };
   },
 
+  /**
+   * Idempotent status transition for Stellar monitor retries / duplicate
+   * webhook delivery (issue #1285).
+   *
+   * Uses `SELECT ... FOR UPDATE` inside a transaction so concurrent retries
+   * serialize on the payment row:
+   * - terminal (`completed`/`failed`) rows are never overwritten; same hash
+   *   returns the existing record, different hash throws CONFLICT.
+   * - non-terminal rows with an existing hash different from the incoming
+   *   hash throw CONFLICT (prevents two hashes landing on one payment).
+   */
+  async updatePaymentStatus(
+    paymentId: string,
+    stellarTxHash: string,
+    status: PaymentStatus = "completed",
+  ): Promise<PaymentRecord> {
+    if (!stellarTxHash || typeof stellarTxHash !== "string") {
+      throw createError(ErrorCode.PAYMENT_INVALID_TX_HASH, 400);
+    }
+
+    return DatabaseService.withTransaction(async (client) => {
+      const { rows } = await client.query<PaymentRecord>(
+        `SELECT * FROM transactions WHERE id = $1 FOR UPDATE`,
+        [paymentId],
+      );
+      const existing = rows[0];
+      if (!existing) throw createError(ErrorCode.PAYMENT_NOT_FOUND, 404);
+
+      // Terminal states are immutable: same hash = idempotent replay,
+      // different hash = conflicting retry.
+      if (existing.status === "completed" || existing.status === "failed") {
+        if (
+          existing.stellar_tx_hash &&
+          existing.stellar_tx_hash !== stellarTxHash
+        ) {
+          throw createError(ErrorCode.CONFLICT, 409, {
+            paymentId,
+            existingHash: existing.stellar_tx_hash,
+          });
+        }
+        return existing;
+      }
+
+      // Non-terminal row already bound to a different hash.
+      if (
+        existing.stellar_tx_hash &&
+        existing.stellar_tx_hash !== stellarTxHash
+      ) {
+        throw createError(ErrorCode.CONFLICT, 409, {
+          paymentId,
+          existingHash: existing.stellar_tx_hash,
+        });
+      }
+
+      // Same hash + same status replay.
+      if (
+        existing.stellar_tx_hash === stellarTxHash &&
+        existing.status === status
+      ) {
+        return existing;
+      }
+
+      const { rows: updatedRows } = await client.query<PaymentRecord>(
+        `UPDATE transactions
+         SET status = $2,
+             stellar_tx_hash = $3,
+             external_reference = COALESCE(external_reference, $3),
+             completed_at = CASE WHEN $2 = 'completed' THEN NOW() ELSE completed_at END,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [paymentId, status, stellarTxHash],
+      );
+
+      if (!updatedRows[0])
+        throw createError(ErrorCode.PAYMENT_CONFIRM_FAILED, 500);
+      logger.info("Payment status updated (idempotent)", {
+        paymentId,
+        status,
+      });
+      return updatedRows[0];
+    });
+  },
+
   async confirmPayment(
     paymentId: string,
     userId: string,
@@ -208,17 +302,14 @@ export const PaymentsService = {
     const payment = await this.getPaymentById(paymentId, userId);
 
     if (payment.status === "completed")
-      throw createError("Payment already confirmed", 409);
+      throw createError(ErrorCode.PAYMENT_ALREADY_CONFIRMED, 409);
     if (!["pending", "processing"].includes(payment.status)) {
-      throw createError(
-        `Cannot confirm payment in ${payment.status} status`,
-        400,
-      );
+      throw createError(ErrorCode.PAYMENT_INVALID_STATUS, 400);
     }
 
     // Validate stellarTxHash format
     if (!stellarTxHash || typeof stellarTxHash !== 'string' || stellarTxHash.length !== 64 || !/^[a-fA-F0-9]+$/.test(stellarTxHash)) {
-      throw createError("Invalid Stellar transaction hash format", 400);
+      throw createError(ErrorCode.PAYMENT_INVALID_TX_HASH, 400);
     }
 
     // 1. Check idempotency: ensure this tx hash hasn't been used for another payment
@@ -227,7 +318,7 @@ export const PaymentsService = {
       [stellarTxHash, paymentId]
     );
     if (idempotencyCheck.rows.length > 0) {
-      throw createError("This transaction hash has already been used for another payment", 409);
+      throw createError(ErrorCode.PAYMENT_REFERENCE_ALREADY_USED, 409);
     }
 
     // 2. Verify transaction on Stellar network with timeout
@@ -236,23 +327,23 @@ export const PaymentsService = {
       tx = await stellarService.getTransaction(stellarTxHash);
     } catch (error) {
       logger.error("Failed to fetch Stellar transaction", { stellarTxHash, error });
-      throw createError("Unable to verify transaction on Stellar network", 400);
+      throw createError(ErrorCode.PAYMENT_TX_VERIFICATION_FAILED, 400);
     }
     
     if (!tx.successful) {
-      throw createError("Stellar transaction was not successful", 400);
+      throw createError(ErrorCode.PAYMENT_TX_NOT_SUCCESSFUL, 400);
     }
     
     // Verify transaction is recent (within 24 hours)
-    const txCreatedAt = new Date(tx.created_at);
+    const txCreatedAt = new Date((tx as any).created_at ?? Date.now());
     const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     if (txCreatedAt < twentyFourHoursAgo) {
-      throw createError("Transaction is too old to confirm (must be within 24 hours)", 400);
+      throw createError(ErrorCode.PAYMENT_TX_TOO_OLD, 400);
     }
     
     if (payment.from_address && tx.source_account !== payment.from_address) {
       throw createError(
-        "Transaction source account does not match payment sender",
+        ErrorCode.PAYMENT_SOURCE_ACCOUNT_MISMATCH,
         400,
       );
     }
@@ -263,7 +354,7 @@ export const PaymentsService = {
       operations = await stellarService.getTransactionOperations(stellarTxHash);
     } catch (error) {
       logger.error("Failed to fetch transaction operations", { stellarTxHash, error });
-      throw createError("Unable to verify transaction operations", 400);
+      throw createError(ErrorCode.PAYMENT_TX_VERIFICATION_FAILED, 400);
     }
     
     const matchingPaymentOp = operations.find((op) => {
@@ -313,7 +404,7 @@ export const PaymentsService = {
         }))
       });
       throw createError(
-        "Transaction does not contain a matching payment operation",
+        ErrorCode.PAYMENT_NO_MATCHING_OPERATION,
         400,
       );
     }
@@ -338,13 +429,18 @@ export const PaymentsService = {
     await DatabaseService.withTransaction(async (client) => {
       const { rows } = await client.query<PaymentRecord>(
         `UPDATE transactions
-         SET status = 'completed', stellar_tx_hash = $2, completed_at = NOW(), updated_at = NOW()
+         SET status = 'completed',
+             payment_rail = 'stellar',
+             external_reference = $2,
+             stellar_tx_hash = $2,
+             completed_at = NOW(),
+             updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
         [paymentId, stellarTxHash],
       );
 
-      if (!rows[0]) throw createError("Failed to confirm payment", 500);
+      if (!rows[0]) throw createError(ErrorCode.PAYMENT_CONFIRM_FAILED, 500);
 
       if (payment.booking_id) {
         await client.query(
@@ -432,21 +528,14 @@ export const PaymentsService = {
 
     const where = conditions.join(" AND ");
 
-    // Count query uses the same filters (without limit)
-    const countParams = [...params];
-
     // Add limit as a proper parameter
     params.push(limit + 1);
     const limitPlaceholder = `$${idx++}`;
 
-    const [{ rows }, { rows: countRows }] = await Promise.all([
+    const [{ rows }] = await Promise.all([
       pool.query<PaymentRecord>(
-        `SELECT * FROM transactions t WHERE ${where} ORDER BY t.created_at DESC, t.id DESC LIMIT ${limitPlaceholder}`,
+        `SELECT t.*, COUNT(*) OVER() AS total_count FROM transactions t WHERE ${where} ORDER BY t.created_at DESC, t.id DESC LIMIT ${limitPlaceholder}`,
         params,
-      ),
-      pool.query(
-        `SELECT COUNT(*) FROM transactions t WHERE ${where}`,
-        countParams,
       ),
     ]);
 
@@ -465,7 +554,10 @@ export const PaymentsService = {
       payments: data,
       next_cursor,
       has_more,
-      total: parseInt(countRows[0].count, 10),
+      total: parseInt(
+        (rows[0] as unknown as { total_count?: string })?.total_count ?? "0",
+        10,
+      ),
     };
   },
 
@@ -506,9 +598,9 @@ export const PaymentsService = {
     const payment = await this.getPaymentById(paymentId, userId);
 
     if (payment.status === "refunded")
-      throw createError("Payment already refunded", 409);
+      throw createError(ErrorCode.PAYMENT_ALREADY_REFUNDED, 409);
     if (payment.status !== "completed")
-      throw createError("Only completed payments can be refunded", 400);
+      throw createError(ErrorCode.PAYMENT_REFUND_NOT_ALLOWED, 400);
 
     const client = await pool.connect();
     try {
@@ -595,11 +687,11 @@ export const PaymentsService = {
        WHERE status IN ('pending', 'processing')
        ORDER BY
          CASE
-           WHEN to_address = $2 THEN 0
+           WHEN to_address = $1 THEN 0
            ELSE 1
          END
        LIMIT 1`,
-      [payload.transaction_hash, payload.to ?? null],
+      [payload.to ?? null],
     );
 
     if (!rows[0]) {
@@ -652,13 +744,42 @@ export const PaymentsService = {
     }
 
     // 5. Update payment and booking
-    const { rows: updatedRows } = await pool.query<PaymentRecord>(
-      `UPDATE transactions
-       SET status = 'completed', stellar_tx_hash = $2, completed_at = NOW(), updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [payment.id, payload.transaction_hash],
-    );
+    // The status guard makes the transition atomic: of two concurrent deliveries
+    // for the same payment only one matches the row. A UNIQUE violation on
+    // stellar_tx_hash (another payment already owns this hash) is the last line
+    // of defence and is treated as an already-processed duplicate.
+    let updatedRows: PaymentRecord[];
+    try {
+      ({ rows: updatedRows } = await pool.query<PaymentRecord>(
+        `UPDATE transactions
+         SET status = 'completed',
+             payment_rail = 'stellar',
+             external_reference = $2,
+             stellar_tx_hash = $2,
+             completed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+           AND status IN ('pending', 'processing')
+         RETURNING *`,
+        [payment.id, payload.transaction_hash],
+      ));
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        logger.info("Webhook: duplicate transaction hash rejected by UNIQUE constraint", {
+          txHash: payload.transaction_hash,
+        });
+        return { processed: false, message: "Transaction hash already processed" };
+      }
+      throw err;
+    }
+
+    if (updatedRows.length === 0) {
+      logger.info("Webhook: payment already completed by a concurrent delivery", {
+        paymentId: payment.id,
+        txHash: payload.transaction_hash,
+      });
+      return { processed: false, message: "Transaction hash already processed" };
+    }
 
     if (payment.booking_id) {
       await pool.query(

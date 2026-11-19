@@ -1,28 +1,109 @@
+﻿import { env } from "../config/env";
+import pino from "pino";
+import { maskPIIDeep } from "./pii-mask";
+
+// ---------------------------------------------------------------------------
+// Minimal pino-compatible type so we don't need pino installed at type-check
+// time. The actual pino instance is created at runtime via require().
+// ---------------------------------------------------------------------------
+interface PinoLogger {
+  level: string;
+  info(obj: object | string, msg?: any, ...args: unknown[]): void;
+  debug(obj: object | string, msg?: any, ...args: unknown[]): void;
+  warn(obj: object | string, msg?: any, ...args: unknown[]): void;
+  error(obj: object | string, msg?: any, ...args: unknown[]): void;
+  fatal(obj: object | string, msg?: any, ...args: unknown[]): void;
+  trace(obj: object | string, msg?: any, ...args: unknown[]): void;
+  child(bindings: Record<string, unknown>): PinoLogger;
+}
+
+const REDACT_PATHS = [
+  "password",
+  "token",
+  "secret",
+  "secretKey",
+  "authorization",
+  "refreshToken",
+  "apiKey",
+  "privateKey",
+  "*.password",
+  "*.token",
+  "*.secret",
+  "*.secretKey",
+  "*.authorization",
+  "*.refreshToken",
+  "*.apiKey",
+  "*.privateKey",
+  "req.headers.authorization",
+  "req.body.password",
+  "req.body.token",
+];
+
+const IS_PRODUCTION = env.NODE_ENV === "production";
+const IS_TEST = env.NODE_ENV === "test";
+const LOG_LEVEL: string =
+  ((env as Record<string, unknown>).LOG_LEVEL as string) ??
+  (IS_TEST ? "silent" : IS_PRODUCTION ? "info" : "debug");
+
+function createPinoLogger(): PinoLogger {
+  return (pino as unknown as (opts: unknown) => PinoLogger)({
+    level: LOG_LEVEL,
+    redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
+    ...(IS_PRODUCTION
+      ? {}
+      : {
+          transport: {
+            target: "pino-pretty",
+            options: { colorize: true, translateTime: "HH:MM:ss" },
+          },
+        }),
+  });
+}
+
+export const logger: PinoLogger = createPinoLogger();
+export default logger;
+
 /**
- * Simple Logger Utility
- * Provides consistent logging across services
+ * Context-bound logger. Binds a `context` field to every log line.
+ * Use `new Logger("MyService")` in service classes.
+ * Prefer the module-level `logger` singleton for most use cases.
  */
-
 export class Logger {
-  private context: string;
+  private child: PinoLogger;
 
-  constructor(context: string) {
-    this.context = context;
+  constructor(context: string = "App") {
+    this.child = logger.child({ context });
   }
 
-  public info(message: string, ...args: any[]): void {
-    console.log(`[INFO] [${this.context}] ${message}`, ...args);
+  info(obj: object | string, msg?: any): void {
+    if (typeof obj === "string") {
+      this.child.info(obj);
+    } else {
+      this.child.info(maskPIIDeep(obj) as object, msg ?? "");
+    }
   }
 
-  public debug(message: string, ...args: any[]): void {
-    console.log(`[DEBUG] [${this.context}] ${message}`, ...args);
+  debug(obj: object | string, msg?: any): void {
+    if (typeof obj === "string") {
+      this.child.debug(obj);
+    } else {
+      this.child.debug(maskPIIDeep(obj) as object, msg ?? "");
+    }
   }
 
-  public warn(message: string, ...args: any[]): void {
-    console.warn(`[WARN] [${this.context}] ${message}`, ...args);
+  warn(obj: object | string, msg?: any): void {
+    if (typeof obj === "string") {
+      this.child.warn(obj);
+    } else {
+      this.child.warn(maskPIIDeep(obj) as object, msg ?? "");
+    }
   }
 
-  public error(message: string, ...args: any[]): void {
-    console.error(`[ERROR] [${this.context}] ${message}`, ...args);
+  error(obj: object | string, msg?: any): void {
+    if (typeof obj === "string") {
+      this.child.error(obj);
+    } else {
+      this.child.error(maskPIIDeep(obj) as object, msg ?? "");
+    }
   }
 }

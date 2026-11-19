@@ -67,7 +67,7 @@ function checkCircuitBreaker(): void {
   }
 }
 
-function onPoolPressure(): void {
+export function onPoolPressure(): void {
   consecutiveExhaustionCount++;
   logger.warn('Pool pressure detected', { consecutiveExhaustionCount });
 

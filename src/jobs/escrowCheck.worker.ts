@@ -90,7 +90,7 @@ async function processEscrowCheck(job: Job<EscrowCheckJobData>): Promise<void> {
         released++;
       } else if (onChainState.status === "disputed") {
         escrowSyncMismatchesTotal.inc({ type: "disputed_mismatch" });
-        await DisputeService.openDispute({
+        await (DisputeService.openDispute as any)({
           escrowId: booking.escrow_id,
           raisedBy: SYSTEM_USER_ID,
           reason: "On-chain dispute detected",

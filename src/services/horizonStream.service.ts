@@ -5,17 +5,30 @@ import { WalletModel } from "../models/wallet.model";
 import { SocketService } from "./socket.service";
 import { logger } from "../utils/logger.utils";
 import { EmailService } from "./email.service";
+import {
+  loadStellarStreamCursor,
+  saveStellarStreamCursor,
+} from "../utils/stellar-cursor.utils";
+import {
+  stellarStreamCursorGauge,
+  stellarStreamDisconnectsTotal,
+  stellarStreamFallbackPollingTotal,
+  stellarStreamReconnectDelaySeconds,
+  stellarStreamReconnectsTotal,
+} from "../metrics/stellar-metrics";
 import type { StellarPaymentRecord } from "../types/stellar.types";
 
 const LARGE_TRANSACTION_THRESHOLD_XLM = 1000;
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_STREAM_RECONNECTION_ATTEMPTS = 10;
 
 interface StreamSubscription {
   close: (() => void) | null;
   reconnectAttempts: number;
   cursor: string;
   reconnectTimer: NodeJS.Timeout | null;
+  fallbackPolling: boolean;
 }
 
 export class HorizonStreamService {
@@ -42,22 +55,30 @@ export class HorizonStreamService {
       return;
     }
 
+    const persistedCursor = await loadStellarStreamCursor(account);
     const state: StreamSubscription = existing ?? {
       close: null,
       reconnectAttempts: 0,
-      cursor: "now",
+      cursor: persistedCursor,
       reconnectTimer: null,
+      fallbackPolling: false,
     };
+
+    state.cursor = persistedCursor;
+    state.fallbackPolling = false;
 
     state.close = stellarService.streamPayments(
       account,
       async (payment) => {
         state.cursor = payment.id;
         state.reconnectAttempts = 0;
+        await saveStellarStreamCursor(account, payment.id);
+        stellarStreamCursorGauge.set({ account }, Date.now());
         await this.processPaymentOperation(payment, account);
       },
       state.cursor,
       () => {
+        stellarStreamDisconnectsTotal.inc({ account });
         this.scheduleReconnect(account);
       },
     );
@@ -68,7 +89,17 @@ export class HorizonStreamService {
 
   scheduleReconnect(account: string): void {
     const state = this.subscriptions.get(account);
-    if (!state || state.reconnectTimer) {
+    if (!state || state.reconnectTimer || state.fallbackPolling) {
+      return;
+    }
+
+    if (state.reconnectAttempts >= MAX_STREAM_RECONNECTION_ATTEMPTS) {
+      this.startFallbackPolling(account).catch((error) => {
+        logger.error("Failed to start Stellar fallback polling", {
+          account,
+          error: error instanceof Error ? error.message : error,
+        });
+      });
       return;
     }
 
@@ -77,6 +108,9 @@ export class HorizonStreamService {
       MAX_RECONNECT_DELAY_MS,
     );
     state.reconnectAttempts += 1;
+    stellarStreamReconnectDelaySeconds.observe({ account }, delay / 1000);
+    stellarStreamReconnectsTotal.inc({ account, outcome: "scheduled" });
+
     state.reconnectTimer = setTimeout(() => {
       state.reconnectTimer = null;
       state.close?.();
@@ -86,9 +120,66 @@ export class HorizonStreamService {
           account,
           error: error instanceof Error ? error.message : error,
         });
+        stellarStreamReconnectsTotal.inc({ account, outcome: "failed" });
         this.scheduleReconnect(account);
       });
     }, delay);
+  }
+
+  async startFallbackPolling(account: string): Promise<void> {
+    const state = this.subscriptions.get(account);
+    if (!state || state.fallbackPolling) {
+      return;
+    }
+
+    state.fallbackPolling = true;
+    stellarStreamFallbackPollingTotal.inc({ account });
+    logger.warn("Stellar stream reconnect attempts exhausted; falling back to polling", {
+      account,
+      cursor: state.cursor,
+    });
+
+    try {
+      const cursor = state.cursor && state.cursor !== "now" ? state.cursor : undefined;
+      const { transactions } = await stellarService.getTransactionHistory(
+        account,
+        cursor,
+        200,
+        "asc",
+      );
+
+      for (const tx of transactions) {
+        const operations = await stellarService.getTransactionOperations(tx.hash);
+        for (const operation of operations) {
+          if (operation.type !== "payment") continue;
+
+          const payment: StellarPaymentRecord = {
+            id: operation.id,
+            type: operation.type,
+            createdAt: operation.created_at ?? tx.createdAt,
+            transactionHash: tx.hash,
+            ledgerSequence: tx.ledger,
+            from: operation.from ?? tx.sourceAccount,
+            to: operation.to ?? operation.account ?? operation.destination_account ?? "",
+            assetType: operation.asset_type ?? "native",
+            assetCode: operation.asset_code,
+            assetIssuer: operation.asset_issuer,
+            amount: operation.amount ?? "0",
+          };
+
+          state.cursor = payment.id;
+          await saveStellarStreamCursor(account, payment.id);
+          await this.processPaymentOperation(payment, account);
+        }
+      }
+    } catch (error) {
+      logger.error("Stellar stream fallback polling failed", {
+        account,
+        error: error instanceof Error ? error.message : error,
+      });
+    } finally {
+      state.fallbackPolling = false;
+    }
   }
 
   async processPaymentOperation(

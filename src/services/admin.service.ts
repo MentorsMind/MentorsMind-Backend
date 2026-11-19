@@ -1,4 +1,5 @@
 import pool from "../config/database";
+import { redis } from "../config/redis";
 import { env } from "../config/env";
 import {
   AuditLoggerService,
@@ -17,6 +18,12 @@ import { LogLevel, AuditAction } from "../utils/log-formatter.utils";
 import { AuditLogService } from "./auditLog.service";
 import { enqueueEmail } from "../queues/email.queue";
 import { TokenService } from "./token.service";
+import { MfaService } from "./mfa.service";
+
+const ADMIN_STEPUP_PREFIX = "admin_stepup:";
+const ADMIN_STEPUP_LIMIT = 5;
+const ADMIN_STEPUP_TTL_SECONDS = 5 * 60;
+const memoryStepUpStore = new Map<string, { count: number; lockedUntil?: number }>();
 
 export interface AdminStats {
   users: {
@@ -42,6 +49,130 @@ export interface AdminStats {
 }
 
 export const AdminService = {
+  async requireAdminMfa(userId: string, role?: string): Promise<{ allowed: boolean; mfaEnabled: boolean; error?: string }> {
+    if (role && role !== "admin") {
+      return { allowed: true, mfaEnabled: true };
+    }
+
+    const { rows } = await pool.query<{ mfa_enabled: boolean }>(
+      `SELECT mfa_enabled FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
+
+    const mfaEnabled = Boolean(rows[0]?.mfa_enabled);
+    if (!mfaEnabled) {
+      return {
+        allowed: false,
+        mfaEnabled: false,
+        error: "Admin MFA required",
+      };
+    }
+
+    return { allowed: true, mfaEnabled: true };
+  },
+
+  async verifyStepUpCode(
+    userId: string,
+    code: string,
+    ipAddress?: string,
+  ): Promise<{ valid: boolean; locked: boolean; attemptsRemaining?: number; error?: string }> {
+    const key = `${ADMIN_STEPUP_PREFIX}${userId}`;
+    const attempts = await this.getStepUpAttempts(key);
+
+    if (attempts >= ADMIN_STEPUP_LIMIT) {
+      return {
+        valid: false,
+        locked: true,
+        attemptsRemaining: 0,
+        error: "Step-up MFA temporarily locked. Please try again later.",
+      };
+    }
+
+    const { rows } = await pool.query<{ mfa_enabled: boolean; mfa_secret: string | null }>(
+      `SELECT mfa_enabled, mfa_secret FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId],
+    );
+
+    if (!rows[0]?.mfa_enabled) {
+      return {
+        valid: false,
+        locked: false,
+        attemptsRemaining: Math.max(0, ADMIN_STEPUP_LIMIT - attempts - 1),
+        error: "Admin MFA is not enabled",
+      };
+    }
+
+    let valid = false;
+    if (rows[0].mfa_secret) {
+      try {
+        const secret = await MfaService.decryptSecret(rows[0].mfa_secret);
+        valid = await MfaService.verifyTotpToken(code, secret);
+      } catch {
+        valid = false;
+      }
+    }
+
+    if (!valid) {
+      const backupCodeValid = await MfaService.verifyAndConsumeBackupCode(userId, code);
+      valid = backupCodeValid.valid;
+    }
+
+    if (valid) {
+      await this.clearStepUpAttempts(key);
+      return { valid: true, locked: false, attemptsRemaining: ADMIN_STEPUP_LIMIT };
+    }
+
+    const nextCount = await this.incrementStepUpAttempts(key);
+    const remaining = Math.max(0, ADMIN_STEPUP_LIMIT - nextCount);
+    const locked = nextCount >= ADMIN_STEPUP_LIMIT;
+    return {
+      valid: false,
+      locked,
+      attemptsRemaining: remaining,
+      error: locked
+        ? "Step-up MFA temporarily locked. Please try again later."
+        : `Invalid step-up MFA code. ${remaining} attempts remaining.`,
+    };
+  },
+
+  async incrementStepUpAttempts(key: string): Promise<number> {
+    if (redis.status === "ready") {
+      const current = Number((await redis.get(key)) || "0");
+      const next = current + 1;
+      await redis.set(key, String(next), "EX", ADMIN_STEPUP_TTL_SECONDS);
+      return next;
+    }
+
+    const existing = memoryStepUpStore.get(key) ?? { count: 0 };
+    const next = existing.count + 1;
+    memoryStepUpStore.set(key, { count: next, lockedUntil: Date.now() + ADMIN_STEPUP_TTL_SECONDS * 1000 });
+    return next;
+  },
+
+  async getStepUpAttempts(key: string): Promise<number> {
+    if (redis.status === "ready") {
+      const value = await redis.get(key);
+      return Number(value || "0");
+    }
+
+    const existing = memoryStepUpStore.get(key);
+    if (!existing) return 0;
+    if (existing.lockedUntil && existing.lockedUntil <= Date.now()) {
+      memoryStepUpStore.delete(key);
+      return 0;
+    }
+    return existing.count;
+  },
+
+  async clearStepUpAttempts(key: string): Promise<void> {
+    if (redis.status === "ready") {
+      await redis.del(key);
+      return;
+    }
+
+    memoryStepUpStore.delete(key);
+  },
+
   async getStats(): Promise<AdminStats> {
     const [
       userStats,

@@ -1,4 +1,4 @@
-import { logger } from "../utils/logger";
+﻿import { Logger, logger } from "../utils/logger.utils";
 
 export interface LearningGoal {
   id: string;
@@ -30,8 +30,13 @@ export interface LearningPath {
   updatedAt: Date;
 }
 
+import { PrerequisiteValidatorService, Prerequisite } from "./prerequisite-validator.service";
+import { createError } from "../middleware/errorHandler";
+
 export class LearningPathService {
   private paths: Map<string, LearningPath> = new Map();
+  private pathPrerequisites: Map<string, Prerequisite[]> = new Map(); // Mock DB for prerequisites
+
 
   async generatePath(
     goal: LearningGoal,
@@ -56,7 +61,31 @@ export class LearningPathService {
     };
 
     this.paths.set(path.id, path);
+    this.pathPrerequisites.set(path.id, []);
     return path;
+  }
+
+  async addPrerequisite(pathId: string, prerequisite: Prerequisite): Promise<Prerequisite> {
+    const path = this.paths.get(pathId);
+    if (!path) throw createError("Path not found", 404);
+
+    const currentPrerequisites = this.pathPrerequisites.get(pathId) || [];
+    
+    // Create a copy and add the new prerequisite to check for cycles
+    const proposedPrerequisites = [...currentPrerequisites, prerequisite];
+    
+    // Check for cycles using Kahn's algorithm
+    const cyclePath = PrerequisiteValidatorService.detectCyclesKahn(proposedPrerequisites);
+    
+    if (cyclePath) {
+      throw createError(`Cycle detected involving milestones: ${cyclePath.join(' -> ')}`, 422);
+    }
+    
+    // No cycle detected, save prerequisite
+    currentPrerequisites.push(prerequisite);
+    this.pathPrerequisites.set(pathId, currentPrerequisites);
+    
+    return prerequisite;
   }
 
   async adjustPath(pathId: string, feedback: any): Promise<LearningPath> {

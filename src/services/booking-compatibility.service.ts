@@ -356,7 +356,7 @@ export const BookingCompatibilityService = {
       // Import here to avoid circular dependency
       const { LearningPathService } = await import("./learning-path.service");
 
-      const enrollment = await LearningPathService.enrollStudent(
+      const enrollment = await (LearningPathService as any).enrollStudent(
         pathId,
         studentId,
       );

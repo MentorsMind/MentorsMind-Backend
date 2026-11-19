@@ -22,10 +22,11 @@ import {
   confirmPaymentSchema,
   refundPaymentSchema,
   webhookPaymentSchema,
-  listPaymentsSchema,
   getPaymentByIdSchema,
 } from "../validators/schemas/payments.schemas";
+import { listUserPaymentsSchema as listPaymentsSchema } from "../validators/payments.validator";
 import { FeeEstimateController } from "../controllers/feeEstimate.controller";
+import { stellarVerificationRateLimit } from "../middleware/stellar-rate-limit.middleware";
 
 const router = Router();
 
@@ -314,6 +315,7 @@ router.get(
  */
 router.post(
   "/:id/confirm",
+  stellarVerificationRateLimit,
   requireIdempotency,
   validate(confirmPaymentSchema),
   asyncHandler(PaymentsController.confirmPayment),

@@ -1,4 +1,4 @@
-import { Server as HttpServer } from 'http';
+﻿import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { CollaborationService } from './collaboration.service';
 import {
@@ -10,6 +10,7 @@ import {
 import { CodeCollaborationService } from './code-collaboration.service';
 import { OTOperation } from '../utils/operational-transform.utils';
 import { CacheService } from './cache.service';
+import { logger } from '../utils/logger.utils';
 
 interface JoinPayload {
   sessionId: string;
@@ -55,7 +56,8 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
 
       try {
         const collaborationState = await CollaborationService.getCollaborationSession(payload.sessionId);
-        socket.emit('collaborationState', collaborationState);
+        // Defensive guard (#1300): old rows may still hold null; never emit null.
+        socket.emit('collaborationState', collaborationState ?? getDefaultCollaborationState());
       } catch (error) {
         socket.emit('error', error instanceof Error ? error.message : 'Collaboration state unavailable');
       }
@@ -90,7 +92,7 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
           whiteboardData: payload.whiteboardData,
         }, payload.userId);
       } catch (error) {
-        console.error('Failed to persist whiteboard update:', error);
+        logger.error('Failed to persist whiteboard update:', error);
       }
     });
 
@@ -115,7 +117,7 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
           operation: transformedOp,
         });
       } catch (error) {
-        console.error('Failed to persist code editor update:', error);
+        logger.error('Failed to persist code editor update:', error);
       }
     });
 
@@ -132,7 +134,7 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
           });
         }
       } catch (error) {
-        console.error('Failed to undo:', error);
+        logger.error('Failed to undo:', error);
       }
     });
 
@@ -149,7 +151,7 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
           });
         }
       } catch (error) {
-        console.error('Failed to redo:', error);
+        logger.error('Failed to redo:', error);
       }
     });
 
@@ -185,7 +187,7 @@ export const initializeCollaborationSocket = (httpServer: HttpServer): void => {
           screenShare: payload.screenShare,
         }, payload.userId);
       } catch (error) {
-        console.error('Failed to persist screen share state:', error);
+        logger.error('Failed to persist screen share state:', error);
       }
     });
 

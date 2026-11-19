@@ -47,6 +47,21 @@ export function expect(actual: unknown) {
         throw new AssertionError(`expected ${JSON.stringify(actual)} to be falsy`);
       }
     },
+    toBeDefined() {
+      if (actual === undefined) {
+        throw new AssertionError('expected value to be defined');
+      }
+    },
+    toBeUndefined() {
+      if (actual !== undefined) {
+        throw new AssertionError(`expected ${JSON.stringify(actual)} to be undefined`);
+      }
+    },
+    toBeGreaterThan(expected: number) {
+      if (!(typeof actual === 'number' && actual > expected)) {
+        throw new AssertionError(`expected ${JSON.stringify(actual)} to be greater than ${expected}`);
+      }
+    },
   };
 }
 

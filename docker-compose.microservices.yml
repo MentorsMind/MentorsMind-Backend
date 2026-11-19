@@ -1,0 +1,81 @@
+# Microservices topology (issue #860).
+#
+# This runs the monolith behind the gateway alongside the extracted services.
+# It is additive: with no services registered, the gateway forwards nothing and
+# behaviour is identical to docker-compose.yml. Bring services up one at a time
+# as their boundaries are actually extracted.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.microservices.yml up
+version: "3.9"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  environment:
+    NODE_ENV: ${NODE_ENV:-development}
+    # Services share the primary database during migration. Splitting the
+    # datastore is a separate step and must not be implied by splitting the
+    # process — a shared database is the normal intermediate state.
+    DATABASE_URL: ${DATABASE_URL}
+    OTEL_EXPORTER_JAEGER_ENDPOINT: http://jaeger:14268/api/traces
+  depends_on:
+    - postgres
+    - redis
+
+services:
+  gateway:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/server.js"]
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL}
+      GATEWAY_ENABLED: "true"
+      # Empty by default: nothing is routed away from the monolith until a
+      # service is explicitly registered here.
+      GATEWAY_USER_SERVICE_URL: ${GATEWAY_USER_SERVICE_URL:-}
+      GATEWAY_BOOKING_SERVICE_URL: ${GATEWAY_BOOKING_SERVICE_URL:-}
+      GATEWAY_PAYMENT_SERVICE_URL: ${GATEWAY_PAYMENT_SERVICE_URL:-}
+    ports:
+      - "${GATEWAY_PORT:-3000}:3000"
+
+  user-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/services/user-service/main.js"]
+    environment:
+      SERVICE_NAME: user-service
+      SERVICE_PORT: "3001"
+    profiles: ["user-service"]
+
+  booking-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/services/booking-service/main.js"]
+    environment:
+      SERVICE_NAME: booking-service
+      SERVICE_PORT: "3002"
+    profiles: ["booking-service"]
+
+  payment-service:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["node", "dist/services/payment-service/main.js"]
+    environment:
+      SERVICE_NAME: payment-service
+      SERVICE_PORT: "3003"
+    profiles: ["payment-service"]
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "14268:14268"

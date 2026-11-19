@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { SearchService, GlobalSearchResultType } from '../services/search.service';
-import { AuthenticatedRequest } from '../types/api.types';
 
-export const findMentors = async (req: Request, res: Response) => {
+export const findMentors = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = (req as any).user?.id;
+    const userId = req.user?.id;
     const results = await SearchService.searchMentors(req.query, userId);
     return res.status(200).json({
       success: true,

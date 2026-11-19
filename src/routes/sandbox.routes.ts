@@ -1,19 +1,28 @@
-/**
+﻿/**
  * Sandbox Routes (issue #784)
  *
  * Fixture-data endpoints third-party developers can exercise end-to-end from
  * the Swagger "Try it out" UI without touching real users, payments, or
- * Stellar accounts. Only mounted/responsive when SANDBOX_MODE=true — see
+ * Stellar accounts. Only mounted/responsive when SANDBOX_MODE=true â€” see
  * docs/API_PORTAL_ONBOARDING.md for how this is wired into the docs portal.
  */
 import { Router, Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'crypto';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.utils';
 
 const router = Router();
 
+const isSandboxEnabled = (): boolean => {
+  return process.env.SANDBOX_MODE === 'true' && process.env.NODE_ENV !== 'production';
+};
+
 router.use((_req: Request, res: Response, next: NextFunction) => {
-  if (process.env.SANDBOX_MODE !== 'true') {
+  if (!isSandboxEnabled()) {
+    logger.warn('Sandbox endpoint accessed but sandbox mode is disabled', {
+      path: _req.path,
+      sandboxMode: process.env.SANDBOX_MODE,
+      nodeEnv: process.env.NODE_ENV,
+    });
     res.status(404).json({
       success: false,
       error: 'Sandbox mode is not enabled on this environment',
@@ -97,3 +106,4 @@ router.post('/bookings', (req: Request, res: Response) => {
 });
 
 export default router;
+

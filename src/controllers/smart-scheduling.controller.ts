@@ -1,16 +1,13 @@
 import { Request, Response } from "express";
+import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SmartSchedulingService } from "../services/smart-scheduling.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 
 export const SmartSchedulingController = {
-  /**
-   * Suggest optimal booking times between a mentor and mentee
-   * GET /api/v1/bookings/suggest-times
-   */
-  suggestOptimalTimes: asyncHandler(async (req: Request, res: Response) => {
+  suggestOptimalTimes: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { mentorId, durationMinutes, startDate, endDate } = req.query;
-    const menteeId = (req as any).user?.id || (req as any).user?.userId;
+    const menteeId = req.user?.id ?? req.user?.userId;
 
     if (!menteeId) {
       return ResponseUtil.unauthorized(res, "Authentication required");
@@ -41,13 +38,9 @@ export const SmartSchedulingController = {
     );
   }),
 
-  /**
-   * Suggest rescheduling times for an existing booking
-   * GET /api/v1/bookings/:id/suggest-reschedule
-   */
-  suggestReschedule: asyncHandler(async (req: Request, res: Response) => {
+  suggestReschedule: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const userId = req.user?.id ?? req.user?.userId;
 
     if (!userId) {
       return ResponseUtil.unauthorized(res, "Authentication required");

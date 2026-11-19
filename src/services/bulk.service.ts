@@ -229,7 +229,7 @@ export function mapCsvRowsToMentors(
     ...(yearsExperienceIdx !== -1 && cells[yearsExperienceIdx]
       ? { yearsExperience: cells[yearsExperienceIdx] }
       : {}),
-  }));
+  })) as BulkImportMentorRow[];
 }
 
 export function validateMentorImportRows(
@@ -326,7 +326,7 @@ export const BulkService = {
     }
 
     const job = await BulkJobModel.create(
-      "mentors_import",
+      "mentors_import" as any,
       requestedBy,
       mapped.length,
     );

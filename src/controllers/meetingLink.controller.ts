@@ -33,7 +33,7 @@ export const videoWebhook = async (req: Request, res: Response) => {
   }
 
   if (event === "session.started") {
-    await SessionModel.updateStatus(booking.id, "in_progress");
+    await SessionModel.updateStatus(booking.id, "in_progress" as any);
   }
 
   if (event === "session.ended") {

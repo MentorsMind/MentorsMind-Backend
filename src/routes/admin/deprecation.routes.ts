@@ -16,8 +16,16 @@ import {
 const router = Router();
 
 /**
- * GET /admin/deprecations
- * Get all deprecated endpoints with their status
+ * @swagger
+ * /admin/deprecations:
+ *   get:
+ *     summary: Get all deprecated endpoints with their status
+ *     tags: [Admin, Deprecation]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of deprecated endpoints
  */
 router.get('/deprecations', (req: Request, res: Response) => {
   const status = deprecationManager.getDeprecationStatus();
@@ -31,8 +39,16 @@ router.get('/deprecations', (req: Request, res: Response) => {
 });
 
 /**
- * GET /admin/deprecations/upcoming
- * Get endpoints that will sunset within 30 days
+ * @swagger
+ * /admin/deprecations/upcoming:
+ *   get:
+ *     summary: Get endpoints that will sunset within 30 days
+ *     tags: [Admin, Deprecation]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of upcoming sunset endpoints
  */
 router.get('/deprecations/upcoming', (req: Request, res: Response) => {
   const upcoming = getUpcomingSunsets();
@@ -48,8 +64,16 @@ router.get('/deprecations/upcoming', (req: Request, res: Response) => {
 });
 
 /**
- * GET /admin/deprecations/sunset
- * Get endpoints that have already sunset
+ * @swagger
+ * /admin/deprecations/sunset:
+ *   get:
+ *     summary: Get endpoints that have already sunset
+ *     tags: [Admin, Deprecation]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of sunset endpoints
  */
 router.get('/deprecations/sunset', (req: Request, res: Response) => {
   const sunset = getSunsetEndpoints();
@@ -65,8 +89,23 @@ router.get('/deprecations/sunset', (req: Request, res: Response) => {
 });
 
 /**
- * GET /admin/deprecations/:endpoint
- * Get details for a specific deprecated endpoint
+ * @swagger
+ * /admin/deprecations/{endpoint}:
+ *   get:
+ *     summary: Get details for a specific deprecated endpoint
+ *     tags: [Admin, Deprecation]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: endpoint
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Deprecation details
+ *       404:
+ *         description: Endpoint not found
  */
 router.get('/deprecations/:endpoint', (req: Request, res: Response) => {
   const endpoint = req.params.endpoint as string;
@@ -97,8 +136,33 @@ router.get('/deprecations/:endpoint', (req: Request, res: Response) => {
 });
 
 /**
- * POST /admin/deprecations
- * Register a new deprecated endpoint
+ * @swagger
+ * /admin/deprecations:
+ *   post:
+ *     summary: Register a new deprecated endpoint
+ *     tags: [Admin, Deprecation]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [endpoint, sunsetMonths]
+ *             properties:
+ *               endpoint: { type: string }
+ *               replacementEndpoint: { type: string }
+ *               migrationGuide: { type: string }
+ *               reason: { type: string }
+ *               sunsetMonths: { type: integer }
+ *     responses:
+ *       201:
+ *         description: Endpoint deprecated successfully
+ *       400:
+ *         description: Bad request
+ *       409:
+ *         description: Endpoint already deprecated
  */
 router.post('/deprecations', (req: Request, res: Response) => {
   try {

@@ -1,13 +1,13 @@
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import Redis from 'ioredis';
 import config from '../config';
-import { logger } from './logger';
+import { logger } from './logger.utils';
 
-const redisConfig = config.redis ? { url: config.redis.url } : { host: '127.0.0.1', port: 6379 };
+const redisConfig = config.redis ? { url: config.redis.url } : { url: "redis://localhost:6379" };
 // Use configuration URL if present, else default
 const redis = redisConfig.url
   ? new Redis(redisConfig.url)
-  : new Redis({ host: redisConfig.host, port: Number(redisConfig.port) || 6379 });
+  : new Redis({ host: (redisConfig as any).host, port: Number((redisConfig as any).port) || 6379 });
 
 export interface QueryOptions {
   useCache?: boolean;
@@ -140,7 +140,7 @@ export class QueryMonitor {
         queryPlan ? JSON.stringify(queryPlan) : null,
       ],
     ).catch((err) => {
-      console.error('[Query Monitor] Failed to log slow query:', err.message);
+      logger.error('[Query Monitor] Failed to log slow query:', err.message);
     });
   }
 

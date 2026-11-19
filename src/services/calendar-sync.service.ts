@@ -1,4 +1,7 @@
-import { logger } from "../utils/logger";
+import { db } from "../config/database";
+import { ErrorCode } from "../errors/error-codes";
+import type { AppError } from "../middleware/errorHandler";
+import { logger } from "../utils/logger.utils";
 import { CalendarEvent } from "./smart-calendar.service";
 
 export interface SyncStatus {
@@ -15,6 +18,16 @@ export class CalendarSyncService {
   private syncIntervals: Map<string, NodeJS.Timeout> = new Map();
 
   async startSync(userId: string, intervalMinutes: number = 15): Promise<void> {
+    if (!(await this.hasConnectedProvider(userId))) {
+      const error: AppError = new Error(
+        "No connected calendar provider found. Connect Google Calendar or Outlook before starting sync.",
+      );
+      error.code = ErrorCode.BAD_REQUEST;
+      error.statusCode = 400;
+      error.isOperational = true;
+      throw error;
+    }
+
     logger.info({ userId, intervalMinutes }, "Starting calendar sync");
 
     const interval = setInterval(
@@ -28,6 +41,16 @@ export class CalendarSyncService {
     await this.performSync(userId);
   }
 
+  private async hasConnectedProvider(userId: string): Promise<boolean> {
+    const { rows } = await db.query(
+      `SELECT 1 FROM oauth_accounts
+       WHERE user_id = $1 AND provider IN ('google', 'microsoft')
+       LIMIT 1`,
+      [userId],
+    );
+    return rows.length > 0;
+  }
+
   async stopSync(userId: string): Promise<void> {
     const interval = this.syncIntervals.get(userId);
     if (interval) {
@@ -35,6 +58,17 @@ export class CalendarSyncService {
       this.syncIntervals.delete(userId);
       logger.info({ userId }, "Stopped calendar sync");
     }
+  }
+
+  /**
+   * Stops all active sync intervals. Called during graceful shutdown to
+   * ensure no orphaned timers remain after SIGTERM/SIGINT is received.
+   */
+  stopAllSyncs(): void {
+    const count = this.syncIntervals.size;
+    this.syncIntervals.forEach((interval) => clearInterval(interval));
+    this.syncIntervals.clear();
+    logger.info({ count }, 'Calendar sync intervals stopped');
   }
 
   async performSync(userId: string): Promise<SyncStatus> {
@@ -113,13 +147,14 @@ export class CalendarSyncService {
     let eventsUpdated = 0;
     let eventsDeleted = 0;
 
-    // Placeholder sync logic
+    // Check each event for duplicates
     for (const event of events) {
       const exists = await this.eventExists(userId, event.id);
       if (exists) {
         eventsUpdated++;
       } else {
         eventsAdded++;
+        // Code to insert event would go here
       }
     }
 
@@ -127,9 +162,21 @@ export class CalendarSyncService {
   }
 
   private async eventExists(userId: string, eventId: string): Promise<boolean> {
-    // Placeholder implementation
-    return false;
+    // Query the calendar_sync_events table to check if event already exists
+    const { rows } = await db.query(
+      `SELECT id FROM calendar_sync_events WHERE user_id = $1 AND external_id = $2`,
+      [userId, eventId],
+    );
+    return rows.length > 0;
   }
 }
 
 export const calendarSyncService = new CalendarSyncService();
+
+/**
+ * Standalone export for use in server.ts shutdown sequence.
+ * Delegates to the singleton instance's stopAllSyncs() method.
+ */
+export function stopAllSyncs(): void {
+  calendarSyncService.stopAllSyncs();
+}
