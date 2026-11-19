@@ -22,8 +22,29 @@ export interface EncryptionKeyset {
 let keyResolver: (() => Promise<EncryptionKeyset>) | null = null;
 let cachedKeyset: EncryptionKeyset | null = null;
 
+/**
+ * Derive a cryptographic key from raw key material using PBKDF2.
+ * 
+ * Security: PBKDF2 with 100k iterations hardens keys against brute-force attacks.
+ * This is essential for keys with low entropy (short strings, dictionary words).
+ * 
+ * - Algorithm: PBKDF2-SHA256
+ * - Iterations: 100,000 (OWASP 2023 recommendation for password hashing)
+ * - Salt: Fixed value ("mm_key_derivation") for deterministic derivation
+ * - Output: 32 bytes (256 bits) for AES-256
+ */
 function deriveKey(rawKey: string): Buffer {
-  return crypto.createHash("sha256").update(rawKey).digest();
+  const ITERATIONS = 100_000;
+  const SALT = "mm_key_derivation"; // Fixed salt ensures deterministic key derivation
+  const KEY_LENGTH = 32; // 256 bits for AES-256-GCM
+  
+  return crypto.pbkdf2Sync(
+    rawKey,
+    SALT,
+    ITERATIONS,
+    KEY_LENGTH,
+    "sha256",
+  );
 }
 
 function parseEncryptedValue(value: string): EncryptedValue {
