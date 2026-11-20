@@ -102,13 +102,26 @@ export const MfaService = {
 
   // ─── Backup Codes ────────────────────────────────────────────────────────
 
+  async generateBackupCodesAsync(count: number = BACKUP_CODE_COUNT): Promise<BackupCodeSet> {
+    const plain: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const code = this.formatBackupCode(crypto.randomBytes(5).toString('hex'));
+      plain.push(code);
+    }
+    // Parallelize bcrypt hashing to avoid blocking the event loop
+    const hashed = await Promise.all(
+      plain.map(code => bcrypt.hash(code, 12))
+    );
+    return { plain, hashed };
+  },
+
   generateBackupCodes(count: number = BACKUP_CODE_COUNT): BackupCodeSet {
     const plain: string[] = [];
     const hashed: string[] = [];
     for (let i = 0; i < count; i++) {
       const code = this.formatBackupCode(crypto.randomBytes(5).toString('hex'));
       plain.push(code);
-      hashed.push(bcrypt.hashSync(code, bcrypt.genSaltSync(10)));
+      hashed.push(bcrypt.hashSync(code, bcrypt.genSaltSync(12)));
     }
     return { plain, hashed };
   },
@@ -181,7 +194,7 @@ export const MfaService = {
     userId: string,
     deviceId?: string,
   ): Promise<{ plain: string[] } | { error: string }> {
-    const { plain, hashed } = this.generateBackupCodes();
+    const { plain, hashed } = await this.generateBackupCodesAsync();
     if (deviceId) {
       const owns = await MfaDeviceModel.findById(deviceId, userId);
       if (!owns) return { error: 'Device not found' };
@@ -233,7 +246,7 @@ export const MfaService = {
     const secret = await this.decryptSecret(params.encryptedSecret);
     const valid = await this.verifyTotpToken(params.token, secret);
     if (!valid) return { error: 'Invalid verification code' };
-    const { plain, hashed } = this.generateBackupCodes();
+    const { plain, hashed } = await this.generateBackupCodesAsync();
     const device = await MfaDeviceModel.createTotp({
       userId: params.userId,
       name: params.name,

@@ -12,10 +12,17 @@ interface EncryptedUserRow {
   pii_encryption_version: string | null;
 }
 
+interface MfaDeviceRow {
+  id: string;
+  user_id: string;
+  encrypted_secret: string | null;
+  pii_encryption_version: string | null;
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function runReEncryptionJob() {
-  logger.info("Starting re-encryption job for Google Calendar tokens");
+  logger.info("Starting re-encryption job for Google Calendar tokens and MFA TOTP secrets");
 
   const currentVersion = await EncryptionUtil.getCurrentKeyVersion();
   
@@ -30,6 +37,7 @@ export async function runReEncryptionJob() {
     return;
   }
 
+  // Re-encrypt Google Calendar tokens
   let totalProcessed = 0;
   let hasMore = true;
 
@@ -100,12 +108,76 @@ export async function runReEncryptionJob() {
     );
     const remaining = parseInt(remainingRes.rows[0].count, 10);
 
-    logger.info(`reEncrypted: ${totalProcessed}, remaining: ${remaining}`);
+    logger.info(`reEncrypted users: ${totalProcessed}, remaining: ${remaining}`);
 
     await sleep(DELAY_MS);
   }
 
-  logger.info("Re-encryption job completed");
+  // Re-encrypt MFA TOTP secrets
+  logger.info("Starting re-encryption of MFA TOTP secrets");
+  let mfaProcessed = 0;
+  let hasMfaMore = true;
+
+  while (hasMfaMore) {
+    const { rows } = await pool.query<MfaDeviceRow>(
+      `SELECT id, user_id, encrypted_secret, pii_encryption_version
+       FROM mfa_devices
+       WHERE type = 'totp'
+         AND encrypted_secret IS NOT NULL
+         AND (pii_encryption_version IS NULL OR pii_encryption_version < $1)
+       ORDER BY id ASC
+       LIMIT $2`,
+      [currentVersion, BATCH_SIZE]
+    );
+
+    if (rows.length === 0) {
+      hasMfaMore = false;
+      break;
+    }
+
+    for (const row of rows) {
+      if (row.encrypted_secret) {
+        try {
+          const newSecret = await EncryptionUtil.reEncrypt(
+            row.encrypted_secret,
+            oldKey,
+            newKey,
+            currentVersion
+          );
+          await pool.query(
+            `UPDATE mfa_devices
+             SET encrypted_secret = $1,
+                 pii_encryption_version = $2
+             WHERE id = $3`,
+            [newSecret, currentVersion, row.id]
+          );
+        } catch (err) {
+          logger.error(`Failed to re-encrypt TOTP secret for device ${row.id}`, { error: err });
+        }
+      }
+    }
+
+    mfaProcessed += rows.length;
+    
+    const remainingMfaRes = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)
+       FROM mfa_devices
+       WHERE type = 'totp'
+         AND encrypted_secret IS NOT NULL
+         AND (pii_encryption_version IS NULL OR pii_encryption_version < $1)`,
+      [currentVersion]
+    );
+    const remainingMfa = parseInt(remainingMfaRes.rows[0].count, 10);
+
+    logger.info(`reEncrypted MFA devices: ${mfaProcessed}, remaining: ${remainingMfa}`);
+
+    await sleep(DELAY_MS);
+  }
+
+  logger.info("Re-encryption job completed", { 
+    usersProcessed: totalProcessed,
+    mfaDevicesProcessed: mfaProcessed 
+  });
 }
 
 if (require.main === module) {
