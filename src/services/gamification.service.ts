@@ -43,7 +43,7 @@ export class GamificationService {
     milestone: number,
   ): Promise<void> {
     try {
-      const db = (await import('../config/db')).default;
+      const db = (await import('../config/database')).default;
       const { rows } = await db.query(
         `SELECT 1 FROM streak_milestone_notifications
          WHERE user_id = $1 AND milestone = $2`,
