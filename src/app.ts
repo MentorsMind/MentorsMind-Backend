@@ -189,9 +189,15 @@ AnalyticsService.initialize().catch((err) => {
 });
 
 // Initialize advanced cache service
-AdvancedCacheService.initialize().catch((err) => {
+const logAdvancedCacheInitializationError = (err: unknown) => {
   logger.error("AdvancedCacheService initialization failed", { error: err });
-});
+};
+
+try {
+  AdvancedCacheService.initialize().catch(logAdvancedCacheInitializationError);
+} catch (err) {
+  logAdvancedCacheInitializationError(err);
+}
 
 import { ApiVersionsController } from "./controllers/api-versions.controller";
 
