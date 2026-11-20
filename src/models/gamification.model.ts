@@ -1,4 +1,4 @@
-import db from '../config/db';
+import db from '../config/database';
 
 export type AchievementCategory = 'sessions' | 'learning' | 'social' | 'special';
 export type AchievementRarity = 'common' | 'rare' | 'epic' | 'legendary';

@@ -21,15 +21,11 @@ jest.mock("../learners.service", () => ({
   },
 }));
 
-jest.mock("../../config/db", () => ({
+jest.mock("../../config/database", () => ({
   __esModule: true,
   default: {
     query: jest.fn(),
   },
-}));
-
-jest.mock("../../config/database", () => ({
-  __esModule: true,
   pool: {
     query: jest.fn(),
   },

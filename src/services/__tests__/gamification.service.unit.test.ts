@@ -7,13 +7,6 @@
   },
 }));
 
-jest.mock('../../config/db', () => ({
-  __esModule: true,
-  default: {
-    query: jest.fn(),
-  },
-}));
-
 jest.mock('../../config/database', () => ({
   __esModule: true,
   default: {
@@ -62,7 +55,7 @@ jest.mock('../../models/gamification.model', () => {
 import { GamificationModel, Achievement } from '../../models/gamification.model';
 import { GamificationService } from '../gamification.service';
 import { PushService } from '../push.service';
-import db from '../../config/db';
+import db from '../../config/database';
 
 describe('GamificationService - Point Calculation & Gamification Logic', () => {
   beforeEach(() => {
