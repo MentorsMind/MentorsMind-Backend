@@ -107,16 +107,21 @@ export const MfaDeviceModel = {
   // ─── TOTP Device ──────────────────────────────────────────────────────────
 
   async createTotp(payload: CreateTotpDevicePayload): Promise<MfaDevice> {
+    // Get current encryption key version to track for future re-encryption
+    const { EncryptionUtil } = await import('../utils/encryption.utils');
+    const currentVersion = await EncryptionUtil.getCurrentKeyVersion();
+    
     const { rows } = await pool.query<MfaDevice>(
       `INSERT INTO mfa_devices
-         (user_id, type, name, encrypted_secret, backup_codes_hashed)
-       VALUES ($1, 'totp', $2, $3, $4)
+         (user_id, type, name, encrypted_secret, backup_codes_hashed, pii_encryption_version)
+       VALUES ($1, 'totp', $2, $3, $4, $5)
        RETURNING *`,
       [
         payload.userId,
         payload.name ?? null,
         payload.encryptedSecret,
         payload.backupCodesHashed ?? null,
+        currentVersion,
       ],
     );
     return rows[0];
