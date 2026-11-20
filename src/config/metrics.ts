@@ -308,7 +308,7 @@ export const emailDeliverySuccessTotal = new Counter<string>({
 
 export const pushTokenInvalidTotal = new Counter<string>({
   name: "push_token_invalid_total",
-  help: "Total invalid push tokens encountered",
+  help: "Total invalid push tokens encountered, partitioned by FCM error reason",
   labelNames: ["reason"],
   registers: [metricsRegistry],
 });
