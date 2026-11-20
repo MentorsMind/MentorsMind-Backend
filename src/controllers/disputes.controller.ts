@@ -9,19 +9,10 @@ import { AuditLoggerService } from '../services/audit-logger.service';
 import { LogLevel } from '../utils/log-formatter.utils';
 
 export class DisputesController {
-  static async openDispute(req: Request, res: Response): Promise<void> {
+  static async openDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      // SECURITY FIX: Ensure user is authenticated
-      if (!req.user || !req.user.userId) {
-        res.status(401).json({ 
-          error: "Authentication required",
-          code: "AUTH_REQUIRED" 
-        });
-        return;
-      }
-
       const { session_id, type, reason } = req.body;
-      const filed_by_id = req.user.userId;
+      const filed_by_id = req.user!.userId;
       const ipAddress = req.ip || "unknown";
       const userAgent = req.headers["user-agent"] || "unknown";
 
