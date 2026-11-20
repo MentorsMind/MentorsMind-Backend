@@ -288,7 +288,7 @@ export const PushService = {
               result.invalidTokens.push(badToken);
               // increment invalid token counter
               try {
-                pushTokenInvalidTotal.inc();
+                pushTokenInvalidTotal.inc({ reason: error.code });
               } catch (e) {
                 logger.debug("Failed to increment pushTokenInvalidTotal", {
                   error: e,

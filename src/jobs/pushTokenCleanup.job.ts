@@ -55,7 +55,7 @@ export async function runPushTokenCleanupJob(): Promise<{
             });
             removed += 1;
             try {
-              pushTokenInvalidTotal.inc();
+              pushTokenInvalidTotal.inc({ reason: error.code });
             } catch (e) {
               logger.debug("[PushTokenCleanupJob] Failed incrementing metric", {
                 error: e,

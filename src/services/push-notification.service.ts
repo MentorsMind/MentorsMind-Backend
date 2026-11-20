@@ -354,7 +354,7 @@ export class PushNotificationService {
           ) {
             result.invalidTokens.push(token);
             await PushTokensModel.deleteByToken(token);
-            pushTokenInvalidTotal?.inc?.();
+            pushTokenInvalidTotal?.inc?.({ reason: errorCode });
           }
 
           this.recordAnalytics({
