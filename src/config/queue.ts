@@ -63,6 +63,7 @@ export const QUEUE_NAMES = {
   REPUTATION_SYNC: "reputation-sync-queue",
   TAX_REPORTING: "tax-reporting-queue",
   VESTING_SYNC: "vesting-sync-queue",
+  AUTH_ATTEMPT: "auth-attempt-queue",
   // Cron-driven (no BullMQ jobs) — registered so startup queue-name validation can catch renames
   RETENTION_ENFORCEMENT: "retention-enforcement-queue",
 } as const;

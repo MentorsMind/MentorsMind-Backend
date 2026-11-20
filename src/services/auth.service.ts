@@ -1,4 +1,4 @@
-﻿import bcrypt from "bcryptjs";
+import bcrypt from "bcryptjs";
 import { env } from "../config/env";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
@@ -14,6 +14,7 @@ import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
 import { CacheService } from "./cache.service";
 import { logger } from "../utils/logger.utils";
+import { enqueueAuthAttempt } from "../queues/auth-attempt.queue";
 
 const JWT_SECRET = env.JWT_SECRET;
 
@@ -329,24 +330,19 @@ export const AuthService = {
     userAgent?: string | null,
     riskScore?: number
   ): Promise<void> {
-    try {
-      await pool.query(`
-        INSERT INTO auth_attempts (
-          user_id, email, success, failure_reason, ip_address, user_agent, 
-          risk_score, authentication_method, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'password', NOW())
-      `, [
-        userId,
-        email,
-        success,
-        failureReason,
-        ipAddress,
-        userAgent,
-        riskScore
-      ]);
-    } catch (error) {
-      // Don't fail auth if logging fails
-      logger.error('Failed to log auth attempt:', error);
-    }
+    // Offload to background queue to prevent blocking auth flow and handle retries/slowness
+    enqueueAuthAttempt({
+      userId,
+      email,
+      success,
+      failureReason,
+      ipAddress,
+      userAgent,
+      riskScore,
+      timestamp: new Date().toISOString(),
+    }).catch((err) => {
+      // Emergency fallback logging if queue itself fails
+      logger.error('Failed to enqueue auth attempt:', { email, error: err });
+    });
   }
 };
