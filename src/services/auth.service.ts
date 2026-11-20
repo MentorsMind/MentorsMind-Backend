@@ -57,6 +57,7 @@ export const AuthService = {
     const insertQuery = `
       INSERT INTO users (email, password_hash, first_name, last_name, role, notification_preferences, user_tier)
       VALUES ($1, $2, $3, $4, $5, $6, 'free')
+      ON CONFLICT (email) DO NOTHING
       RETURNING id, role, user_tier
     `;
     try {
@@ -68,14 +69,26 @@ export const AuthService = {
         role,
         JSON.stringify(defaultPreferences),
       ]);
+
+      // ON CONFLICT DO NOTHING yields no rows when a concurrent request
+      // inserted the same email between our uniqueness check and this insert,
+      // so the check-then-insert race is resolved atomically by the database.
+      if (rows.length === 0) {
+        throw createError(
+          ErrorCode.CONFLICT,
+          409,
+          { message: 'An account with this email already exists' }
+        );
+      }
+
       const user = rows[0];
 
       const tokens = await TokenService.issueTokens(user.id, email, user.role, user.user_tier);
       return { ...tokens, userId: user.id };
     } catch (err: any) {
-      // Handle concurrent registration race condition
-      // Two simultaneous requests may both pass the uniqueness check before either inserts,
-      // resulting in PostgreSQL UNIQUE_VIOLATION on the second insert.
+      // Defensive fallback: if a unique violation on email is still raised
+      // (e.g. the conflict target above is not matched), translate it into a
+      // user-friendly 409 instead of leaking the raw database error.
       if (err.code === '23505' && err.constraint?.includes('email')) {
         throw createError(
           ErrorCode.CONFLICT,
