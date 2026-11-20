@@ -10,7 +10,7 @@ export const securityMiddleware = helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      scriptSrc: ["'self'", "'strict-dynamic'"],
+      scriptSrc: ["'self'"],
       imgSrc: ["'self'", 'data:', 'https:'],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       connectSrc: ["'self'", "https://api.stellar.org", "wss://"],
@@ -38,7 +38,7 @@ export const securityMiddleware = helmet({
     policy: 'strict-origin-when-cross-origin'
   },
   permittedCrossDomainPolicies: false,
-  crossOriginEmbedderPolicy: false, // May interfere with Stellar operations
+  crossOriginEmbedderPolicy: true,
 });
 
 // Enhanced rate limiting for different endpoint types

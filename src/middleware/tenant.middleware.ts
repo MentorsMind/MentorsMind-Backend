@@ -14,6 +14,12 @@ export interface TenantRequest extends Request {
  * Also populates the AsyncLocalStorage TenantContext so that all downstream
  * database queries automatically receive the correct tenant filter.
  *
+ * Tenant context is scoped exclusively to each request via AsyncLocalStorage:
+ * every code path calls next() inside a TenantContext.run() callback, so the
+ * store is always created fresh for each request and torn down automatically
+ * when the callback returns. Concurrent requests on the same connection cannot
+ * share or leak each other's tenant context.
+ *
  * Continues without error if no tenant matches (single-tenant fallback).
  */
 export const tenantMiddleware = async (

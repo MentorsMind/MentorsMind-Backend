@@ -23,11 +23,13 @@ export const TenantService = {
 
   async update(
     id: string,
-    data: Partial<Omit<TenantRecord, 'id' | 'created_at' | 'updated_at'>>,
+    data: Partial<Omit<TenantRecord, 'id' | 'domain' | 'created_at' | 'updated_at'>>,
   ): Promise<TenantRecord | null> {
     const tenant = await TenantModel.findById(id);
     if (!tenant) return null;
-    return TenantModel.update(id, data);
+    // domain is immutable after creation — changing it would break tenant routing
+    const { domain: _domain, ...safeData } = data as Record<string, unknown> & { domain?: unknown };
+    return TenantModel.update(id, safeData as Parameters<typeof TenantModel.update>[1]);
   },
 
   async list(filters?: {
