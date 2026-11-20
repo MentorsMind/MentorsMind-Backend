@@ -179,8 +179,14 @@ export const errorHandler = (
     ip: req.ip,
   });
 
-  // Only report 5xx errors to Sentry
-  if (statusCode >= 500) {
+  // 5xx → capture full exception so Sentry creates/updates an issue.
+  // Selected 4xx → capture as a warning-level message so repeated
+  // authorization failures, conflicts, and validation errors on critical
+  // paths surface in alerts without polluting the exception stream.
+  const MONITORED_4XX = new Set([403, 409, 422]);
+  const shouldReport = statusCode >= 500 || MONITORED_4XX.has(statusCode);
+
+  if (shouldReport) {
     Sentry.withScope((scope) => {
       if (user) {
         scope.setUser({ id: user.userId, role: user.role });
@@ -201,11 +207,22 @@ export const errorHandler = (
       } catch {
         // Tenant enrichment must never break error handling.
       }
-      Sentry.captureException(err);
+
+      if (statusCode >= 500) {
+        Sentry.captureException(err);
+      } else {
+        // Warn-level message so Sentry can alert on volume spikes without
+        // treating every 403/409/422 as a crash.
+        scope.setTag("error_code", resolveErrorCode(err, statusCode));
+        Sentry.captureMessage(
+          `${statusCode} ${resolveErrorCode(err, statusCode)}: ${err.message}`,
+          "warning",
+        );
+      }
     });
   }
-  res.setHeader("X-Request-ID", (req.headers["x-request-id"] as string) || "");
-  res.setHeader("X-Trace-ID", (req.headers["x-trace-id"] as string) || "");
+  if (requestId) res.setHeader("X-Request-ID", requestId);
+  if (correlationId) res.setHeader("X-Trace-ID", correlationId);
 
   const catalogEntry = getCatalogEntry(resolveErrorCode(err, statusCode));
   const details = "details" in err ? (err as AppError).details : undefined;
@@ -243,7 +260,7 @@ export const createError = (
   details?: Record<string, unknown>,
 ): AppError => {
   const isCatalogKey = typeof code === "string" && code in ERROR_CATALOG;
-  const catalogEntry = isCatalogKey || (typeof code === "string" && !(code in ERROR_CATALOG) === false)
+  const catalogEntry = isCatalogKey
     ? ERROR_CATALOG[code as ErrorCode]
     : getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
 
