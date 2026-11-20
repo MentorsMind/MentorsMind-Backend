@@ -32,6 +32,10 @@ import {
 import { submitVerificationSchema as verificationSubmitSchema } from "../validators/schemas/verification.schemas";
 import { idParamSchema } from "../validators/schemas/common.schemas";
 
+const requireMentorOwnerOrAdmin = requireOwnerOrAdmin((req) =>
+  typeof req.params.id === "string" ? req.params.id : undefined,
+);
+
 const router = Router();
 
 /**
@@ -167,7 +171,7 @@ router.get(
 router.put(
   "/:id",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(updateMentorProfileSchema),
   asyncHandler(MentorsController.updateProfile),
 );
@@ -192,7 +196,7 @@ router.put(
 router.post(
   "/:id/availability",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(setAvailabilitySchema),
   asyncHandler(MentorsController.setAvailability),
 );
@@ -248,7 +252,7 @@ router.get(
 router.put(
   "/:id/pricing",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(updatePricingSchema),
   asyncHandler(MentorsController.updatePricing),
 );
@@ -282,7 +286,7 @@ router.put(
 router.get(
   "/:id/sessions",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(getMentorSessionsSchema),
   asyncHandler(MentorsController.getSessions),
 );
@@ -316,7 +320,7 @@ router.get(
 router.get(
   "/:id/earnings",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(getMentorEarningsSchema),
   asyncHandler(MentorsController.getEarnings),
 );
@@ -353,7 +357,7 @@ router.get(
 router.post(
   "/:id/verify",
   authenticate,
-  requireOwnerOrAdmin,
+  requireMentorOwnerOrAdmin,
   validate(submitVerificationSchema),
   asyncHandler(MentorsController.submitVerification),
 );

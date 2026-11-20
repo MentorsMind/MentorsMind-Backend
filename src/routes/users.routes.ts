@@ -18,6 +18,10 @@ import { MAX_AVATAR_SIZE_BYTES } from "../services/upload.service";
 import { createImageUploadMiddleware } from "../middleware/image-upload.middleware";
 import { noCacheMiddleware } from "../middleware/no-cache.middleware";
 
+const requireUserOwnerOrAdmin = requireOwnerOrAdmin((req) =>
+  typeof req.params.id === "string" ? req.params.id : undefined,
+);
+
 // ---------------------------------------------------------------------------
 // Multer — in-memory storage for avatar uploads
 // 5 MB hard limit enforced here (UploadService also validates for defence-in-depth)
@@ -388,7 +392,7 @@ router.get(
 router.get(
   "/:id",
   validate(idParamSchema),
-  requireOwnerOrAdmin,
+  requireUserOwnerOrAdmin,
   asyncHandler(UsersController.getUser),
 );
 
@@ -436,7 +440,7 @@ router.get(
 router.put(
   "/:id",
   validate(updateUserSchema),
-  requireOwnerOrAdmin,
+  requireUserOwnerOrAdmin,
   asyncHandler(UsersController.updateUser),
 );
 
@@ -469,7 +473,7 @@ router.put(
 router.delete(
   "/:id",
   validate(idParamSchema),
-  requireOwnerOrAdmin,
+  requireUserOwnerOrAdmin,
   asyncHandler(UsersController.deleteUser),
 );
 
