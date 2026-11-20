@@ -15,22 +15,32 @@ import {
 import { idParamSchema } from "../validators/schemas/common.schemas";
 import { RecommendationController } from "../controllers/recommendation.controller";
 import { MAX_AVATAR_SIZE_BYTES } from "../services/upload.service";
-import { createImageUploadMiddleware } from "../middleware/image-upload.middleware";
-import { noCacheMiddleware } from "../middleware/no-cache.middleware";
+import {
+  cleanupUploadedFile,
+  createFileUpload,
+} from "../middleware/file-upload.middleware";
 
 const requireUserOwnerOrAdmin = requireOwnerOrAdmin((req) =>
   typeof req.params.id === "string" ? req.params.id : undefined,
 );
 
 // ---------------------------------------------------------------------------
-// Multer — in-memory storage for avatar uploads
+// Multer — temporary disk storage for avatar uploads
 // 5 MB hard limit enforced here (UploadService also validates for defence-in-depth)
 // ---------------------------------------------------------------------------
-const avatarUpload = createImageUploadMiddleware(MAX_AVATAR_SIZE_BYTES, [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-]);
+const avatarUpload = createFileUpload({
+  limits: { fileSize: MAX_AVATAR_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      // Pass error so multer rejects the upload early
+      cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+    }
+  },
+});
+
 
 const router = Router();
 
@@ -315,6 +325,7 @@ router.get(
 router.post(
   "/avatar",
   avatarUpload.single('avatar'),
+  cleanupUploadedFile,
   asyncHandler(UsersController.uploadAvatar),
 );
 

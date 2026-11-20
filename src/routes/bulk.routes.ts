@@ -1,15 +1,17 @@
 import { Router } from "express";
-import multer from "multer";
 import { BulkController } from "../controllers/bulk.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { requireAdmin } from "../middleware/admin-auth.middleware";
 import { validate } from "../middleware/validation.middleware";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { bulkPaymentsSchema, bulkJobIdParamSchema } from "../validators/schemas/bulk.schemas";
+import {
+  cleanupUploadedFile,
+  createFileUpload,
+} from "../middleware/file-upload.middleware";
 
 const router = Router();
-const upload = multer({
-  storage: multer.memoryStorage(),
+const upload = createFileUpload({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
@@ -18,6 +20,7 @@ router.use(authenticate, requireAdmin);
 router.post(
   "/users/import",
   upload.single("file"),
+  cleanupUploadedFile,
   asyncHandler(BulkController.importUsers),
 );
 
@@ -58,6 +61,7 @@ router.post(
 router.post(
   "/mentors/import",
   upload.single("file"),
+  cleanupUploadedFile,
   asyncHandler(BulkController.importMentors),
 );
 

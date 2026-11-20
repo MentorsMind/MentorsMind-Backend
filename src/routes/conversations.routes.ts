@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import multer from 'multer';
 import { ConversationsController } from '../controllers/conversations.controller';
 import { authenticate } from '../middleware/auth.middleware';
 import { screenMessage } from '../middleware/content-moderation.middleware';
@@ -14,12 +13,14 @@ import {
   batchMarkReadSchema,
   uploadAttachmentSchema,
 } from '../validators/schemas/conversations.schemas';
+import {
+  cleanupUploadedFile,
+  createFileUpload,
+} from '../middleware/file-upload.middleware';
 
 const router = Router();
 
-// Memory storage so we can virus-scan before persisting
-const upload = multer({
-  storage: multer.memoryStorage(),
+const upload = createFileUpload({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB hard cap
 });
 
@@ -281,6 +282,7 @@ router.post(
   authenticate,
   validate(uploadAttachmentSchema),
   upload.single('file'),
+  cleanupUploadedFile,
   asyncHandler(ConversationsController.uploadAttachment),
 );
 
