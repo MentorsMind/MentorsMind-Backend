@@ -1,0 +1,2 @@
+ALTER TABLE backup_log
+  ADD COLUMN IF NOT EXISTS location TEXT;

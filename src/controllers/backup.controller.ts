@@ -51,13 +51,13 @@ export const BackupController = {
 
   /** GET /admin/backup/jobs */
   listJobs: asyncHandler(async (_req: Request, res: Response) => {
-    const jobs = BackupService.listJobs();
+    const jobs = await BackupService.listJobs();
     res.json({ success: true, data: jobs, count: jobs.length });
   }),
 
   /** GET /admin/backup/jobs/:id */
   getJob: asyncHandler(async (req: Request, res: Response) => {
-    const job = BackupService.getJob(req.params.id as string);
+    const job = await BackupService.getJob(req.params.id as string);
     if (!job) {
       res.status(404).json({ success: false, message: "Backup job not found" });
       return;
@@ -98,7 +98,7 @@ export const BackupController = {
       return;
     }
 
-    const candidate = BackupService.getPITRCandidate(target);
+    const candidate = await BackupService.getPITRCandidate(target);
     if (!candidate) {
       res
         .status(404)

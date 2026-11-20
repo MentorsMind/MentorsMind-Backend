@@ -13,6 +13,20 @@ import pool from "../config/database";
 const execAsync = promisify(exec);
 const gzipAsync = promisify(zlib.gzip);
 
+interface BackupLogRow {
+  id: string;
+  backup_type: BackupJob["type"];
+  status: BackupJob["status"];
+  s3_key: string | null;
+  location: string | null;
+  size_bytes: number | string;
+  duration_ms: number;
+  integrity_verified: boolean;
+  error: string | null;
+  started_at: Date;
+  completed_at: Date | null;
+}
+
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface BackupDestination {
@@ -60,6 +74,25 @@ export interface PITROptions {
 
 const jobRegistry = new Map<string, BackupJob>();
 
+function backupJobFromLog(row: BackupLogRow): BackupJob {
+  const location =
+    row.location ??
+    (row.s3_key ? `s3://${env.AWS_S3_BUCKET}/${row.s3_key}` : "");
+  const job: BackupJob = {
+    id: row.id,
+    type: row.backup_type,
+    status: row.status,
+    size: Number(row.size_bytes),
+    duration: row.duration_ms,
+    location,
+    startedAt: new Date(row.started_at),
+    ...(row.completed_at ? { completedAt: new Date(row.completed_at) } : {}),
+    ...(row.error ? { error: row.error } : {}),
+  };
+  jobRegistry.set(job.id, job);
+  return job;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function buildS3Key(type: BackupJob["type"], id: string): string {
@@ -103,12 +136,13 @@ async function persistBackupLog(job: BackupJob): Promise<void> {
   await pool
     .query(
       `INSERT INTO backup_log
-         (id, backup_type, status, s3_key, size_bytes, duration_ms,
+         (id, backup_type, status, s3_key, location, size_bytes, duration_ms,
           integrity_verified, error, started_at, completed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status,
          s3_key = EXCLUDED.s3_key,
+         location = EXCLUDED.location,
          size_bytes = EXCLUDED.size_bytes,
          duration_ms = EXCLUDED.duration_ms,
          integrity_verified = EXCLUDED.integrity_verified,
@@ -119,6 +153,7 @@ async function persistBackupLog(job: BackupJob): Promise<void> {
         job.type,
         job.status,
         s3Key,
+        job.location || null,
         job.size,
         job.duration,
         false,
@@ -199,14 +234,28 @@ export const BackupService = {
     };
   },
 
-  getJob(id: string): BackupJob | undefined {
-    return jobRegistry.get(id);
+  async getJob(id: string): Promise<BackupJob | undefined> {
+    const cached = jobRegistry.get(id);
+    if (cached) return cached;
+
+    const result = await pool.query<BackupLogRow>(
+      `SELECT id, backup_type, status, s3_key, location, size_bytes,
+              duration_ms, integrity_verified, error, started_at, completed_at
+         FROM backup_log
+        WHERE id = $1`,
+      [id],
+    );
+    return result.rows[0] ? backupJobFromLog(result.rows[0]) : undefined;
   },
 
-  listJobs(): BackupJob[] {
-    return Array.from(jobRegistry.values()).sort(
-      (a, b) => b.startedAt.getTime() - a.startedAt.getTime(),
+  async listJobs(): Promise<BackupJob[]> {
+    const result = await pool.query<BackupLogRow>(
+      `SELECT id, backup_type, status, s3_key, location, size_bytes,
+              duration_ms, integrity_verified, error, started_at, completed_at
+         FROM backup_log
+        ORDER BY started_at DESC`,
     );
+    return result.rows.map(backupJobFromLog);
   },
 
   async runFullBackup(config?: Partial<BackupConfig>): Promise<BackupJob> {
@@ -221,6 +270,7 @@ export const BackupService = {
       startedAt: new Date(),
     };
     jobRegistry.set(job.id, job);
+    await persistBackupLog(job);
 
     const start = Date.now();
     try {
@@ -263,6 +313,7 @@ export const BackupService = {
       startedAt: new Date(),
     };
     jobRegistry.set(job.id, job);
+    await persistBackupLog(job);
 
     const start = Date.now();
     try {
@@ -307,6 +358,7 @@ export const BackupService = {
       backup_type: string;
       status: string;
       s3_key: string | null;
+      location: string | null;
       size_bytes: number;
       duration_ms: number;
       integrity_verified: boolean;
@@ -318,7 +370,7 @@ export const BackupService = {
   }> {
     const [dataResult, countResult] = await Promise.all([
       pool.query(
-        `SELECT id, backup_type, status, s3_key, size_bytes, duration_ms,
+        `SELECT id, backup_type, status, s3_key, location, size_bytes, duration_ms,
                 integrity_verified, error, started_at, completed_at
            FROM backup_log
           ORDER BY started_at DESC
@@ -329,13 +381,18 @@ export const BackupService = {
     ]);
 
     return {
-      data: dataResult.rows,
+      data: dataResult.rows.map((row) => ({
+        ...row,
+        location:
+          row.location ??
+          (row.s3_key ? `s3://${env.AWS_S3_BUCKET}/${row.s3_key}` : null),
+      })),
       total: parseInt(countResult.rows[0].count, 10),
     };
   },
 
   async verifyBackup(jobId: string): Promise<BackupVerificationResult> {
-    const job = jobRegistry.get(jobId);
+    const job = await BackupService.getJob(jobId);
     if (!job) {
       return {
         jobId,
@@ -376,7 +433,7 @@ export const BackupService = {
     candidate: BackupJob;
     instructions: string;
   }> {
-    const candidate = BackupService.getPITRCandidate(timestamp);
+    const candidate = await BackupService.getPITRCandidate(timestamp);
     if (!candidate) {
       const err: any = new Error(
         "No suitable backup found for the given target time",
@@ -431,16 +488,18 @@ export const BackupService = {
    * before the target time. Actual restore must be performed by an operator
    * using the returned backup location + WAL logs.
    */
-  getPITRCandidate(targetTime: Date): BackupJob | undefined {
-    const candidates = Array.from(jobRegistry.values())
-      .filter(
-        (j) =>
-          j.type === "full" &&
-          j.status === "completed" &&
-          j.startedAt <= targetTime,
-      )
-      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
-
-    return candidates[0];
+  async getPITRCandidate(targetTime: Date): Promise<BackupJob | undefined> {
+    const result = await pool.query<BackupLogRow>(
+      `SELECT id, backup_type, status, s3_key, location, size_bytes,
+              duration_ms, integrity_verified, error, started_at, completed_at
+         FROM backup_log
+        WHERE backup_type = 'full'
+          AND status = 'completed'
+          AND started_at <= $1
+        ORDER BY started_at DESC
+        LIMIT 1`,
+      [targetTime],
+    );
+    return result.rows[0] ? backupJobFromLog(result.rows[0]) : undefined;
   },
 };
