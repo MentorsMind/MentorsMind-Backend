@@ -6,6 +6,7 @@ import {
   SubscriptionRecord,
 } from "../models/subscription.model";
 import { Logger, logger } from "../utils/logger.utils";
+import { DatabaseService } from "./database.service";
 
 // ─── Tier definitions ─────────────────────────────────────────────────────────
 
@@ -87,12 +88,6 @@ export const SubscriptionService = {
     billingCycle: BillingCycle,
     options: { trial?: boolean; stellarTxId?: string } = {},
   ): Promise<SubscriptionRecord> {
-    // Cancel existing active subscription
-    const existing = await SubscriptionModel.findActiveByUserId(userId);
-    if (existing) {
-      await SubscriptionModel.cancel(existing.id, userId);
-    }
-
     const price = TIER_PRICES[tier][billingCycle];
     const features = TIER_FEATURES[tier];
 
@@ -108,33 +103,51 @@ export const SubscriptionService = {
       ? new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
       : undefined;
 
-    const sub = await SubscriptionModel.create({
-      user_id: userId,
-      tier,
-      billing_cycle: billingCycle,
-      price,
-      features,
-      end_date: endDate,
-      trial_ends_at: trialEndsAt,
-      stellar_tx_id: options.stellarTxId,
+    const sub = await DatabaseService.withTransaction(async (client) => {
+      const existing = await SubscriptionModel.findActiveByUserId(userId, client);
+      if (existing) {
+        const cancelled = await SubscriptionModel.cancel(
+          existing.id,
+          userId,
+          client,
+        );
+        if (!cancelled) {
+          throw new Error("Failed to cancel existing subscription");
+        }
+      }
+
+      const created = await SubscriptionModel.create(
+        {
+          user_id: userId,
+          tier,
+          billing_cycle: billingCycle,
+          price,
+          features,
+          end_date: endDate,
+          trial_ends_at: trialEndsAt,
+          stellar_tx_id: options.stellarTxId,
+        },
+        client,
+      );
+      if (!created) throw new Error("Failed to create subscription");
+
+      // Keep the denormalized user tier consistent with the subscription.
+      await client.query(
+        `UPDATE users SET user_tier = $1, updated_at = NOW() WHERE id = $2`,
+        [
+          tier === "enterprise"
+            ? "enterprise"
+            : tier === "premium"
+              ? "premium"
+              : tier === "pro"
+                ? "pro"
+                : "free",
+          userId,
+        ],
+      );
+
+      return created;
     });
-
-    if (!sub) throw new Error("Failed to create subscription");
-
-    // Update user_tier column
-    await pool.query(
-      `UPDATE users SET user_tier = $1, updated_at = NOW() WHERE id = $2`,
-      [
-        tier === "enterprise"
-          ? "enterprise"
-          : tier === "premium"
-            ? "premium"
-            : tier === "pro"
-              ? "pro"
-              : "free",
-        userId,
-      ],
-    );
 
     logger.info("Subscription created", { userId, tier, billingCycle });
     return sub;

@@ -1,5 +1,6 @@
 ﻿import pool from "../config/database";
 import { Logger, logger } from "../utils/logger.utils";
+import type { PoolClient } from "pg";
 
 export type SubscriptionTier = "free" | "pro" | "premium" | "enterprise";
 export type SubscriptionStatus = "active" | "cancelled" | "expired" | "trial";
@@ -37,10 +38,11 @@ export interface CreateSubscriptionInput {
 export const SubscriptionModel = {
   async create(
     input: CreateSubscriptionInput,
+    client?: PoolClient,
   ): Promise<SubscriptionRecord | null> {
     const status: SubscriptionStatus = input.trial_ends_at ? "trial" : "active";
     try {
-      const { rows } = await pool.query<SubscriptionRecord>(
+      const { rows } = await (client ?? pool).query<SubscriptionRecord>(
         `INSERT INTO subscriptions
            (user_id, tier, status, billing_cycle, price, features, end_date, trial_ends_at, stellar_tx_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -60,13 +62,17 @@ export const SubscriptionModel = {
       return rows[0] ?? null;
     } catch (error) {
       logger.error("Failed to create subscription:", error);
+      if (client) throw error;
       return null;
     }
   },
 
-  async findActiveByUserId(userId: string): Promise<SubscriptionRecord | null> {
+  async findActiveByUserId(
+    userId: string,
+    client?: PoolClient,
+  ): Promise<SubscriptionRecord | null> {
     try {
-      const { rows } = await pool.query<SubscriptionRecord>(
+      const { rows } = await (client ?? pool).query<SubscriptionRecord>(
         `SELECT * FROM subscriptions
          WHERE user_id = $1 AND status IN ('active', 'trial')
          ORDER BY created_at DESC LIMIT 1`,
@@ -75,6 +81,7 @@ export const SubscriptionModel = {
       return rows[0] ?? null;
     } catch (error) {
       logger.error("Failed to find active subscription:", error);
+      if (client) throw error;
       return null;
     }
   },
@@ -92,9 +99,13 @@ export const SubscriptionModel = {
     }
   },
 
-  async cancel(id: string, userId: string): Promise<SubscriptionRecord | null> {
+  async cancel(
+    id: string,
+    userId: string,
+    client?: PoolClient,
+  ): Promise<SubscriptionRecord | null> {
     try {
-      const { rows } = await pool.query<SubscriptionRecord>(
+      const { rows } = await (client ?? pool).query<SubscriptionRecord>(
         `UPDATE subscriptions
          SET status = 'cancelled', auto_renew = FALSE, cancelled_at = NOW(), updated_at = NOW()
          WHERE id = $1 AND user_id = $2 AND status IN ('active', 'trial')
@@ -104,6 +115,7 @@ export const SubscriptionModel = {
       return rows[0] ?? null;
     } catch (error) {
       logger.error("Failed to cancel subscription:", error);
+      if (client) throw error;
       return null;
     }
   },
