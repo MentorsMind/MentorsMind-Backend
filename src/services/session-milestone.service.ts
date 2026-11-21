@@ -45,14 +45,15 @@ export const SessionMilestoneService = {
     contributesToCompletion: boolean = true,
     userId: string
   ): Promise<SessionMilestoneMapping> {
-    // Validate milestone exists and user has access
-    const milestone = await this.validateMilestoneAccess(milestoneId, userId);
-    
-    // Validate booking exists and user has access
-    const booking = await this.validateBookingAccess(bookingId, userId);
-    
+    // Validate milestone and booking access, and check for an existing mapping,
+    // in a single batch of independent queries instead of sequential round-trips.
+    const [, , existingMapping] = await Promise.all([
+      this.validateMilestoneAccess(milestoneId, userId),
+      this.validateBookingAccess(bookingId, userId),
+      this.getMappingByBookingId(bookingId)
+    ]);
+
     // Check if mapping already exists
-    const existingMapping = await this.getMappingByBookingId(bookingId);
     if (existingMapping) {
       throw createError(ErrorCode.SESSION_MILESTONE_ALREADY_LINKED, 409);
     }

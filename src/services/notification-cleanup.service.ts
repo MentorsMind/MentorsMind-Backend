@@ -49,7 +49,7 @@ export class NotificationCleanupService {
       const result = await pool.query(query, [days]);
       const deletedCount = result.rowCount || 0;
 
-      logger.info(`Notification cleanup completed: ${deletedCount} notifications deleted`);
+      logger.info({ deletedCount }, 'Notification cleanup completed');
 
       // Also cleanup expired notifications
       const expiredCount = await NotificationService.cleanupExpiredNotifications();
