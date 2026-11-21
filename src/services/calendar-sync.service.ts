@@ -28,6 +28,11 @@ export class CalendarSyncService {
       throw error;
     }
 
+    if (this.syncIntervals.has(userId)) {
+      logger.info({ userId }, "Calendar sync already running; ignoring duplicate start");
+      return;
+    }
+
     logger.info({ userId, intervalMinutes }, "Starting calendar sync");
 
     const interval = setInterval(
