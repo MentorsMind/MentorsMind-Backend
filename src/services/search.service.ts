@@ -61,7 +61,7 @@ export interface GlobalSearchResult {
 }
 
 function hashParams(params: Record<string, any>): string {
-  return crypto.createHash('md5').update(JSON.stringify(params)).digest('hex').substring(0, 8);
+  return crypto.createHash('sha256').update(JSON.stringify(params)).digest('hex');
 }
 
 /** Build a stable, user-agnostic cache key from search filters */

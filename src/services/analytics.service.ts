@@ -2,11 +2,6 @@
 import { CacheService } from "./cache.service";
 import { logger } from "../utils/logger.utils";
 
-// Track materialized view availability
-let viewsAvailable = false;
-let lastViewCheck = 0;
-const VIEW_CHECK_INTERVAL = 60000; // Check every 60 seconds
-
 export interface RevenueData {
   date: string;
   currency: string;
@@ -61,13 +56,6 @@ export const AnalyticsService = {
    * Check if all required materialized views exist
    */
   async checkViewsExist(): Promise<boolean> {
-    const now = Date.now();
-
-    // Use cached result if recent
-    if (viewsAvailable && now - lastViewCheck < VIEW_CHECK_INTERVAL) {
-      return true;
-    }
-
     try {
       const requiredViews = [
         "mv_daily_revenue",
@@ -89,9 +77,6 @@ export const AnalyticsService = {
       const foundViews = rows.map((r: any) => r.table_name);
       const allExist = requiredViews.every((v) => foundViews.includes(v));
 
-      viewsAvailable = allExist;
-      lastViewCheck = now;
-
       if (!allExist) {
         const missing = requiredViews.filter((v) => !foundViews.includes(v));
         logger.warn("Analytics materialized views missing", { missing });
@@ -102,7 +87,6 @@ export const AnalyticsService = {
       return allExist;
     } catch (error) {
       logger.error("Failed to check analytics views", { error });
-      viewsAvailable = false;
       return false;
     }
   },
@@ -137,11 +121,10 @@ export const AnalyticsService = {
    */
   async getRevenue(period: string = "30d"): Promise<RevenueData[]> {
     const cacheKey = `analytics:revenue:${period}`;
+    await this.ensureViewsAvailable();
 
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        await this.ensureViewsAvailable();
-
         const days = this.parsePeriod(period);
 
         const query = `
@@ -165,12 +148,6 @@ export const AnalyticsService = {
         });
         return rows;
       } catch (error) {
-        if (error instanceof AnalyticsViewsUnavailableError) {
-          logger.warn("Revenue analytics unavailable", {
-            error: error.message,
-          });
-          throw error;
-        }
         logger.error("Failed to fetch revenue analytics", { error, period });
         throw error;
       }
@@ -182,11 +159,10 @@ export const AnalyticsService = {
    */
   async getUserGrowth(period: string = "30d"): Promise<UserGrowthData[]> {
     const cacheKey = `analytics:users:${period}`;
+    await this.ensureViewsAvailable();
 
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        await this.ensureViewsAvailable();
-
         const days = this.parsePeriod(period);
 
         const query = `
@@ -208,12 +184,6 @@ export const AnalyticsService = {
         });
         return rows;
       } catch (error) {
-        if (error instanceof AnalyticsViewsUnavailableError) {
-          logger.warn("User growth analytics unavailable", {
-            error: error.message,
-          });
-          throw error;
-        }
         logger.error("Failed to fetch user growth analytics", {
           error,
           period,
@@ -228,11 +198,10 @@ export const AnalyticsService = {
    */
   async getSessions(period: string = "30d"): Promise<SessionData[]> {
     const cacheKey = `analytics:sessions:${period}`;
+    await this.ensureViewsAvailable();
 
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        await this.ensureViewsAvailable();
-
         const days = this.parsePeriod(period);
 
         const query = `
@@ -254,12 +223,6 @@ export const AnalyticsService = {
         });
         return rows;
       } catch (error) {
-        if (error instanceof AnalyticsViewsUnavailableError) {
-          logger.warn("Session analytics unavailable", {
-            error: error.message,
-          });
-          throw error;
-        }
         logger.error("Failed to fetch session analytics", { error, period });
         throw error;
       }
@@ -271,11 +234,10 @@ export const AnalyticsService = {
    */
   async getTopMentors(limit: number = 10): Promise<TopMentor[]> {
     const cacheKey = `analytics:top-mentors:${limit}`;
+    await this.ensureViewsAvailable();
 
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        await this.ensureViewsAvailable();
-
         const query = `
           SELECT 
             id,
@@ -299,12 +261,6 @@ export const AnalyticsService = {
         });
         return rows;
       } catch (error) {
-        if (error instanceof AnalyticsViewsUnavailableError) {
-          logger.warn("Top mentors analytics unavailable", {
-            error: error.message,
-          });
-          throw error;
-        }
         logger.error("Failed to fetch top mentors analytics", { error, limit });
         throw error;
       }
@@ -316,11 +272,10 @@ export const AnalyticsService = {
    */
   async getAssetDistribution(): Promise<AssetDistribution[]> {
     const cacheKey = "analytics:asset-distribution";
+    await this.ensureViewsAvailable();
 
     return CacheService.wrap(cacheKey, CACHE_TTL, async () => {
       try {
-        await this.ensureViewsAvailable();
-
         const query = `
           SELECT 
             currency,
@@ -338,12 +293,6 @@ export const AnalyticsService = {
         });
         return rows;
       } catch (error) {
-        if (error instanceof AnalyticsViewsUnavailableError) {
-          logger.warn("Asset distribution analytics unavailable", {
-            error: error.message,
-          });
-          throw error;
-        }
         logger.error("Failed to fetch asset distribution analytics", { error });
         throw error;
       }
@@ -433,8 +382,6 @@ export const AnalyticsService = {
   async refreshViews(): Promise<void> {
     try {
       await pool.query("SELECT refresh_analytics_views()");
-      viewsAvailable = true;
-      lastViewCheck = Date.now();
       logger.info("Analytics views refreshed successfully");
     } catch (error) {
       logger.error("Failed to refresh analytics views", { error });

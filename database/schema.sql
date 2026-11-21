@@ -6,6 +6,7 @@
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- =============================================================================
 -- ENUMS
@@ -103,6 +104,13 @@ CREATE TABLE IF NOT EXISTS system_configs (
 -- =============================================================================
 
 \i 006_create_indexes.sql
+
+-- Trigram index for substring searches on mentor bios
+CREATE INDEX IF NOT EXISTS idx_users_mentor_bio_trgm
+    ON users USING GIN (bio gin_trgm_ops)
+    WHERE role = 'mentor';
+COMMENT ON INDEX idx_users_mentor_bio_trgm IS
+    'Supports substring ILIKE searches on mentor bios';
 
 -- =============================================================================
 -- TRIGGERS
