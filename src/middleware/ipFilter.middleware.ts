@@ -71,3 +71,10 @@ export async function adminAllowlistMiddleware(req: Request, res: Response, next
   
   next();
 }
+
+/**
+ * Refreshes the IP blocklist cache and in-memory set.
+ */
+export async function refreshBlocklist(): Promise<void> {
+  await IpFilterService.refreshBlocklist();
+}

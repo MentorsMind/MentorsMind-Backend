@@ -39,8 +39,50 @@ export class IpFilterService {
         }
       }
 
+      localBlocklistSet = new Set(exactIps);
+      localBlocklistLoadedAt = Date.now();
+
       return rows;
     });
+  }
+
+  /**
+   * Refreshes the in-memory blocklist set and invalidates related caches.
+   */
+  static async refreshBlocklist(): Promise<void> {
+    try {
+      localBlocklistLoadedAt = 0;
+      localBlocklistSet.clear();
+      await CacheService.del(CACHE_KEY);
+      if (CacheService.isDistributed()) {
+        await CacheService.del('ip_filter:blockset');
+      }
+      const rules = await this.getRules();
+      if (Array.isArray(rules)) {
+        const exactIps = rules
+          .filter(r => r.rule_type === 'block' && r.context === 'global' && !r.ip_range.includes('/'))
+          .map(r => r.ip_range);
+        localBlocklistSet = new Set(exactIps);
+        localBlocklistLoadedAt = Date.now();
+      }
+    } catch (err) {
+      logger.error({ err }, 'Error refreshing blocklist cache');
+    }
+  }
+
+  /**
+   * Returns a copy of the current in-memory blocklist set.
+   */
+  static getLocalBlocklist(): Set<string> {
+    return new Set(localBlocklistSet);
+  }
+
+  /**
+   * Clears the in-memory blocklist set and resets timestamp.
+   */
+  static clearLocalBlocklist(): void {
+    localBlocklistSet.clear();
+    localBlocklistLoadedAt = 0;
   }
 
   /**
@@ -72,7 +114,11 @@ export class IpFilterService {
       [data.ipRange, data.ruleType, data.context, data.reason]
     );
 
-    await CacheService.del(CACHE_KEY);
+    if (data.ruleType === 'block' && data.context === 'global' && !data.ipRange.includes('/')) {
+      localBlocklistSet.add(data.ipRange);
+    }
+
+    await this.refreshBlocklist();
 
     await AuditLogService.log({
       userId: data.adminId,
@@ -101,7 +147,11 @@ export class IpFilterService {
 
     if (rows.length === 0) return false;
 
-    await CacheService.del(CACHE_KEY);
+    if (rows[0].rule_type === 'block' && rows[0].context === 'global') {
+      localBlocklistSet.delete(rows[0].ip_range);
+    }
+
+    await this.refreshBlocklist();
 
     await AuditLogService.log({
       userId: adminId,
@@ -200,4 +250,11 @@ export class IpFilterService {
       return false;
     }
   }
+}
+
+/**
+ * Refreshes the in-memory blocklist set and invalidates related caches.
+ */
+export async function refreshBlocklist(): Promise<void> {
+  await IpFilterService.refreshBlocklist();
 }
