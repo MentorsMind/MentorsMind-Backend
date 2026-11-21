@@ -134,16 +134,7 @@ export const SubscriptionService = {
       // Keep the denormalized user tier consistent with the subscription.
       await client.query(
         `UPDATE users SET user_tier = $1, updated_at = NOW() WHERE id = $2`,
-        [
-          tier === "enterprise"
-            ? "enterprise"
-            : tier === "premium"
-              ? "premium"
-              : tier === "pro"
-                ? "pro"
-                : "free",
-          userId,
-        ],
+        [tier, userId],
       );
 
       return created;
