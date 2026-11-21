@@ -5,6 +5,7 @@ jest.mock("../../config/database", () => ({
 
 jest.mock("../../models/data-export-request.model", () => ({
   DataExportRequestModel: {
+    findLatestByUserId: jest.fn(),
     updateStatus: jest.fn().mockResolvedValue(undefined),
   },
 }));
@@ -42,6 +43,7 @@ jest.mock("../storage.service", () => ({
 
 import crypto from "crypto";
 import { DataExportRequestModel } from "../../models/data-export-request.model";
+import { ErrorCode } from "../../errors/error-codes";
 import { emailService } from "../email.service";
 import { StorageService } from "../storage.service";
 import { DataExportService } from "../dataExport.service";
@@ -49,6 +51,19 @@ import { DataExportService } from "../dataExport.service";
 describe("DataExportService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it("throws a typed 429 when an export was requested within the last 30 days", async () => {
+    (DataExportRequestModel.findLatestByUserId as jest.Mock).mockResolvedValue({
+      requested_at: new Date(),
+      status: "completed",
+    });
+
+    await expect(DataExportService.requestExport("user-1")).rejects.toMatchObject({
+      message: "You can only request one data export every 30 days.",
+      statusCode: 429,
+      code: ErrorCode.RATE_LIMIT_EXCEEDED,
+    });
   });
 
   it("uploads the generated archive to S3 and records its key and checksum", async () => {
