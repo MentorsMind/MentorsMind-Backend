@@ -39,6 +39,7 @@ async function startWorkers() {
     qualityScoreWorker,
     onboardingNudgeWorker,
     taxReportingWorker,
+    authAttemptWorker,
     startScheduler,
     stopScheduler,
           } = await import("./workers");
@@ -63,6 +64,7 @@ async function startWorkers() {
       "qualityScore",
       "onboardingNudge",
       "taxReporting",
+      "authAttempt",
     ],
   });
 
@@ -86,6 +88,7 @@ async function startWorkers() {
       qualityScoreWorker.close(),
       onboardingNudgeWorker.close(),
       taxReportingWorker.close(),
+      authAttemptWorker.close(),
       stopScheduler(),
     ]);
 

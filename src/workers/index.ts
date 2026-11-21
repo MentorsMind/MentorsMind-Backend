@@ -27,6 +27,7 @@ import { insightGenerationWorker } from './insight-generation.worker';
 import { incidentHandlerWorker } from './incident-handler.worker';
 import { onboardingNudgeWorker } from './onboardingNudge.worker';
 import { taxReportingWorker } from './tax-reporting.worker';
+import { authAttemptWorker } from './auth-attempt.worker';
 import {
     startScheduler,
     stopScheduler,
@@ -109,6 +110,7 @@ const REQUIRED_QUEUE_NAMES = [
     'ONBOARDING_NUDGE',
     'TAX_REPORTING',
     'REPUTATION_SYNC',
+    'AUTH_ATTEMPT',
     'RETENTION_ENFORCEMENT',
 ] as const;
 
@@ -146,6 +148,7 @@ logger.info('[Workers] Queue name validation passed', {
     incidentHandlerWorker,
     onboardingNudgeWorker,
     taxReportingWorker,
+    authAttemptWorker,
 ].forEach(registerWorkerLifecycleLogging);
 
 export {
@@ -174,4 +177,5 @@ export {
     incidentHandlerWorker,
     onboardingNudgeWorker,
     taxReportingWorker,
+    authAttemptWorker,
 };
