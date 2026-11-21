@@ -32,7 +32,6 @@ const DELETION_WHITELIST: WhitelistEntry[] = [
   { tableName: "escrow_transactions", whereColumn: "seller_id" },
   { tableName: "disputes", whereColumn: "initiator_id" },
   { tableName: "meeting_participants", whereColumn: "user_id" },
-  { tableName: "audit_logs", whereColumn: "user_id" },
   { tableName: "oauth_tokens", whereColumn: "user_id" },
   { tableName: "push_tokens", whereColumn: "user_id" },
   { tableName: "messages", whereColumn: "sender_id" },
@@ -147,6 +146,35 @@ async function deleteFromTableIfPresent(
     await client.query(
       `DELETE FROM "${tableName}" WHERE "${whereColumn}" = $1`,
       [userId],
+    );
+  }
+}
+
+async function anonymizeAuditLogsIfPresent(
+  client: PoolClient,
+  userId: string,
+  pseudonym: string,
+): Promise<void> {
+  const { rows } = await client.query(
+    `SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'audit_logs'
+     ) AS present`,
+  );
+
+  if (rows[0]?.present) {
+    await client.query(
+      `UPDATE audit_logs
+          SET user_id = NULL,
+              ip_address = NULL,
+              user_agent = NULL,
+              metadata = jsonb_build_object(
+                'anonymizedUserId', $2,
+                'anonymizedAt', NOW()
+              ),
+              hash_algorithm = 'hmac-sha256-redacted'
+        WHERE user_id = $1`,
+      [userId, pseudonym],
     );
   }
 }
@@ -271,12 +299,16 @@ export const accountDeletionService = {
     const client = await pool.connect();
     const emailToNotify = row.email; // Capture original email before anonymization
     const anonymizedEmail = `deleted+${crypto.createHash("sha256").update(`${row.id}:${row.email}`).digest("hex").slice(0, 24)}@deleted.local`;
+    const auditPseudonym = crypto
+      .createHash("sha256")
+      .update(`audit-log-user:${row.id}`)
+      .digest("hex");
 
     try {
       await client.query("BEGIN");
 
       // Apply your whitelist-protected cleanup for all mapped tables
-      await deleteFromTableIfPresent(client, "audit_logs", "user_id", row.id);
+      await anonymizeAuditLogsIfPresent(client, row.id, auditPseudonym);
       await deleteFromTableIfPresent(
         client,
         "meeting_participants",
@@ -418,9 +450,7 @@ export const accountDeletionService = {
    * @param maxRetries - Maximum number of retry attempts (default: 3)
    * @returns Object containing retry results
    */
-  async retryFailedDeletions(
-    maxRetries: number = 3,
-  ): Promise<{
+  async retryFailedDeletions(maxRetries: number = 3): Promise<{
     total: number;
     successful: number;
     failed: number;
