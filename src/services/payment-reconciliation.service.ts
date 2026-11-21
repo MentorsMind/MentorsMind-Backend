@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import pool from "../config/database";
+import { redis } from "../config/redis";
 import { logger } from "../utils/logger.utils";
 import { SocketService } from "./socket.service";
 
@@ -49,10 +50,55 @@ function inferRail(row: any): string | null {
   return null;
 }
 
+/** TTL for the per-period idempotency claim — long enough to span one day. */
+const RUN_CLAIM_TTL_SECONDS = 24 * 60 * 60;
+
+/** UTC day that a reconciliation run belongs to (the job runs nightly). */
+function reconciliationPeriod(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
 export const PaymentReconciliationService = {
   async runNightlyReconciliation(): Promise<PaymentReconciliationSummary> {
     const startedAt = Date.now();
     const runId = randomUUID();
+
+    // Idempotency guard: atomically claim the current period before doing any
+    // work. A second trigger in the same window (manual re-run, scheduler drift,
+    // overlapping workers) is skipped instead of re-evaluating every booking and
+    // flooding the review queue with duplicate discrepancy rows.
+    const period = reconciliationPeriod();
+    const claimKey = `payment:reconciliation:nightly:${period}`;
+    let claimed = false;
+    try {
+      claimed =
+        (await redis.set(claimKey, runId, "EX", RUN_CLAIM_TTL_SECONDS, "NX")) ===
+        "OK";
+    } catch (err) {
+      // Fail open: a cache outage must not halt reconciliation. The per-booking
+      // existence check still protects against duplicate open discrepancies.
+      logger.warn(
+        "Payment reconciliation idempotency guard unavailable — proceeding",
+        { runId, error: err instanceof Error ? err.message : String(err) },
+      );
+      claimed = true;
+    }
+
+    if (!claimed) {
+      logger.info(
+        "Payment reconciliation already ran for this period — skipping duplicate run",
+        { runId, period },
+      );
+      return {
+        runId,
+        triggeredAt: new Date().toISOString(),
+        totalBookingsChecked: 0,
+        discrepanciesFound: 0,
+        discrepanciesCreated: 0,
+        alertsSent: 0,
+        durationMs: Date.now() - startedAt,
+      };
+    }
 
     try {
       const bookingsRes = await pool.query(
@@ -185,6 +231,9 @@ export const PaymentReconciliationService = {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      // Release the period claim so a failed run can be retried within the
+      // window instead of being silently blocked until the claim expires.
+      await redis.del(claimKey).catch(() => undefined);
       logger.error("PaymentReconciliationService.runNightlyReconciliation failed", {
         error: message,
         runId,

@@ -1,5 +1,6 @@
 import { PaymentReconciliationService } from "../payment-reconciliation.service";
 import pool from "../../config/database";
+import { redis } from "../../config/redis";
 import { SocketService } from "../socket.service";
 
 jest.mock("../../config/database", () => ({
@@ -7,6 +8,9 @@ jest.mock("../../config/database", () => ({
   default: {
     query: jest.fn(),
   },
+}));
+jest.mock("../../config/redis", () => ({
+  redis: { set: jest.fn(), del: jest.fn() },
 }));
 jest.mock("../../utils/logger.utils", () => ({
   logger: { warn: jest.fn(), error: jest.fn(), info: jest.fn() },
@@ -16,13 +20,35 @@ jest.mock("../socket.service", () => ({
 }));
 
 const mockedQuery = pool.query as jest.Mock;
+const mockedRedis = redis as unknown as { set: jest.Mock; del: jest.Mock };
 
 describe("PaymentReconciliationService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // By default the per-period idempotency claim is acquired.
+    mockedRedis.set.mockResolvedValue("OK");
+    mockedRedis.del.mockResolvedValue(1);
   });
 
   describe("runNightlyReconciliation", () => {
+    it("skips a duplicate run in the same period without re-evaluating bookings", async () => {
+      // A previous run already claimed this period, so the SET NX returns null.
+      mockedRedis.set.mockResolvedValue(null);
+
+      const summary = await PaymentReconciliationService.runNightlyReconciliation();
+
+      expect(mockedRedis.set).toHaveBeenCalledWith(
+        expect.stringContaining("payment:reconciliation:nightly:"),
+        expect.any(String),
+        "EX",
+        expect.any(Number),
+        "NX",
+      );
+      expect(summary.discrepanciesCreated).toBe(0);
+      expect(summary.totalBookingsChecked).toBe(0);
+      expect(mockedQuery).not.toHaveBeenCalled();
+    });
+
     it("marks a booking reconciled (no discrepancy) when its single transaction is confirmed with a rail + reference", async () => {
       mockedQuery
         // distinct booking ids
