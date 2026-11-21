@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import archiver from "archiver";
 import crypto from "crypto";
 import pool from "../config/database";
@@ -12,13 +10,7 @@ import { exportQueue } from "../queues/export.queue";
 import { AuditLoggerService } from "./audit-logger.service";
 import { LogLevel, AuditAction } from "../utils/log-formatter.utils";
 import { emailService } from "./email.service";
-import config from "../config";
-
-const EXPORT_DIR = path.join(process.cwd(), "exports");
-
-if (!fs.existsSync(EXPORT_DIR)) {
-  fs.mkdirSync(EXPORT_DIR, { recursive: true });
-}
+import { StorageService } from "./storage.service";
 
 export const DataExportService = {
   async requestExport(userId: string): Promise<DataExportRequest> {
@@ -72,16 +64,13 @@ export const DataExportService = {
       const userData = await this.collectUserData(userId);
 
       const fileName = `data_export_${userId}_${Date.now()}.zip`;
-      const filePath = path.join(EXPORT_DIR, fileName);
-      const output = fs.createWriteStream(filePath);
       const archive = archiver("zip", { zlib: { level: 9 } });
-
-      const archivePromise = new Promise((resolve, reject) => {
-        output.on("close", resolve);
-        archive.on("error", reject);
+      const archiveBufferPromise = new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        archive.on("data", (chunk: Buffer) => chunks.push(chunk));
+        archive.once("end", () => resolve(Buffer.concat(chunks)));
+        archive.once("error", reject);
       });
-
-      archive.pipe(output);
 
       // Add each data category as a JSON file
       for (const [category, data] of Object.entries(userData)) {
@@ -90,20 +79,32 @@ export const DataExportService = {
         });
       }
 
-      await archive.finalize();
-      await archivePromise;
+      const [, archiveBuffer] = await Promise.all([
+        archive.finalize(),
+        archiveBufferPromise,
+      ]);
 
-      const stats = fs.statSync(filePath);
       const checksum = crypto
         .createHash("sha256")
-        .update(fs.readFileSync(filePath))
+        .update(archiveBuffer)
         .digest("hex");
+      const s3Key = StorageService.buildExportKey(
+        userId,
+        requestId,
+        Date.now(),
+      );
+      await StorageService.uploadFile(s3Key, archiveBuffer, "application/zip", {
+        userId,
+        fileName,
+        checksum,
+      });
+
       const expiresAt = new Date();
       expiresAt.setHours(expiresAt.getHours() + 48); // 48h expiry
 
       await DataExportRequestModel.updateStatus(requestId, "completed", {
-        filePath,
-        fileSize: stats.size,
+        filePath: s3Key,
+        fileSize: archiveBuffer.length,
         checksum,
         processedAt: new Date(),
         expiresAt,
@@ -112,7 +113,10 @@ export const DataExportService = {
       // Send email
       const user = await UsersService.findById(userId);
       if (user) {
-        const downloadUrl = `${config.server.apiVersion}/users/me/data-export/download/${requestId}`; // Simplified
+        const downloadUrl = await StorageService.generatePresignedUrl(
+          s3Key,
+          48 * 60 * 60,
+        );
         await emailService.sendEmail({
           to: [user.email],
           subject: "Your Data Export is Ready",
@@ -133,7 +137,7 @@ export const DataExportService = {
         userId: userId,
         entityType: "data_export_request",
         entityId: requestId,
-        metadata: { fileName, fileSize: stats.size },
+        metadata: { fileName, fileSize: archiveBuffer.length },
       });
     } catch (error: any) {
       await DataExportRequestModel.updateStatus(requestId, "failed", {

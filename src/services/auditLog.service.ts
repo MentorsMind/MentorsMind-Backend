@@ -419,7 +419,10 @@ export const AuditLogService = {
    *
    * Checks:
    *   1. Each record's previous_hash matches the preceding record's record_hash
-   *   2. Each record's record_hash matches the recomputed HMAC over its fields
+   *   2. Each non-redacted record's record_hash matches the recomputed HMAC
+   *
+   * Redacted records retain their original record_hash and chain links, but
+   * their content HMAC cannot be recomputed after personal data is removed.
    *
    * Returns a list of any broken links (tampering evidence).
    */
@@ -449,6 +452,15 @@ export const AuditLogService = {
               `got ${current.previous_hash ?? "null"}`,
           );
         }
+      }
+
+      // The original HMAC remains as a commitment, but redacted fields are no
+      // longer available to recompute it. Chain continuity is still checked.
+      if (
+        current.record_hash &&
+        current.hash_algorithm === "hmac-sha256-redacted"
+      ) {
+        continue;
       }
 
       // Check 2: HMAC integrity — recompute the hash and compare
