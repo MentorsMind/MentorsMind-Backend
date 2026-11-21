@@ -157,6 +157,8 @@ export class FeatureFlagService {
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
   static async create(input: CreateFlagInput): Promise<FeatureFlag> {
+    this.assertValidVariantWeights(input.variants);
+
     if (input.dependsOnKey) {
       await this.assertNoDependencyCycle(input.key, input.dependsOnKey);
     }
@@ -211,6 +213,8 @@ export class FeatureFlagService {
     const existing = await this.findById(id);
     if (!existing) return null;
 
+    this.assertValidVariantWeights(input.variants);
+
     if (input.dependsOnKey) {
       await this.assertNoDependencyCycle(existing.key, input.dependsOnKey);
     }
@@ -249,6 +253,28 @@ export class FeatureFlagService {
     const { rowCount } = await pool.query('DELETE FROM feature_flags WHERE id = $1', [id]);
     if (existing) await publishFlagUpdated(existing.key);
     return (rowCount ?? 0) > 0;
+  }
+
+  /**
+   * Enforces that variant weights (0-100 each) sum to 100 so rollout
+   * percentages are not silently skewed. No-op when no variants are provided.
+   */
+  private static assertValidVariantWeights(variants?: FlagVariant[]): void {
+    if (!variants || variants.length === 0) return;
+
+    for (const variant of variants) {
+      if (variant.weight < 0 || variant.weight > 100) {
+        throw new Error(
+          `Feature flag variant "${variant.name}" weight must be between 0 and 100 (got ${variant.weight})`,
+        );
+      }
+    }
+
+    const sum = variants.reduce((acc, variant) => acc + variant.weight, 0);
+    // Tolerance guards against floating-point drift for fractional weights.
+    if (Math.abs(sum - 100) > 0.001) {
+      throw new Error(`Feature flag variant weights must sum to 100 (got ${sum})`);
+    }
   }
 
   /**
