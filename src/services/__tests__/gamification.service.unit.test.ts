@@ -330,13 +330,19 @@ describe('GamificationService - Point Calculation & Gamification Logic', () => {
         streakReset: false,
       });
       (db.query as jest.Mock)
-        .mockResolvedValueOnce({ rows: [] }) // milestone not announced yet
-        .mockResolvedValueOnce({ rows: [] }); // insert into streak_milestone_notifications
+        .mockResolvedValueOnce({ rows: [{ id: 'claim-1' }] });
 
       const result = await GamificationService.recordActivity('user-1');
 
       expect(result.streak).toBe(7);
       expect(result.streakIncreased).toBe(true);
+      expect(db.query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO streak_milestone_notifications'),
+        ['user-1', 7],
+      );
+      expect((db.query as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
+        (PushService.sendStreakMilestone as jest.Mock).mock.invocationCallOrder[0],
+      );
       expect(PushService.sendStreakMilestone).toHaveBeenCalledWith('user-1', 7);
     });
 
@@ -348,8 +354,7 @@ describe('GamificationService - Point Calculation & Gamification Logic', () => {
           streakReset: false,
         });
         (db.query as jest.Mock)
-          .mockResolvedValueOnce({ rows: [] })
-          .mockResolvedValueOnce({ rows: [] });
+          .mockResolvedValueOnce({ rows: [{ id: `claim-${milestone}` }] });
 
         await GamificationService.recordActivity('user-1');
 
@@ -382,14 +387,14 @@ describe('GamificationService - Point Calculation & Gamification Logic', () => {
       expect(PushService.sendStreakMilestone).not.toHaveBeenCalled();
     });
 
-    it('does not duplicate announcement if milestone was already recorded in DB', async () => {
+    it('does not send if another attempt already claimed the milestone', async () => {
       (GamificationModel.updateStreak as jest.Mock).mockResolvedValueOnce({
         streak: 7,
         streakIncreased: true,
         streakReset: false,
       });
       (db.query as jest.Mock).mockResolvedValueOnce({
-        rows: [{ user_id: 'user-1', milestone: 7 }],
+        rows: [],
       });
 
       await GamificationService.recordActivity('user-1');

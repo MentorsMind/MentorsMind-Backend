@@ -28,7 +28,7 @@ export class GamificationService {
     const result = await GamificationModel.updateStreak(userId);
 
     // Trigger push notifications on streak milestones (issue #984).
-    // Idempotent: each milestone is announced at most once per user.
+    // At-most-once: claim each milestone before sending to avoid duplicates.
     if (result.streakIncreased && [7, 30, 60, 100].includes(result.streak)) {
       await this.announceStreakMilestone(userId, result.streak);
     }
@@ -37,8 +37,8 @@ export class GamificationService {
   }
 
   /**
-   * Fire a streak-milestone push notification exactly once per (user, milestone).
-   * Best-effort: failures are logged and never fail the check-in.
+   * Claim and send a streak-milestone push notification at most once per
+   * (user, milestone). Failures are logged and never fail the check-in.
    */
   private static async announceStreakMilestone(
     userId: string,
@@ -47,23 +47,18 @@ export class GamificationService {
     try {
       const db = (await import('../config/database')).default;
       const { rows } = await db.query(
-        `SELECT 1 FROM streak_milestone_notifications
-         WHERE user_id = $1 AND milestone = $2`,
+        `INSERT INTO streak_milestone_notifications (user_id, milestone)
+         VALUES ($1, $2) ON CONFLICT (user_id, milestone) DO NOTHING
+         RETURNING id`,
         [userId, milestone],
       );
 
-      if (rows.length > 0) {
-        return; // already announced
+      if (rows.length === 0) {
+        return; // already claimed by this or another attempt
       }
 
       const { PushService } = await import('./push.service');
       await PushService.sendStreakMilestone(userId, milestone);
-
-      await db.query(
-        `INSERT INTO streak_milestone_notifications (user_id, milestone)
-         VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [userId, milestone],
-      );
 
       logger.info(`[GamificationService] Announced streak milestone`, {
         userId,
