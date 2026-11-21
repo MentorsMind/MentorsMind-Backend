@@ -1,4 +1,4 @@
-﻿import { Request, Response } from "express";
+import { Request, Response } from "express";
 import { AuthenticatedRequest } from "../middleware/auth.middleware";
 import { SessionModel } from "../models/session.model";
 import { BookingModel } from "../models/booking.model";
@@ -10,6 +10,43 @@ import { EventStoreService } from "../services/event-store.service";
 import { ResponseUtil } from "../utils/response.utils";
 import { asyncHandler } from "../utils/asyncHandler.utils";
 import { Logger, logger } from "../utils/logger.utils";
+
+/** Maximum number of days in advance a booking may be scheduled. */
+const MAX_BOOKING_HORIZON_DAYS = 365;
+
+/**
+ * Parses and validates a user-supplied scheduledAt value.
+ * Returns a valid Date or an error message.
+ */
+function parseScheduledAt(
+  value: unknown,
+): { date: Date } | { error: string } {
+  if (value === undefined || value === null || value === "") {
+    return { error: "scheduledAt is required" };
+  }
+  if (typeof value !== "string" && typeof value !== "number") {
+    return { error: "scheduledAt must be a valid date string" };
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return { error: "scheduledAt is not a valid date" };
+  }
+
+  const now = Date.now();
+  if (date.getTime() <= now) {
+    return { error: "scheduledAt must be in the future" };
+  }
+
+  const maxMs = MAX_BOOKING_HORIZON_DAYS * 24 * 60 * 60 * 1000;
+  if (date.getTime() - now > maxMs) {
+    return {
+      error: `scheduledAt must be within ${MAX_BOOKING_HORIZON_DAYS} days from now`,
+    };
+  }
+
+  return { date };
+}
 
 /**
  * Bookings Controller - Handles session booking operations with meeting URL generation
@@ -27,10 +64,15 @@ export const BookingsController = {
       return ResponseUtil.unauthorized(res, "Authentication required");
     }
 
+    const parsed = parseScheduledAt(scheduledAt);
+    if ("error" in parsed) {
+      return ResponseUtil.error(res, parsed.error, 400);
+    }
+
     const bookingData = {
       menteeId,
       mentorId,
-      scheduledAt: new Date(scheduledAt),
+      scheduledAt: parsed.date,
       durationMinutes,
       topic,
       notes,
@@ -333,99 +375,8 @@ export const BookingsController = {
       res,
       {
         bookingId: id,
-        events: history.events,
-        total: history.total,
-        limit,
-        offset,
+        events: history,
       },
-      "Booking event history retrieved",
-    );
-  }),
-
-  /**
-   * POST /api/v1/bookings/:id/no-show/dispute
-   * File a dispute against a recorded no-show within the dispute window.
-   */
-  disputeNoShow: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user?.id ?? req.user?.userId;
-    const { reason } = req.body;
-
-    if (!userId) {
-      return ResponseUtil.unauthorized(res, "Authentication required");
-    }
-    if (!id || Array.isArray(id)) {
-      return ResponseUtil.error(res, "Invalid booking ID", 400);
-    }
-    if (!reason || typeof reason !== "string" || !reason.trim()) {
-      return ResponseUtil.error(res, "Dispute reason is required", 400);
-    }
-
-    const booking = await BookingsService.disputeNoShow(id, userId, reason.trim());
-    return ResponseUtil.success(
-      res,
-      { booking },
-      "No-show dispute submitted and pending review",
-    );
-  }),
-
-  /**
-   * POST /api/v1/bookings/:id/no-show/dispute/resolve
-   * Admin resolves a pending no-show dispute (approved | dismissed).
-   */
-  resolveNoShowDispute: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const adminUserId = req.user?.id ?? req.user?.userId;
-    const { decision, note } = req.body;
-
-    if (!adminUserId) {
-      return ResponseUtil.unauthorized(res, "Authentication required");
-    }
-    if (!id || Array.isArray(id)) {
-      return ResponseUtil.error(res, "Invalid booking ID", 400);
-    }
-    if (!["approved", "dismissed"].includes(decision)) {
-      return ResponseUtil.error(res, "Decision must be 'approved' or 'dismissed'", 400);
-    }
-
-    const booking = await BookingsService.resolveNoShowDispute(
-      id,
-      adminUserId,
-      decision as "approved" | "dismissed",
-      typeof note === "string" && note.trim() ? note.trim() : undefined,
-    );
-    return ResponseUtil.success(
-      res,
-      { booking },
-      "No-show dispute resolved",
-    );
-  }),
-
-  /**
-   * Complete a booking
-   * PATCH /api/v1/bookings/:id/complete
-   * POST /api/v1/bookings/:id/complete
-   */
-  completeBooking: asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const { id } = req.params;
-    const userId = req.user?.id ?? req.user?.userId;
-
-    if (!userId) {
-      return ResponseUtil.unauthorized(res, "Authentication required");
-    }
-
-    if (!id || Array.isArray(id)) {
-      return ResponseUtil.error(res, "Invalid booking ID", 400);
-    }
-
-    const booking = await BookingsService.completeBooking(id, userId);
-
-    return ResponseUtil.success(
-      res,
-      { booking, session: booking },
-      "Booking marked as completed successfully",
     );
   }),
 };
-
-export default BookingsController;

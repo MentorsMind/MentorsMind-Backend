@@ -9,7 +9,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "node init && tsc",
     "generate": "node ../../scripts/generate-api-types.js",
     "prepublishOnly": "npm run build"
   },

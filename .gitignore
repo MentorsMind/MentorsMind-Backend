@@ -4,8 +4,6 @@ yarn.lock
 .kiro
 
 # Environment variables — keep .env.example tracked as a template
-.env
-.env.*
 !.env.example
 
 # Build outputs
@@ -22,7 +20,6 @@ yarn-debug.log*
 yarn-error.log*
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -50,3 +47,4 @@ openapi.main.json
 # Database
 *.db
 *.sqlite
+config.bat
