@@ -1,5 +1,6 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
 import pool from '../config/database';
+import { env } from '../config/env';
 import { logger } from '../utils/logger.utils';
 import {
   executeSorobanInvocation,
@@ -45,20 +46,17 @@ class StellarSorobanVestingClient implements SorobanVestingClient {
 
   constructor() {
     const sdkAny = StellarSdk as any;
-    const serverUrl =
-      process.env.SOROBAN_RPC_URL ||
-      process.env.STELLAR_RPC_URL ||
-      'https://soroban-testnet.stellar.org';
+    const serverUrl = env.SOROBAN_RPC_URL;
 
     const RpcServerCtor = sdkAny.SorobanRpc?.Server || sdkAny.rpc?.Server;
     this.rpcServer = RpcServerCtor ? new RpcServerCtor(serverUrl) : null;
 
-    this.keypair = process.env.PLATFORM_SECRET_KEY
-      ? sdkAny.Keypair.fromSecret(process.env.PLATFORM_SECRET_KEY)
+    this.keypair = env.PLATFORM_SECRET_KEY
+      ? sdkAny.Keypair.fromSecret(env.PLATFORM_SECRET_KEY)
       : null;
 
     this.networkPassphrase =
-      process.env.STELLAR_NETWORK === 'mainnet'
+      env.STELLAR_NETWORK === 'mainnet'
         ? sdkAny.Networks.PUBLIC
         : sdkAny.Networks.TESTNET;
   }
@@ -114,7 +112,7 @@ class StellarSorobanVestingClient implements SorobanVestingClient {
     }
 
     const sourcePublicKey =
-      this.keypair?.publicKey?.() || process.env.PLATFORM_PUBLIC_KEY;
+      this.keypair?.publicKey?.() || env.PLATFORM_PUBLIC_KEY;
 
     if (!sourcePublicKey) {
       throw new Error(
@@ -774,8 +772,8 @@ class VestingServiceImpl {
 
   private getDefaultContractAddress(): string | undefined {
     return (
-      process.env.SOROBAN_VESTING_CONTRACT_ADDRESS ||
-      process.env.VESTING_CONTRACT_ADDRESS ||
+      env.SOROBAN_VESTING_CONTRACT_ADDRESS ||
+      env.VESTING_CONTRACT_ADDRESS ||
       undefined
     );
   }

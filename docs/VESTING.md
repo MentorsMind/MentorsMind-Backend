@@ -547,8 +547,8 @@ Then trigger manual sync for each.
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
 | `SOROBAN_VESTING_CONTRACT_ADDRESS` | Yes | Deployed contract address | `CABC123...` |
-| `SOROBAN_RPC_URL` | No | RPC endpoint (default: testnet) | `https://soroban-testnet.stellar.org` |
-| `PLATFORM_SECRET_KEY` | Yes | Admin signing key | `SABC123...` |
+| `SOROBAN_RPC_URL` | No | RPC endpoint; validated as a URL (default: testnet) | `https://soroban-testnet.stellar.org` |
+| `PLATFORM_SECRET_KEY` | Yes, when a vesting contract is configured | Valid Stellar admin signing seed | `SABC123...` |
 | `PLATFORM_PUBLIC_KEY` | No | Admin public key (derived if not set) | `GABC123...` |
 | `STELLAR_NETWORK` | No | `testnet` or `mainnet` (default: testnet) | `testnet` |
 
