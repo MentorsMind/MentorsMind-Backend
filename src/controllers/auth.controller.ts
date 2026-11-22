@@ -21,7 +21,7 @@ import { routeParam } from "../utils/route-params.utils";
 export const AuthController = {
   async register(req: Request, res: Response) {
     try {
-      const validatedData = registerSchema.parse(req).body;
+      const validatedData = (await registerSchema.parseAsync(req)).body;
       const result = await AuthService.register(validatedData);
 
       await AuditLogService.log({
