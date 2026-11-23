@@ -9,6 +9,7 @@ import { runLeaderboardPrecompute } from "../jobs/leaderboardPrecompute.job";
 import { runStreakTracking } from "../jobs/streakTracking.job";
 import { WalletReconciliationService } from "../services/wallet-reconciliation.service";
 import { PaymentReconciliationService } from "../services/payment-reconciliation.service";
+import { runDisputeEscalationJob } from "../jobs/disputeEscalation.job";
 import { logger } from "../utils/logger.utils";
 
 async function processMaintenanceJob(job: Job): Promise<void> {
@@ -69,6 +70,14 @@ async function processMaintenanceJob(job: Job): Promise<void> {
 
   if (job.name === "payment-reconciliation-scheduled") {
     await handlePaymentReconciliation(job);
+    return;
+  }
+
+  if (job.name === "dispute-escalation-scheduled") {
+    logger.info("[MaintenanceWorker] Running dispute escalation", {
+      jobId: job.id,
+    });
+    await runDisputeEscalationJob();
     return;
   }
 

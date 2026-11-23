@@ -11,6 +11,10 @@ async function bootstrap() {
   await loadSecrets();
   // Dynamic import ensures config/env.ts is evaluated AFTER secrets are merged
   await import("./server");
+
+  // Initialize scheduled dispute escalation cron job
+  const { disputeEscalationJob } = await import("./jobs/disputeEscalation.job");
+  disputeEscalationJob.initialize();
 }
 
 bootstrap().catch((err) => {

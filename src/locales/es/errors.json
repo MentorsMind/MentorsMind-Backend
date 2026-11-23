@@ -164,6 +164,7 @@
     "DISPUTE_ESCROW_MISSING": "No se encontró depósito en garantía para la reserva",
     "DISPUTE_INVALID_STATUS_TRANSITION": "La disputa no puede cambiar al estado solicitado",
     "DISPUTE_UPDATE_FAILED": "Error al actualizar el estado de la disputa",
+    "DISPUTE_ALREADY_EXISTS": "Ya existe una disputa abierta para esta reserva",
     "USER_NOT_FOUND": "Usuario no encontrado",
     "USER_ACCESS_DENIED": "Acceso denegado",
     "USER_UPDATE_FAILED": "Error al actualizar el usuario",

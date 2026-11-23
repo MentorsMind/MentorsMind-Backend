@@ -164,6 +164,7 @@
     "DISPUTE_ESCROW_MISSING": "No escrow found for booking",
     "DISPUTE_INVALID_STATUS_TRANSITION": "Dispute cannot transition to the requested status",
     "DISPUTE_UPDATE_FAILED": "Failed to update dispute status",
+    "DISPUTE_ALREADY_EXISTS": "An open dispute already exists for this booking",
     "USER_NOT_FOUND": "User not found",
     "USER_ACCESS_DENIED": "Access denied",
     "USER_UPDATE_FAILED": "Failed to update user",

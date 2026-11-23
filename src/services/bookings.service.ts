@@ -38,6 +38,16 @@ import {
   BookingProjectionEventType,
 } from "../events/booking.reducer";
 
+/**
+ * Maximum acceptable age for exchange rates when computing USD equivalents.
+ * Set to 5 minutes (300 seconds), matching the Soroban oracle contract STALE_SECS.
+ * If an oracle or cached rate is older than this (e.g. from an extended network
+ * outage or stale fallback), computing usdEquivalent is skipped to prevent storing
+ * inaccurate or misleading booking costs.
+ */
+export const MAX_USD_EQUIVALENT_RATE_STALENESS_MS = 5 * 60 * 1000; // 5 minutes
+export const MAX_RATE_STALENESS_MS = MAX_USD_EQUIVALENT_RATE_STALENESS_MS;
+
 /** Dual-write helper — never fails the primary booking mutation. */
 async function publishBookingDomainEvent(
   bookingId: string,
@@ -213,10 +223,36 @@ export const BookingsService = {
 
         // Best-effort USD equivalent (oracle preferred, SDEX fallback via
         // AssetExchangeService). Never blocks booking creation on failure.
+        // Validates rate freshness to avoid storing inaccurate costs from stale cache/oracle outages.
         let usdEquivalent: string | null = null;
         try {
           const rate = await AssetExchangeService.getRate("XLM", "USDC");
-          usdEquivalent = (parseFloat(amount) * parseFloat(rate.rate)).toFixed(2);
+          let isStale = false;
+          if (rate.fetchedAt) {
+            const rateTime = new Date(rate.fetchedAt).getTime();
+            if (
+              isNaN(rateTime) ||
+              Date.now() - rateTime > MAX_USD_EQUIVALENT_RATE_STALENESS_MS
+            ) {
+              isStale = true;
+            }
+          }
+
+          if (isStale) {
+            logger.warn(
+              "Exchange rate for USD equivalent is stale, skipping computation",
+              {
+                mentorId: data.mentorId,
+                fetchedAt: rate.fetchedAt,
+                rateAgeMs: rate.fetchedAt
+                  ? Date.now() - new Date(rate.fetchedAt).getTime()
+                  : null,
+                maxAllowedAgeMs: MAX_USD_EQUIVALENT_RATE_STALENESS_MS,
+              },
+            );
+          } else {
+            usdEquivalent = (parseFloat(amount) * parseFloat(rate.rate)).toFixed(2);
+          }
         } catch (error) {
           logger.warn("Failed to compute USD equivalent for booking amount", {
             mentorId: data.mentorId,
