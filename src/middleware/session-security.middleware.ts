@@ -26,7 +26,26 @@ const MFA_STEPUP_THRESHOLD = (() => {
   return n > 0 ? n : 0; // 0 = disabled
 })();
 const DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes between expensive per-request checks
+const DEBOUNCE_CLEANUP_INTERVAL = 10 * 60 * 1000; // Clean up every 10 minutes
+const DEBOUNCE_EXPIRY = 5 * 60 * 1000; // Remove entries older than 5 minutes
 const debounce = new Map<string, number>();
+
+// Periodic cleanup to prevent memory leak
+setInterval(() => {
+  const now = Date.now();
+  const threshold = now - DEBOUNCE_EXPIRY;
+  for (const [key, timestamp] of debounce.entries()) {
+    if (timestamp < threshold) {
+      debounce.delete(key);
+    }
+  }
+  if (debounce.size > 0) {
+    logger.debug('Session security debounce cleanup', { 
+      entriesRemoved: debounce.size,
+      remainingEntries: debounce.size 
+    });
+  }
+}, DEBOUNCE_CLEANUP_INTERVAL);
 
 export interface SessionSecurityContext {
   sessionId?: string;

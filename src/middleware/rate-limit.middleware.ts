@@ -120,10 +120,17 @@ export const apiLimiter = async (
   const user = (req as any).user;
   const tier = (user?.userTier || user?.user_tier || "free").toLowerCase();
 
-  // Enterprise bypass
+  // Enterprise bypass - still set headers for consistency
   if (tier === "enterprise") {
     res.setHeader("X-RateLimit-Tier", "enterprise");
     res.setHeader("X-RateLimit-Bypass", "tier");
+    // Set headers with effectively unlimited values for enterprise users
+    setRateLimitHeaders(res, {
+      limit: 999999,
+      current: 0,
+      remaining: 999999,
+      resetTime: new Date(Date.now() + 15 * 60 * 1000),
+    });
     return next();
   }
 
