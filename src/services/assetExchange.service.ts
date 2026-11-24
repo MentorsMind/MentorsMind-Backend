@@ -24,6 +24,7 @@ import { v4 as uuidv4 } from 'uuid';
 // ---------------------------------------------------------------------------
 
 export const MAX_SLIPPAGE_PCT = 1;    // 1 % max slippage enforced on path payments
+export const MAX_RATE_STALENESS_MS = 5 * 60 * 1000; // 5 minutes max staleness for exchange rates
 const RATE_STALE_PCT = 2;             // reject if rate moved > 2 % since quote
 const RATE_TTL_SECONDS = 60;          // Redis TTL for exchange rates
 const QUOTE_TTL_SECONDS = 120;        // Quotes valid for 2 minutes
@@ -223,6 +224,16 @@ export const AssetExchangeService = {
     }
 
     return quote;
+  },
+
+  /**
+   * Check if an exchange rate is stale based on its fetchedAt timestamp.
+   */
+  isRateStale(rate: ExchangeRate, maxAgeMs: number = MAX_RATE_STALENESS_MS): boolean {
+    if (!rate || !rate.fetchedAt) return false;
+    const rateTime = new Date(rate.fetchedAt).getTime();
+    if (isNaN(rateTime)) return true;
+    return Date.now() - rateTime > maxAgeMs;
   },
 
   /**

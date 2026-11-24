@@ -107,6 +107,7 @@ export enum ErrorCode {
   DISPUTE_ESCROW_MISSING = 'DISPUTE_ESCROW_MISSING',
   DISPUTE_INVALID_STATUS_TRANSITION = 'DISPUTE_INVALID_STATUS_TRANSITION',
   DISPUTE_UPDATE_FAILED = 'DISPUTE_UPDATE_FAILED',
+  DISPUTE_ALREADY_EXISTS = 'DISPUTE_ALREADY_EXISTS',
 
   // ─── Users ──────────────────────────────────────────────────────────────────
   USER_NOT_FOUND = 'USER_NOT_FOUND',
@@ -459,6 +460,7 @@ export const ERROR_CATALOG = Object.fromEntries([
   entry(ErrorCode.DISPUTE_ESCROW_MISSING, 400, 'No escrow found for booking'),
   entry(ErrorCode.DISPUTE_INVALID_STATUS_TRANSITION, 409, 'Dispute cannot transition to the requested status'),
   entry(ErrorCode.DISPUTE_UPDATE_FAILED, 500, 'Failed to update dispute status'),
+  entry(ErrorCode.DISPUTE_ALREADY_EXISTS, 409, 'An open dispute already exists for this booking'),
 
   // ─── Users ──────────────────────────────────────────────────────────────────
   entry(ErrorCode.USER_NOT_FOUND, 404, 'User not found'),

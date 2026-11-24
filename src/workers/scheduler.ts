@@ -20,6 +20,8 @@ import staleDataCleanupJob from "../jobs/stale-data-cleanup.job";
 import deprecationMaintenanceJob from "../jobs/deprecation-maintenance.job";
 import { runLeaderboardPrecompute } from "../jobs/leaderboardPrecompute.job";
 import { runStreakTracking } from "../jobs/streakTracking.job";
+import { runDisputeEscalationJob } from "../jobs/disputeEscalation.job";
+import { DisputeService } from "../services/disputes.service";
 import { logger } from "../utils/logger.utils";
 import config from "../config";
 import { AuditLogModel } from "../models/audit-log.model";
@@ -261,6 +263,18 @@ export async function startScheduler(): Promise<void> {
     },
   );
 
+  // Dispute auto-escalation — daily at 00:00 UTC. Automatically transitions
+  // open disputes older than 7 days to investigating status.
+  await addRepeatableJobIfNotExists(
+    maintenanceQueue,
+    "dispute-escalation-scheduled",
+    { jobType: "dispute-escalation" },
+    {
+      repeat: { pattern: "0 0 * * *" }, // cron: daily 00:00 UTC
+      jobId: "dispute-escalation-recurring",
+    },
+  );
+
   logger.info(
     "Job scheduler started — weekly earnings, session reminders, escrow check, notification cleanup, daily maintenance, verification retry, audit log archival, key rotation, insight generation, leaderboard pre-computation, and streak tracking registered",
   );
@@ -338,6 +352,15 @@ export async function runMaintenanceTasks(): Promise<void> {
     }
   } catch (error) {
     logger.error("Maintenance: error cleaning up expired exports", { error });
+  }
+
+  try {
+    const escalated = await DisputeService.escalateOldDisputes();
+    if (escalated > 0) {
+      logger.info("Maintenance: old disputes escalated", { count: escalated });
+    }
+  } catch (error) {
+    logger.error("Maintenance: error escalating old disputes", { error });
   }
 
   try {

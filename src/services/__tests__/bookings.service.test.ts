@@ -86,6 +86,101 @@ describe('BookingsService', () => {
       }));
     });
 
+    it('sets usdEquivalent to null when exchange rate is stale (> 5 minutes)', async () => {
+      (db.query as jest.Mock).mockResolvedValue({
+        rows: [
+          { id: 'mentee-1', role: 'mentee', status: 'active' },
+          { id: 'mentor-1', role: 'mentor', status: 'active' }
+        ]
+      });
+      (BookingModel.checkConflict as jest.Mock).mockResolvedValue(false);
+      (MentorsService.findById as jest.Mock).mockResolvedValue({ hourly_rate: 100 });
+      const staleTimestamp = new Date(Date.now() - 10 * 60 * 1000).toISOString(); // 10 minutes ago
+      (AssetExchangeService.getRate as jest.Mock).mockResolvedValue({
+        rate: '0.1',
+        fetchedAt: staleTimestamp,
+      });
+      (BookingModel.create as jest.Mock).mockResolvedValue({ id: 'booking-stale' });
+
+      const result = await BookingsService.createBooking({
+        menteeId: 'mentee-1',
+        mentorId: 'mentor-1',
+        scheduledAt: futureDate,
+        durationMinutes: 60,
+        topic: 'Test Stale Exchange Rate'
+      });
+
+      expect(result.id).toBe('booking-stale');
+      expect(BookingModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        amount: '100.0000000',
+        currency: 'XLM',
+        usdEquivalent: null
+      }));
+    });
+
+    it('sets usdEquivalent to null when exchange rate fetchedAt is an invalid date', async () => {
+      (db.query as jest.Mock).mockResolvedValue({
+        rows: [
+          { id: 'mentee-1', role: 'mentee', status: 'active' },
+          { id: 'mentor-1', role: 'mentor', status: 'active' }
+        ]
+      });
+      (BookingModel.checkConflict as jest.Mock).mockResolvedValue(false);
+      (MentorsService.findById as jest.Mock).mockResolvedValue({ hourly_rate: 100 });
+      (AssetExchangeService.getRate as jest.Mock).mockResolvedValue({
+        rate: '0.1',
+        fetchedAt: 'invalid-iso-date',
+      });
+      (BookingModel.create as jest.Mock).mockResolvedValue({ id: 'booking-invalid-date' });
+
+      const result = await BookingsService.createBooking({
+        menteeId: 'mentee-1',
+        mentorId: 'mentor-1',
+        scheduledAt: futureDate,
+        durationMinutes: 60,
+        topic: 'Test Invalid Timestamp'
+      });
+
+      expect(result.id).toBe('booking-invalid-date');
+      expect(BookingModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        amount: '100.0000000',
+        currency: 'XLM',
+        usdEquivalent: null
+      }));
+    });
+
+    it('computes usdEquivalent when exchange rate is fresh (< 5 minutes)', async () => {
+      (db.query as jest.Mock).mockResolvedValue({
+        rows: [
+          { id: 'mentee-1', role: 'mentee', status: 'active' },
+          { id: 'mentor-1', role: 'mentor', status: 'active' }
+        ]
+      });
+      (BookingModel.checkConflict as jest.Mock).mockResolvedValue(false);
+      (MentorsService.findById as jest.Mock).mockResolvedValue({ hourly_rate: 100 });
+      const freshTimestamp = new Date(Date.now() - 30 * 1000).toISOString(); // 30 seconds ago
+      (AssetExchangeService.getRate as jest.Mock).mockResolvedValue({
+        rate: '0.1',
+        fetchedAt: freshTimestamp,
+      });
+      (BookingModel.create as jest.Mock).mockResolvedValue({ id: 'booking-fresh' });
+
+      const result = await BookingsService.createBooking({
+        menteeId: 'mentee-1',
+        mentorId: 'mentor-1',
+        scheduledAt: futureDate,
+        durationMinutes: 60,
+        topic: 'Test Fresh Exchange Rate'
+      });
+
+      expect(result.id).toBe('booking-fresh');
+      expect(BookingModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        amount: '100.0000000',
+        currency: 'XLM',
+        usdEquivalent: '10.00'
+      }));
+    });
+
     it('throws 409 conflict if advisory lock cannot be acquired', async () => {
       mockClient.query.mockImplementation(async (sql: string) => {
         if (typeof sql === 'string' && sql.includes('pg_try_advisory_xact_lock')) {

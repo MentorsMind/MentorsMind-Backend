@@ -23,6 +23,17 @@ jest.mock('../dispute-state-machine.service');
 describe('DisputeService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (DatabaseService.withTransaction as jest.Mock).mockImplementation(async (cb) => {
+      const client = {
+        query: jest.fn().mockImplementation(async (sql: string) => {
+          if (typeof sql === 'string' && sql.includes('SELECT')) {
+            return { rows: [] };
+          }
+          return { rows: [{ id: 'dispute-1', status: 'open' }] };
+        }),
+      };
+      return cb(client);
+    });
   });
 
   describe('openDispute', () => {
@@ -36,6 +47,24 @@ describe('DisputeService', () => {
       expect(result.id).toBe('dispute-1');
       expect(NotificationService.sendNotification).toHaveBeenCalledTimes(2);
       expect(AuditLogModel.create).toHaveBeenCalled();
+    });
+
+    it('throws 409 conflict if an open dispute already exists for the session', async () => {
+      (pool.query as jest.Mock).mockResolvedValue({
+        rows: [{ mentor_id: 'mentor-1', mentee_id: 'mentee-1', escrow_id: 'escrow-1' }]
+      });
+      (DisputeModel.findOpenBySessionId as jest.Mock).mockResolvedValue({
+        id: 'existing-dispute-1',
+        session_id: 'session-1',
+        status: 'open',
+      });
+
+      await expect(
+        DisputeService.openDispute('session-1', 'mentee-1', 'quality', 'duplicate dispute reason')
+      ).rejects.toMatchObject({
+        statusCode: 409,
+        code: ErrorCode.DISPUTE_ALREADY_EXISTS,
+      });
     });
 
     it('throws if booking not found', async () => {
@@ -68,6 +97,35 @@ describe('DisputeService', () => {
       expect(count).toBe(1);
       expect(DisputeModel.updateStatus).toHaveBeenCalledWith('dispute-1', 'investigating', expect.any(String));
       expect(NotificationService.sendNotification).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips disputes already in investigating status', async () => {
+      (DisputeModel.findUnresolvedOlderThanDays as jest.Mock).mockResolvedValue([
+        { id: 'dispute-already-investigating', status: 'investigating', session_id: 'session-1', filed_by_id: 'user-1' }
+      ]);
+      (DisputeStateMachine.canTransition as jest.Mock).mockReturnValue(true);
+
+      const count = await DisputeService.escalateOldDisputes();
+      expect(count).toBe(0);
+      expect(DisputeModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('handles individual dispute failure gracefully without failing entire batch', async () => {
+      (DisputeModel.findUnresolvedOlderThanDays as jest.Mock).mockResolvedValue([
+        { id: 'dispute-fail', status: 'open', session_id: 'session-1', filed_by_id: 'user-1' },
+        { id: 'dispute-success', status: 'open', session_id: 'session-2', filed_by_id: 'user-2' },
+      ]);
+      (DisputeStateMachine.canTransition as jest.Mock).mockReturnValue(true);
+      (DisputeModel.updateStatus as jest.Mock)
+        .mockRejectedValueOnce(new Error('DB failure'))
+        .mockResolvedValueOnce({ id: 'dispute-success', status: 'investigating' });
+      (pool.query as jest.Mock).mockResolvedValue({
+        rows: [{ mentor_id: 'mentor-2', mentee_id: 'user-2' }]
+      });
+
+      const count = await DisputeService.escalateOldDisputes();
+      expect(count).toBe(1);
+      expect(DisputeModel.updateStatus).toHaveBeenCalledTimes(2);
     });
   });
 

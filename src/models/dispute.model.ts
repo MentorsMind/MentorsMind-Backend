@@ -3,6 +3,8 @@ import {
   TenantContext,
   withCurrentTenantFilter,
 } from "../utils/tenant-context.utils";
+import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 
 export type DisputeStatus =
   | "open"
@@ -44,14 +46,21 @@ export const DisputeModel = {
     respondent_id: string;
     type: DisputeType;
     reason: string;
-  }): Promise<DisputeRecord> {
+    status?: DisputeStatus;
+  }, client?: any): Promise<DisputeRecord> {
     const tenantId = TenantContext.hasTenantContext()
       ? TenantContext.getTenantId()
       : null;
 
-    const { rows } = await pool.query<DisputeRecord>(
-      `INSERT INTO disputes (tenant_id, session_id, filed_by_id, respondent_id, type, reason)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    const existingDispute = await this.findOpenBySessionId(data.session_id, client);
+    if (existingDispute) {
+      throw createError(ErrorCode.DISPUTE_ALREADY_EXISTS, 409);
+    }
+
+    const dbClient = client || pool;
+    const { rows } = await dbClient.query<DisputeRecord>(
+      `INSERT INTO disputes (tenant_id, session_id, filed_by_id, respondent_id, type, reason, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         tenantId,
         data.session_id,
@@ -59,9 +68,55 @@ export const DisputeModel = {
         data.respondent_id,
         data.type,
         data.reason,
+        data.status || 'open',
       ],
     );
     return rows[0];
+  },
+
+  /**
+   * Finds an active or open dispute for a given session/booking (status not resolved or dismissed).
+   */
+  async findOpenBySessionId(
+    sessionId: string,
+    client?: any,
+  ): Promise<DisputeRecord | null> {
+    const { query, params } = withCurrentTenantFilter(
+      `SELECT * FROM disputes
+       WHERE session_id = $1
+       AND status NOT IN ('resolved', 'dismissed')
+       LIMIT 1`,
+      [sessionId],
+    );
+    const dbClient = client || pool;
+    const { rows } = await dbClient.query<DisputeRecord>(query, params);
+    return rows[0] || null;
+  },
+
+  /**
+   * Alias for findOpenBySessionId.
+   */
+  async findActiveBySessionId(
+    sessionId: string,
+    client?: any,
+  ): Promise<DisputeRecord | null> {
+    return this.findOpenBySessionId(sessionId, client);
+  },
+
+  /**
+   * Returns all disputes associated with a session/booking.
+   */
+  async findBySessionId(
+    sessionId: string,
+    client?: any,
+  ): Promise<DisputeRecord[]> {
+    const { query, params } = withCurrentTenantFilter(
+      `SELECT * FROM disputes WHERE session_id = $1 ORDER BY created_at DESC`,
+      [sessionId],
+    );
+    const dbClient = client || pool;
+    const { rows } = await dbClient.query<DisputeRecord>(query, params);
+    return rows;
   },
 
   async findById(id: string): Promise<DisputeRecord | null> {

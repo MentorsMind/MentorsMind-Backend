@@ -38,6 +38,7 @@ import { goalReminderJob } from "./jobs/goalReminder.job";
 import keyRotationJob from "./jobs/keyRotation.job";
 import baselineRefreshJob from "./jobs/baselineRefresh.job";
 import { runReEncryptionJob } from "./jobs/re-encrypt-pii.job";
+import { disputeEscalationJob } from "./jobs/disputeEscalation.job";
 import {
   emailWorker,
   paymentWorker,
@@ -184,6 +185,7 @@ stellarMonitorJob.start().catch((err) => {
 // Start scheduled database backup jobs (daily full, hourly WAL, retention)
 backupJob.initialize();
 goalReminderJob.initialize();
+disputeEscalationJob.initialize();
 
 // Start background exchange rate refresh
 import("./services/assetExchange.service")
@@ -212,6 +214,7 @@ async function shutdown(signal: string) {
   stellarMonitorJob.stop();
   backupJob.stop();
   goalReminderJob.stop();
+  disputeEscalationJob.stop();
   keyRotationJob.stop();
   await Promise.allSettled([
     emailWorker.close(),

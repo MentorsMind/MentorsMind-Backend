@@ -89,12 +89,9 @@ export const DisputeResolutionService = {
     }
 
     // Check for existing open dispute on this session
-    const existingDisputes = await DisputeModel.findByUserId(params.filedById);
-    const existingOpen = existingDisputes.find(
-      (d) => d.session_id === params.sessionId && !["resolved", "dismissed"].includes(d.status),
-    );
+    const existingOpen = await DisputeModel.findOpenBySessionId(params.sessionId);
     if (existingOpen) {
-      throw createError(ErrorCode.CONFLICT, 409);
+      throw createError(ErrorCode.DISPUTE_ALREADY_EXISTS, 409);
     }
 
     const dispute = await DisputeModel.create({

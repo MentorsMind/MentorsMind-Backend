@@ -16,6 +16,7 @@ import {
 } from "./outbox.service";
 import { createError } from "../middleware/errorHandler";
 import { ErrorCode } from "../errors/error-codes";
+import { logger } from "../utils/logger.utils";
 
 export class DisputeService {
   static async openDispute(
@@ -36,6 +37,12 @@ export class DisputeService {
     const booking = bookingRows[0];
     if (!booking) throw createError(ErrorCode.DISPUTE_SESSION_NOT_FOUND, 404);
 
+    // Uniqueness check: verify no active/open dispute already exists for this booking before cancelling escrow
+    const existingDispute = await DisputeModel.findOpenBySessionId(sessionId);
+    if (existingDispute) {
+      throw createError(ErrorCode.DISPUTE_ALREADY_EXISTS, 409);
+    }
+
     if (booking.escrow_id) {
       const { cancelEscrowRelease } = await import("../queues/escrow-release.queue");
       await cancelEscrowRelease(booking.escrow_id);
@@ -48,6 +55,12 @@ export class DisputeService {
     // The outbox worker re-dispatches the notification fan-out reliably
     // if the process crashes before sendNotification finishes.
     const dispute = await DatabaseService.withTransaction(async (client) => {
+      // In-transaction concurrency check (protects against simultaneous duplicate requests)
+      const existingInTx = await DisputeModel.findOpenBySessionId(sessionId, client);
+      if (existingInTx) {
+        throw createError(ErrorCode.DISPUTE_ALREADY_EXISTS, 409);
+      }
+
       const insertResult = await client.query<DisputeRecord>(
         `INSERT INTO disputes (session_id, filed_by_id, respondent_id, type, reason, status)
          VALUES ($1, $2, $3, $4, $5, 'open')
@@ -133,67 +146,85 @@ export class DisputeService {
    * Automatically escalate disputes older than 7 days to `investigating`.
    */
   static async escalateOldDisputes(): Promise<number> {
+    logger.info("[DisputeService] Checking for old disputes to escalate");
     const oldDisputes = await DisputeModel.findUnresolvedOlderThanDays(7);
     let escalatedCount = 0;
 
     for (const dispute of oldDisputes) {
-      if (DisputeStateMachine.canTransition(dispute.status, "investigating")) {
-        await DisputeModel.updateStatus(
-          dispute.id,
-          "investigating",
-          "Auto-escalated after 7 days",
-        );
+      try {
+        if (
+          dispute.status !== "investigating" &&
+          DisputeStateMachine.canTransition(dispute.status, "investigating")
+        ) {
+          await DisputeModel.updateStatus(
+            dispute.id,
+            "investigating",
+            "Auto-escalated after 7 days",
+          );
 
-        await AuditLogModel.create({
-          level: "warn",
-          action: "dispute_escalated",
-          message: `Dispute ${dispute.id} automatically escalated`,
-          user_id: null,
-          entity_type: "dispute",
-          entity_id: dispute.id,
-          metadata: { previous_status: dispute.status },
-          ip_address: null,
-          user_agent: null,
-        });
+          await AuditLogModel.create({
+            level: "warn",
+            action: "dispute_escalated",
+            message: `Dispute ${dispute.id} automatically escalated`,
+            user_id: null,
+            entity_type: "dispute",
+            entity_id: dispute.id,
+            metadata: { previous_status: dispute.status },
+            ip_address: null,
+            user_agent: null,
+          });
 
-        // Notify reporter and the other party about escalation
-        const { rows: escalateBookingRows } = await pool.query<{
-          mentor_id: string;
-          mentee_id: string;
-        }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
-          dispute.session_id,
-        ]);
-        const escalateBooking = escalateBookingRows[0];
-        const escalateOtherPartyId =
-          escalateBooking &&
-          (escalateBooking.mentor_id === dispute.filed_by_id
-            ? escalateBooking.mentee_id
-            : escalateBooking.mentor_id);
+          // Notify reporter and the other party about escalation
+          const { rows: escalateBookingRows } = await pool.query<{
+            mentor_id: string;
+            mentee_id: string;
+          }>(`SELECT mentor_id, mentee_id FROM bookings WHERE id = $1 LIMIT 1`, [
+            dispute.session_id,
+          ]);
+          const escalateBooking = escalateBookingRows[0];
+          const escalateOtherPartyId =
+            escalateBooking &&
+            (escalateBooking.mentor_id === dispute.filed_by_id
+              ? escalateBooking.mentee_id
+              : escalateBooking.mentor_id);
 
-        const escalateNotifications = [
-          NotificationService.sendNotification({
-            userId: dispute.filed_by_id,
-            type: NotificationType.DISPUTE_CREATED,
-            channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
-            priority: NotificationPriority.HIGH,
-            data: { disputeId: dispute.id, event: "dispute_escalated" },
-          }),
-        ];
-        if (escalateOtherPartyId) {
-          escalateNotifications.push(
+          const escalateNotifications = [
             NotificationService.sendNotification({
-              userId: escalateOtherPartyId,
+              userId: dispute.filed_by_id,
               type: NotificationType.DISPUTE_CREATED,
               channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
               priority: NotificationPriority.HIGH,
               data: { disputeId: dispute.id, event: "dispute_escalated" },
             }),
-          );
+          ];
+          if (escalateOtherPartyId) {
+            escalateNotifications.push(
+              NotificationService.sendNotification({
+                userId: escalateOtherPartyId,
+                type: NotificationType.DISPUTE_CREATED,
+                channels: [NotificationChannel.IN_APP, NotificationChannel.EMAIL],
+                priority: NotificationPriority.HIGH,
+                data: { disputeId: dispute.id, event: "dispute_escalated" },
+              }),
+            );
+          }
+          await Promise.all(escalateNotifications);
+          escalatedCount++;
+          logger.info("[DisputeService] Dispute auto-escalated to investigating", {
+            disputeId: dispute.id,
+          });
         }
-        await Promise.all(escalateNotifications);
-        escalatedCount++;
+      } catch (err) {
+        logger.error("[DisputeService] Failed to escalate dispute", {
+          disputeId: dispute.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
+    logger.info("[DisputeService] Dispute escalation sweep completed", {
+      escalatedCount,
+      totalChecked: oldDisputes.length,
+    });
     return escalatedCount;
   }
 
