@@ -13,7 +13,7 @@ import {
 const router = Router();
 
 // Apply authentication to all dispute routes
-router.use(authenticate as any);
+router.use(authenticate);
 
 // User/Admin routes
 router.get("/templates/resolution", DisputesController.getResolutionTemplates);

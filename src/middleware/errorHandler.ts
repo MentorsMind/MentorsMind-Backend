@@ -179,8 +179,8 @@ export const errorHandler = (
     ip: req.ip,
   });
 
-  // Only report 5xx errors to Sentry
-  if (statusCode >= 500) {
+  // Report server failures and high-signal operational client failures.
+  if (statusCode >= 500 || [403, 409, 422].includes(statusCode)) {
     Sentry.withScope((scope) => {
       if (user) {
         scope.setUser({ id: user.userId, role: user.role });
@@ -204,8 +204,24 @@ export const errorHandler = (
       Sentry.captureException(err);
     });
   }
-  res.setHeader("X-Request-ID", (req.headers["x-request-id"] as string) || "");
-  res.setHeader("X-Trace-ID", (req.headers["x-trace-id"] as string) || "");
+  const requestIdHeader = req.headers["x-request-id"];
+  const inboundRequestId = Array.isArray(requestIdHeader)
+    ? requestIdHeader[0]
+    : requestIdHeader;
+  const responseRequestId =
+    requestId || (typeof inboundRequestId === "string" && inboundRequestId.trim().length > 0
+      ? inboundRequestId
+      : undefined);
+  const traceIdHeader = req.headers["x-trace-id"];
+  const inboundTraceId = Array.isArray(traceIdHeader) ? traceIdHeader[0] : traceIdHeader;
+  const responseTraceId =
+    (req as any).traceId ||
+    res.locals?.traceId ||
+    (typeof inboundTraceId === "string" && inboundTraceId.trim().length > 0
+      ? inboundTraceId
+      : undefined);
+  if (responseRequestId) res.setHeader("X-Request-ID", responseRequestId);
+  if (responseTraceId) res.setHeader("X-Trace-ID", responseTraceId);
 
   const catalogEntry = getCatalogEntry(resolveErrorCode(err, statusCode));
   const details = "details" in err ? (err as AppError).details : undefined;
@@ -243,7 +259,7 @@ export const createError = (
   details?: Record<string, unknown>,
 ): AppError => {
   const isCatalogKey = typeof code === "string" && code in ERROR_CATALOG;
-  const catalogEntry = isCatalogKey || (typeof code === "string" && !(code in ERROR_CATALOG) === false)
+  const catalogEntry = isCatalogKey
     ? ERROR_CATALOG[code as ErrorCode]
     : getCatalogEntry(ErrorCode.INTERNAL_SERVER_ERROR);
 
