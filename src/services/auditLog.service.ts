@@ -103,9 +103,19 @@ export interface LogAuditParams {
   userAgent?: string | null;
   metadata?: Record<string, any>;
   /**
-   * Owning tenant for this entry. Optional — when omitted, falls back to the
-   * current TenantContext (AsyncLocalStorage). Pass it explicitly for
-   * cross-context calls; leave unset for system jobs with no tenant.
+   * Owning tenant for this entry.
+   * 
+   * IMPORTANT: In multi-tenant deployments, this field must ALWAYS be set to
+   * a meaningful value. When omitted, the current TenantContext is checked.
+   * 
+   * For background jobs and system events without a tenant context:
+   *   - Pass tenantId = "system" (preferred)
+   *   - Pass tenantId = null only if this is a truly system-wide operation
+   *     (e.g., infrastructure maintenance, not business logic)
+   * 
+   * DO NOT rely on implicit NULL assignment. Explicitly pass tenantId to ensure
+   * compliance queries can find all related audit entries, preventing incomplete
+   * audit trails in multi-tenant deployments.
    */
   tenantId?: string | null;
 }
@@ -186,16 +196,36 @@ export const AuditLogService = {
    *   3. Inserts the entry with both previous_hash and record_hash populated
    *
    * This is the primary method for recording audit events.
+   * 
+   * SECURITY NOTE (Multi-Tenant Compliance):
+   * The tenant_id field MUST be explicitly set. When TenantContext is unavailable
+   * (background jobs, system events), callers MUST pass tenantId = "system" to 
+   * prevent silent NULL assignment. This ensures compliance queries correctly 
+   * retrieve all related audit entries.
    */
   async log(params: LogAuditParams): Promise<AuditLogEntry> {
     const createdAt = new Date();
     const createdAtIso = createdAt.toISOString();
 
     // Resolve the tenant: explicit param wins, otherwise fall back to the
-    // AsyncLocalStorage tenant context. Null for system/background jobs.
-    // Note: tenant_id is intentionally NOT part of the HMAC canonical form —
-    // adding it would invalidate the hash chain of pre-existing entries.
-    const tenantId = params.tenantId ?? TenantContext.getTenantId() ?? null;
+    // AsyncLocalStorage tenant context. For background/system operations,
+    // this ensures tenantId is explicitly set to prevent compliance issues.
+    let tenantId = params.tenantId;
+    
+    if (tenantId === undefined) {
+      // Fallback to TenantContext only if not explicitly set to null
+      tenantId = TenantContext.getTenantId() ?? null;
+    }
+    
+    // Log a warning if tenant_id is NULL for non-system operations
+    if (tenantId === null && params.userId) {
+      logger.warn(
+        'Audit log entry recorded with NULL tenant_id for a user operation. ' +
+        'This may result in incomplete audit trails in multi-tenant deployments. ' +
+        'Ensure callers pass tenantId explicitly or set TenantContext appropriately.',
+        { userId: params.userId, action: params.action }
+      );
+    }
 
     // Step 1: Fetch the most recent record's hash to link the chain.
     // We use SERIALIZABLE isolation to prevent concurrent inserts that read

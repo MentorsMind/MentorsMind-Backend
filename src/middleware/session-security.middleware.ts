@@ -65,13 +65,31 @@ declare global {
   }
 }
 
+/**
+ * Extract refresh token from secure sources only.
+ * 
+ * Security: Refresh tokens MUST come from HttpOnly cookies to prevent XSS exfiltration.
+ * Accepting refresh tokens from arbitrary headers (x-refresh-token, Authorization: Refresh)
+ * negates the security benefits of HttpOnly cookie storage.
+ * 
+ * Priority order:
+ * 1. Signed (encrypted) cookies (most secure)
+ * 2. Regular HttpOnly cookies (secure fallback)
+ * 3. None (headers and Authorization are explicitly rejected)
+ */
 function getRefreshToken(req: Request): string | null {
-  const header = (req.headers['x-refresh-token'] as string) || '';
-  if (header) return header;
-  if (req.cookies?.[REFRESH_TOKEN_COOKIE]) return String(req.cookies[REFRESH_TOKEN_COOKIE]);
-  if (req.signedCookies?.[REFRESH_TOKEN_COOKIE]) return String(req.signedCookies[REFRESH_TOKEN_COOKIE]);
-  const auth = (req.headers.authorization as string) || '';
-  if (auth.startsWith('Refresh ')) return auth.slice(8).trim();
+  // Signed cookies take priority (they're encrypted by cookie middleware)
+  if (req.signedCookies?.[REFRESH_TOKEN_COOKIE]) {
+    return String(req.signedCookies[REFRESH_TOKEN_COOKIE]);
+  }
+  
+  // Fallback to regular HttpOnly cookies
+  if (req.cookies?.[REFRESH_TOKEN_COOKIE]) {
+    return String(req.cookies[REFRESH_TOKEN_COOKIE]);
+  }
+  
+  // Explicitly reject arbitrary headers to prevent XSS exfiltration
+  // If clients need refresh tokens, they should send them via HttpOnly cookies
   return null;
 }
 
