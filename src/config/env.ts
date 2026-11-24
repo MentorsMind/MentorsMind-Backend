@@ -286,6 +286,7 @@ export const envSchema = z.object({
   
   // Audit & Compliance
   AUDIT_LOG_RETENTION_DAYS: z.string().regex(/^\d+$/).default("2555"), // 7 years
+  AUDIT_HMAC_SECRET: z.string().min(32, "AUDIT_HMAC_SECRET must be at least 32 characters for SOC 2 compliance"),
   PCI_COMPLIANCE_MODE: z.enum(["true", "false"]).default("false"),
   GDPR_COMPLIANCE_MODE: z.enum(["true", "false"]).default("true"),
 
@@ -440,6 +441,7 @@ const SENSITIVE_KEYS = new Set([
   "JWT_SECRET_PREVIOUS",
   "FILE_SIGNING_SECRET",
   "CACHE_KEY_HMAC_SECRET",
+  "AUDIT_HMAC_SECRET",
   "PII_ENCRYPTION_KEYS",
   "PLATFORM_SECRET_KEY",
   "SMTP_PASS",

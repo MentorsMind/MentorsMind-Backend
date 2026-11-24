@@ -198,11 +198,14 @@ export const AuditLogService = {
     const tenantId = params.tenantId ?? TenantContext.getTenantId() ?? null;
 
     // Step 1: Fetch the most recent record's hash to link the chain.
-    // We use a transaction to ensure no concurrent insert races between
-    // fetching the previous hash and inserting the new record.
+    // We use SERIALIZABLE isolation to prevent concurrent inserts that read
+    // the same "last" hash before either commits. This ensures strict chain ordering.
     const client = await pool.connect();
     try {
-      await client.query("BEGIN");
+      // Use SERIALIZABLE isolation to prevent phantom reads of the last hash.
+      // This guarantees that if two transactions attempt to insert concurrently,
+      // one will see the other's committed record as the new "last".
+      await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
 
       // Lock the table briefly to prevent race conditions on hash chain
       const prevResult = await client.query<{ record_hash: string | null }>(

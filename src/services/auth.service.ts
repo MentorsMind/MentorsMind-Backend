@@ -122,7 +122,7 @@ export const AuthService = {
 
     if (rows.length === 0) {
       await this.logAuthAttempt(null, email, false, 'Invalid credentials', ipAddress, userAgent);
-      throw new Error('Invalid email or password.');
+      throw createError(ErrorCode.AUTH_INVALID_CREDENTIALS, 401);
     }
 
     const user = rows[0];
