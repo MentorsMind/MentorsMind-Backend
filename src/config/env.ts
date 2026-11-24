@@ -109,8 +109,28 @@ export const envSchema = z.object({
   STELLAR_HORIZON_URL: z
     .string()
     .url("STELLAR_HORIZON_URL must be a valid URL"),
+  SOROBAN_RPC_URL: z
+    .string()
+    .url("SOROBAN_RPC_URL must be a valid URL")
+    .default("https://soroban-testnet.stellar.org"),
   PLATFORM_PUBLIC_KEY: z.string().optional(),
-  PLATFORM_SECRET_KEY: z.string().optional(),
+  PLATFORM_SECRET_KEY: z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() === ""
+        ? undefined
+        : typeof value === "string"
+          ? value.trim()
+          : value,
+    z
+      .string()
+      .regex(
+        /^S[A-Z2-7]{55}$/,
+        "PLATFORM_SECRET_KEY must be a valid Stellar secret seed",
+      )
+      .optional(),
+  ),
+  SOROBAN_VESTING_CONTRACT_ADDRESS: z.string().optional(),
+  VESTING_CONTRACT_ADDRESS: z.string().optional(),
   /** Public key of the HSM-provisioned platform Stellar key (issue #982) */
   STELLAR_FUNDING_PUBLIC_KEY: z.string().optional(),
   /** Timeout in ms for Stellar Horizon HTTP requests (issue #1215) */
@@ -408,6 +428,18 @@ export const envSchema = z.object({
   CHATBOT_MESSAGE_RETENTION_DAYS: z.string().regex(/^\d+$/).optional(),
   STALE_CLEANUP_DRY_RUN: z.enum(["true", "false"]).optional(),
 }).superRefine((data, ctx) => {
+  if (
+    (data.SOROBAN_VESTING_CONTRACT_ADDRESS || data.VESTING_CONTRACT_ADDRESS) &&
+    !data.PLATFORM_SECRET_KEY
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        "PLATFORM_SECRET_KEY is required when a vesting contract is configured",
+      path: ["PLATFORM_SECRET_KEY"],
+    });
+  }
+
   if (['production', 'staging'].includes(data.NODE_ENV) && !data.PII_ENCRYPTION_KEYS) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

@@ -12,7 +12,7 @@ const baseEnv = {
   AWS_SECRET_ACCESS_KEY: "test-secret-key",
 };
 
-describe("PII_ENCRYPTION_KEYS requirement", () => {
+describe("environment validation", () => {
   let envSchema: typeof import("../env").envSchema;
 
   beforeAll(() => {
@@ -50,5 +50,45 @@ describe("PII_ENCRYPTION_KEYS requirement", () => {
   it("stays optional in test/development", () => {
     expect(envSchema.safeParse({ ...baseEnv, NODE_ENV: "test" }).success).toBe(true);
     expect(envSchema.safeParse({ ...baseEnv, NODE_ENV: "development" }).success).toBe(true);
+  });
+
+  it("defaults the Soroban RPC URL and rejects malformed URLs", () => {
+    const valid = envSchema.safeParse({ ...baseEnv, NODE_ENV: "test" });
+    expect(valid.success).toBe(true);
+    if (valid.success) {
+      expect(valid.data.SOROBAN_RPC_URL).toBe(
+        "https://soroban-testnet.stellar.org",
+      );
+    }
+
+    expect(
+      envSchema.safeParse({
+        ...baseEnv,
+        NODE_ENV: "test",
+        SOROBAN_RPC_URL: "not-a-url",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("validates the Stellar secret and requires it when vesting is configured", () => {
+    const contractConfigured = {
+      ...baseEnv,
+      NODE_ENV: "test",
+      SOROBAN_VESTING_CONTRACT_ADDRESS: "C".repeat(56),
+    };
+
+    expect(envSchema.safeParse(contractConfigured).success).toBe(false);
+    expect(
+      envSchema.safeParse({
+        ...contractConfigured,
+        PLATFORM_SECRET_KEY: "not-a-stellar-secret",
+      }).success,
+    ).toBe(false);
+    expect(
+      envSchema.safeParse({
+        ...contractConfigured,
+        PLATFORM_SECRET_KEY: `S${"A".repeat(55)}`,
+      }).success,
+    ).toBe(true);
   });
 });

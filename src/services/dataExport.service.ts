@@ -11,6 +11,8 @@ import { AuditLoggerService } from "./audit-logger.service";
 import { LogLevel, AuditAction } from "../utils/log-formatter.utils";
 import { emailService } from "./email.service";
 import { StorageService } from "./storage.service";
+import { createError } from "../middleware/errorHandler";
+import { ErrorCode } from "../errors/error-codes";
 
 export const DataExportService = {
   async requestExport(userId: string): Promise<DataExportRequest> {
@@ -25,7 +27,9 @@ export const DataExportService = {
         latestRequest.requested_at > thirtyDaysAgo &&
         latestRequest.status !== "failed"
       ) {
-        throw new Error("You can only request one data export every 30 days.");
+        const error = createError(ErrorCode.RATE_LIMIT_EXCEEDED, 429);
+        error.message = "You can only request one data export every 30 days.";
+        throw error;
       }
     }
 
