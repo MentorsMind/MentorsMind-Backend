@@ -51,8 +51,42 @@ describe("errorHandler Sentry tenant scope", () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-  it("does not report 4xx errors", () => {
+  it.each([403, 409, 422])("reports %i operational client errors", (statusCode) => {
+    const error = Object.assign(new Error("operational client failure"), { statusCode });
+    errorHandler(error, req, makeRes(), jest.fn());
+
+    expect(Sentry.captureException).toHaveBeenCalledWith(error);
+    expect(scope.setContext).toHaveBeenCalledWith(
+      "request",
+      expect.objectContaining({ statusCode }),
+    );
+  });
+
+  it("does not report routine 4xx errors", () => {
     errorHandler(Object.assign(new Error("bad"), { statusCode: 400 }), req, makeRes(), jest.fn());
     expect(scope.setTag).not.toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it("does not set empty request or trace headers when no IDs are available", () => {
+    const res = makeRes();
+    errorHandler(Object.assign(new Error("bad"), { statusCode: 400 }), req, res, jest.fn());
+
+    expect(res.setHeader).not.toHaveBeenCalledWith("X-Request-ID", "");
+    expect(res.setHeader).not.toHaveBeenCalledWith("X-Trace-ID", "");
+  });
+
+  it("sets the resolved request ID and trace ID on the error response", () => {
+    const request = {
+      ...req,
+      requestId: "generated-request-id",
+      traceId: "generated-trace-id",
+    };
+    const res = makeRes();
+
+    errorHandler(Object.assign(new Error("bad"), { statusCode: 400 }), request, res, jest.fn());
+
+    expect(res.setHeader).toHaveBeenCalledWith("X-Request-ID", "generated-request-id");
+    expect(res.setHeader).toHaveBeenCalledWith("X-Trace-ID", "generated-trace-id");
   });
 });

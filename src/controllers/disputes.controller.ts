@@ -59,7 +59,7 @@ const MediateDisputeSchema = z.object({
 });
 
 export class DisputesController {
-  static async openDispute(req: Request, res: Response): Promise<void> {
+  static async openDispute(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       // SECURITY FIX: Ensure user is authenticated
       if (!req.user || !req.user.userId) {
